@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import type { LyricLine, OfflineAnalysis } from '@/lib/types';
+import { EMPTY_FEATURES, type LyricLine, type OfflineAnalysis, type ThemeName } from '@/lib/types';
 import { lineIndexAt } from '@/lib/lrc';
-import { sinceBeatAt } from '@/lib/audioFeatures';
+import { recentBeatsAt, sinceBeatAt } from '@/lib/audioFeatures';
 import { Renderer, STAGE_W, STAGE_H } from '@/engine/renderer';
 import type { AudioEngine } from '@/hooks/useAudioEngine';
 
@@ -13,6 +13,7 @@ interface Props {
   meta: { title: string; artist: string } | null;
   engine: AudioEngine;
   analysis: OfflineAnalysis | null;
+  theme: ThemeName;
   /** High-resolution playhead from useLyricSync. */
   timeAt: () => number;
   /** The exporter flips this off while it owns the canvas. */
@@ -30,6 +31,7 @@ export default function KineticStage({
   meta,
   engine,
   analysis,
+  theme,
   timeAt,
   liveLoopEnabled,
 }: Props) {
@@ -56,17 +58,20 @@ export default function KineticStage({
       const t = timeAt();
       const features = engine.ready
         ? engine.readFeatures()
-        : { bass: 0.15, mids: 0.1, highs: 0.08, level: 0.12 };
+        : { ...EMPTY_FEATURES, bass: 0.15, mids: 0.1, highs: 0.08, level: 0.12 };
       // Prefer the offline beat grid when we have it (it's steadier); fall
       // back to live detection before analysis completes.
       const sinceBeat = analysis ? sinceBeatAt(analysis.beats, t) : engine.sinceBeat();
+      const recentBeats = analysis ? recentBeatsAt(analysis.beats, t) : engine.recentBeats();
       renderer.render(ctx, {
         time: t,
         features,
         sinceBeat,
+        recentBeats,
         lines,
         lineIndex: lineIndexAt(lines, t),
         meta,
+        theme,
       });
     };
     raf = requestAnimationFrame(loop);
@@ -76,7 +81,7 @@ export default function KineticStage({
       renderer.dispose();
       rendererRef.current = null;
     };
-  }, [canvasRef, lines, meta, engine, analysis, timeAt, liveLoopEnabled]);
+  }, [canvasRef, lines, meta, engine, analysis, theme, timeAt, liveLoopEnabled]);
 
   return (
     <div className="stage-wrap">

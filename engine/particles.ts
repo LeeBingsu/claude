@@ -9,7 +9,8 @@ export interface ParticleSnapshot {
   y: number; // 0..1
   size: number; // px at 1080p
   alpha: number;
-  hue: number;
+  /** 0..1 — mapped onto the active theme's hue range at draw time. */
+  hue01: number;
 }
 
 interface ParticleDef {
@@ -24,7 +25,17 @@ interface ParticleDef {
   rise: number;
   size: number;
   twinkle: number;
-  hue: number;
+  hue01: number;
+}
+
+export interface ParticleFieldOptions {
+  count?: number;
+  seed?: number;
+  /** Base size range in px at 1080p. */
+  minSize?: number;
+  maxSize?: number;
+  /** Base alpha scale. */
+  alphaScale?: number;
 }
 
 // Mulberry32 — tiny seeded PRNG so the field is stable across sessions.
@@ -41,9 +52,11 @@ function mulberry32(seed: number): () => number {
 
 export class ParticleField {
   private defs: ParticleDef[];
+  private alphaScale: number;
 
-  constructor(count = 110, seed = 1337) {
+  constructor({ count = 110, seed = 1337, minSize = 1, maxSize = 3.6, alphaScale = 1 }: ParticleFieldOptions = {}) {
     const rnd = mulberry32(seed);
+    this.alphaScale = alphaScale;
     this.defs = Array.from({ length: count }, () => ({
       baseX: rnd(),
       baseY: rnd(),
@@ -54,9 +67,9 @@ export class ParticleField {
       phaseX: rnd() * Math.PI * 2,
       phaseY: rnd() * Math.PI * 2,
       rise: 0.004 + rnd() * 0.02,
-      size: 1 + rnd() * 2.6,
+      size: minSize + rnd() * (maxSize - minSize),
       twinkle: 0.5 + rnd() * 2.2,
-      hue: 195 + rnd() * 90, // teal → violet range
+      hue01: rnd(),
     }));
   }
 
@@ -67,8 +80,10 @@ export class ParticleField {
         x: ((d.baseX + Math.sin(time * d.speedX + d.phaseX) * d.driftX) % 1 + 1) % 1,
         y: ((y + Math.sin(time * d.speedY + d.phaseY) * d.driftY) % 1 + 1) % 1,
         size: d.size * (1 + energy * 1.6),
-        alpha: 0.12 + 0.5 * Math.abs(Math.sin(time * d.twinkle + d.phaseX)) * (0.4 + energy),
-        hue: d.hue,
+        alpha:
+          (0.12 + 0.5 * Math.abs(Math.sin(time * d.twinkle + d.phaseX)) * (0.4 + energy)) *
+          this.alphaScale,
+        hue01: d.hue01,
       };
     });
   }

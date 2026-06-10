@@ -27,6 +27,9 @@ export interface TrackMeta {
   durationSec?: number;
 }
 
+/** Number of log-spaced spectrum bands carried per frame. */
+export const SPECTRUM_BANDS = 32;
+
 /** Per-frame audio features, every value normalised to roughly 0..1. */
 export interface AudioFeatureFrame {
   /** Low band energy (kick / bass). */
@@ -37,6 +40,10 @@ export interface AudioFeatureFrame {
   highs: number;
   /** Overall loudness. */
   level: number;
+  /** Slow-moving loudness average — "how epic is this section" (0..1). */
+  energy: number;
+  /** SPECTRUM_BANDS log-spaced bands, 0..1, for the spectrum ring. */
+  spectrum: number[];
 }
 
 /** Pre-computed offline analysis of a whole track. */
@@ -48,16 +55,30 @@ export interface OfflineAnalysis {
   beats: number[];
 }
 
+export type ThemeName = 'aurora' | 'inferno' | 'velvet' | 'noir';
+
 /** Everything the pure canvas renderer needs to draw one frame. */
 export interface FrameInput {
   time: number;
   features: AudioFeatureFrame;
   /** Seconds since the most recent detected beat (Infinity if none yet). */
   sinceBeat: number;
+  /** Seconds since each of the last few beats, ascending (for shockwaves). */
+  recentBeats: number[];
   lines: LyricLine[];
   lineIndex: number;
   meta: { title: string; artist: string } | null;
+  theme: ThemeName;
 }
+
+export const EMPTY_FEATURES: AudioFeatureFrame = {
+  bass: 0,
+  mids: 0,
+  highs: 0,
+  level: 0,
+  energy: 0,
+  spectrum: new Array(SPECTRUM_BANDS).fill(0),
+};
 
 export type ExportPhase =
   | { kind: 'idle' }

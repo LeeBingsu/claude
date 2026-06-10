@@ -2,8 +2,8 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
-import type { ExportPhase, LyricLine, OfflineAnalysis } from '@/lib/types';
-import { sinceBeatAt } from '@/lib/audioFeatures';
+import type { ExportPhase, LyricLine, OfflineAnalysis, ThemeName } from '@/lib/types';
+import { recentBeatsAt, sinceBeatAt } from '@/lib/audioFeatures';
 import { lineIndexAt } from '@/lib/lrc';
 import { Renderer, STAGE_W, STAGE_H } from '@/engine/renderer';
 
@@ -17,6 +17,7 @@ export interface ExportDeps {
   analysis: () => OfflineAnalysis | null;
   lines: () => LyricLine[];
   meta: () => { title: string; artist: string } | null;
+  theme: () => ThemeName;
   /** Pause/resume the live preview loop while the HQ exporter owns the canvas. */
   setLiveLoopEnabled: (enabled: boolean) => void;
 }
@@ -132,6 +133,7 @@ export function useExporter(deps: ExportDeps): Exporter {
       const ctx = canvas.getContext('2d')!;
       const totalFrames = Math.ceil(buffer.duration * FPS);
       const meta = deps.meta();
+      const theme = deps.theme();
       for (let f = 0; f < totalFrames; f++) {
         if (cancelRef.current) throw new Error('Export cancelled.');
         if (encoderError) throw encoderError;
@@ -140,9 +142,11 @@ export function useExporter(deps: ExportDeps): Exporter {
           time: t,
           features: analysis.frames[Math.min(f, analysis.frames.length - 1)],
           sinceBeat: sinceBeatAt(analysis.beats, t),
+          recentBeats: recentBeatsAt(analysis.beats, t),
           lines,
           lineIndex: lineIndexAt(lines, t),
           meta,
+          theme,
         });
         const frame = new VideoFrame(canvas, { timestamp: Math.round(t * 1e6) });
         videoEncoder.encode(frame, { keyFrame: f % (FPS * 2) === 0 });

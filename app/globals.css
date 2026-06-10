@@ -237,6 +237,48 @@ input:focus {
   color: var(--ink);
 }
 
+/* ── Theme selector ─────────────────────────────────────────────────────── */
+
+.theme-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.theme-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass);
+  color: var(--ink-dim);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s, box-shadow 0.2s;
+}
+
+.theme-chip .swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.25);
+}
+
+.theme-chip:hover {
+  color: var(--ink);
+}
+
+.theme-chip.active {
+  color: var(--ink);
+  border-color: rgba(255, 255, 255, 0.45);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08), 0 6px 22px rgba(0, 0, 0, 0.35);
+}
+
 /* ── Stage ──────────────────────────────────────────────────────────────── */
 
 .stage-wrap {

@@ -1,10 +1,11 @@
-import type { AudioFeatureFrame, OfflineAnalysis } from './types';
+import { SPECTRUM_BANDS, type AudioFeatureFrame, type OfflineAnalysis } from './types';
 
 /**
  * Offline, deterministic audio analysis. Decodes the whole track once and
- * computes per-frame band energies + beat timestamps from the raw PCM, so the
- * high-quality exporter can reproduce exactly what the live visualiser shows
- * without depending on real-time AnalyserNode readings.
+ * computes per-frame band energies, a 32-band spectrum and beat timestamps
+ * from the raw PCM, so the high-quality exporter can reproduce exactly what
+ * the live visualiser shows without depending on real-time AnalyserNode
+ * readings.
  */
 
 const FFT_SIZE = 2048;
@@ -60,6 +61,19 @@ function bandEnergy(mags: Float64Array, sampleRate: number, loHz: number, hiHz: 
   return sum / Math.max(1, hi - lo + 1);
 }
 
+/** Log-spaced band edges shared by the offline and live spectrum pipelines. */
+export function spectrumBandEdges(): number[] {
+  const lo = 40;
+  const hi = 14000;
+  const edges: number[] = [];
+  for (let i = 0; i <= SPECTRUM_BANDS; i++) {
+    edges.push(lo * Math.pow(hi / lo, i / SPECTRUM_BANDS));
+  }
+  return edges;
+}
+
+const EDGES = spectrumBandEdges();
+
 export function analyzeBuffer(buffer: AudioBuffer, fps = 60): OfflineAnalysis {
   const sampleRate = buffer.sampleRate;
   const duration = buffer.duration;
@@ -81,6 +95,7 @@ export function analyzeBuffer(buffer: AudioBuffer, fps = 60): OfflineAnalysis {
   let maxMids = 1e-6;
   let maxHighs = 1e-6;
   let maxLevel = 1e-6;
+  const maxSpec = new Float64Array(SPECTRUM_BANDS).fill(1e-6);
 
   for (let f = 0; f < totalFrames; f++) {
     const center = Math.floor((f / fps) * sampleRate);
@@ -94,30 +109,53 @@ export function analyzeBuffer(buffer: AudioBuffer, fps = 60): OfflineAnalysis {
     const mids = bandEnergy(mags, sampleRate, 350, 2200);
     const highs = bandEnergy(mags, sampleRate, 4000, 12000);
     const level = bandEnergy(mags, sampleRate, 20, 12000);
+    const spectrum: number[] = [];
+    for (let b = 0; b < SPECTRUM_BANDS; b++) {
+      const e = bandEnergy(mags, sampleRate, EDGES[b], EDGES[b + 1]);
+      spectrum.push(e);
+      maxSpec[b] = Math.max(maxSpec[b], e);
+    }
 
     maxBass = Math.max(maxBass, bass);
     maxMids = Math.max(maxMids, mids);
     maxHighs = Math.max(maxHighs, highs);
     maxLevel = Math.max(maxLevel, level);
-    rawFrames.push({ bass, mids, highs, level });
+    rawFrames.push({ bass, mids, highs, level, energy: 0, spectrum });
   }
 
   // Normalise to 0..1 against track peaks, then apply attack/decay smoothing
-  // identical in spirit to the live path so both look the same.
+  // identical in spirit to the live path so both look the same. `energy` is a
+  // slow EMA of the level — the "how epic is this section" meter.
   const frames: AudioFeatureFrame[] = [];
-  let s: AudioFeatureFrame = { bass: 0, mids: 0, highs: 0, level: 0 };
+  let s: AudioFeatureFrame = {
+    bass: 0,
+    mids: 0,
+    highs: 0,
+    level: 0,
+    energy: 0,
+    spectrum: new Array(SPECTRUM_BANDS).fill(0),
+  };
+  let energy = 0;
   for (const raw of rawFrames) {
-    const n = {
+    const n: AudioFeatureFrame = {
       bass: raw.bass / maxBass,
       mids: raw.mids / maxMids,
       highs: raw.highs / maxHighs,
       level: raw.level / maxLevel,
+      energy: 0,
+      spectrum: raw.spectrum.map((v, b) => v / maxSpec[b]),
     };
     s = smoothFeatures(s, n);
-    frames.push(s);
+    energy = energyEma(energy, s.level, fps);
+    frames.push({ ...s, energy });
   }
 
-  return { fps, duration, frames, beats: detectBeats(rawFrames.map((r) => r.bass / maxBass), fps) };
+  return {
+    fps,
+    duration,
+    frames,
+    beats: detectBeats(rawFrames.map((r) => r.bass / maxBass), fps),
+  };
 }
 
 /** Fast attack, slower release — shared by live + offline pipelines. */
@@ -128,7 +166,15 @@ export function smoothFeatures(prev: AudioFeatureFrame, next: AudioFeatureFrame)
     mids: mix(prev.mids, next.mids),
     highs: mix(prev.highs, next.highs),
     level: mix(prev.level, next.level),
+    energy: prev.energy,
+    spectrum: next.spectrum.map((v, i) => mix(prev.spectrum[i] ?? 0, v)),
   };
+}
+
+/** ~2.5 s exponential moving average of loudness, shared by both pipelines. */
+export function energyEma(prev: number, level: number, fps: number): number {
+  const alpha = 1 - Math.exp(-1 / (fps * 2.5));
+  return prev + (level - prev) * alpha;
 }
 
 /**
@@ -162,6 +208,19 @@ export function beatPulse(sinceBeat: number): number {
 
 /** Find seconds since the most recent beat at time t (binary search). */
 export function sinceBeatAt(beats: number[], t: number): number {
+  const idx = lastBeatIndexAt(beats, t);
+  return idx === -1 ? Infinity : t - beats[idx];
+}
+
+/** Seconds since each of the last `count` beats at time t, ascending. */
+export function recentBeatsAt(beats: number[], t: number, count = 4): number[] {
+  const idx = lastBeatIndexAt(beats, t);
+  const out: number[] = [];
+  for (let i = idx; i >= 0 && out.length < count; i--) out.push(t - beats[i]);
+  return out;
+}
+
+function lastBeatIndexAt(beats: number[], t: number): number {
   let lo = 0;
   let hi = beats.length - 1;
   let ans = -1;
@@ -174,5 +233,5 @@ export function sinceBeatAt(beats: number[], t: number): number {
       hi = mid - 1;
     }
   }
-  return ans === -1 ? Infinity : t - beats[ans];
+  return ans;
 }

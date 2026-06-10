@@ -50,11 +50,18 @@ You then drop in the audio file you own; it never leaves your machine.
 - **`engine/lineAnimator`** — GSAP timelines (expo / back / elastic eases, centre-out
   staggers) built **paused** and stepped with `.time(t)`. Animation becomes a pure
   function of time, so the live preview and the frame-by-frame exporter are pixel-identical.
-  Three entrance variants rotate per line: rise-and-unfold, split-rotation, elastic crush.
-- **`engine/renderer`** — the pure canvas pipeline: aurora background and seeded particle
-  field riding the spectrum, per-character karaoke highlighting, then a liquid composite —
-  beat-driven kinetic scale → sine-field slice displacement (amplitude rides the bass) →
-  RGB channel split on hard hits — finished with vignette and seeded film grain.
+  Six entrance variants rotate per line: rise-and-unfold, split-rotation, elastic crush,
+  slam-zoom (for drops), wave cascade and louvre flip-in.
+- **`engine/renderer`** — the pure canvas pipeline, layered per frame: beat-kicked camera
+  shake → aurora background → rotating god rays → beat shockwave rings → a mirrored
+  64-bar circular spectrum analyser → particle field + bokeh → typography (per-character
+  karaoke fills with word-punch pops and accent halos, per-line tilt, kinetic scale,
+  liquid slice displacement, glitch tears on hard beats, RGB channel split) → ghost echo
+  of the previous line → beat screen flash → cinematic title card for intros and
+  instrumental interludes (tracking animation + shimmer sweep) → vignette and film grain.
+  A slow energy EMA acts as an "epicness" meter that intensifies everything in choruses.
+- **`engine/themes`** — four selectable colour systems (Aurora, Inferno, Velvet, Noir)
+  that recolour blobs, rays, particles, karaoke gradients and accents consistently.
 - **SVG displacement filters** — `feTurbulence` + `feDisplacementMap` (`#liquid-title`),
   with GSAP animating the turbulence frequency and displacement scale, give the DOM hero
   type its liquid breathing. The canvas implements the equivalent distortion at pixel

@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { AudioFeatureFrame } from '@/lib/types';
-import { smoothFeatures } from '@/lib/audioFeatures';
+import { SPECTRUM_BANDS, type AudioFeatureFrame } from '@/lib/types';
+import { energyEma, smoothFeatures, spectrumBandEdges } from '@/lib/audioFeatures';
 
 export interface AudioEngine {
   /** Call once after a user gesture; wires the <audio> element into the graph. */
@@ -11,11 +11,15 @@ export interface AudioEngine {
   readFeatures: () => AudioFeatureFrame;
   /** Seconds since the last live-detected beat (Infinity before the first). */
   sinceBeat: () => number;
+  /** Seconds since each of the last few live beats, ascending. */
+  recentBeats: () => number[];
   /** Stream carrying the track audio, for realtime MediaRecorder capture. */
   captureStream: () => MediaStream | null;
   resume: () => Promise<void>;
   ready: boolean;
 }
+
+const EDGES = spectrumBandEdges();
 
 /**
  * Live Web Audio pipeline:
@@ -31,9 +35,22 @@ export function useAudioEngine(): AudioEngine {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const streamDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
   const binsRef = useRef<Uint8Array | null>(null);
-  const featRef = useRef<AudioFeatureFrame>({ bass: 0, mids: 0, highs: 0, level: 0 });
-  const peakRef = useRef({ bass: 1e-4, mids: 1e-4, highs: 1e-4, level: 1e-4 });
-  const beatRef = useRef({ history: [] as number[], last: -Infinity });
+  const featRef = useRef<AudioFeatureFrame>({
+    bass: 0,
+    mids: 0,
+    highs: 0,
+    level: 0,
+    energy: 0,
+    spectrum: new Array(SPECTRUM_BANDS).fill(0),
+  });
+  const peakRef = useRef({
+    bass: 1e-4,
+    mids: 1e-4,
+    highs: 1e-4,
+    level: 1e-4,
+    spectrum: new Array(SPECTRUM_BANDS).fill(1e-4) as number[],
+  });
+  const beatRef = useRef({ history: [] as number[], recent: [] as number[] });
   const attachedRef = useRef<HTMLAudioElement | null>(null);
   const [ready, setReady] = useState(false);
 
@@ -75,25 +92,36 @@ export function useAudioEngine(): AudioEngine {
       return sum / Math.max(1, b - a + 1) / 255;
     };
 
+    const peak = peakRef.current;
+    const rawSpectrum: number[] = [];
+    for (let b = 0; b < SPECTRUM_BANDS; b++) {
+      const v = band(EDGES[b], EDGES[b + 1]);
+      peak.spectrum[b] = Math.max(peak.spectrum[b] * 0.9995, v, 0.12);
+      rawSpectrum.push(v / peak.spectrum[b]);
+    }
+
     const raw = {
       bass: band(20, 140),
       mids: band(350, 2200),
       highs: band(4000, 12000),
       level: band(20, 12000),
     };
-    const peak = peakRef.current;
     peak.bass = Math.max(peak.bass * 0.9995, raw.bass, 0.2);
     peak.mids = Math.max(peak.mids * 0.9995, raw.mids, 0.2);
     peak.highs = Math.max(peak.highs * 0.9995, raw.highs, 0.15);
     peak.level = Math.max(peak.level * 0.9995, raw.level, 0.2);
 
-    const normalised = {
+    const normalised: AudioFeatureFrame = {
       bass: raw.bass / peak.bass,
       mids: raw.mids / peak.mids,
       highs: raw.highs / peak.highs,
       level: raw.level / peak.level,
+      energy: 0,
+      spectrum: rawSpectrum,
     };
-    featRef.current = smoothFeatures(featRef.current, normalised);
+    const smoothed = smoothFeatures(featRef.current, normalised);
+    smoothed.energy = energyEma(featRef.current.energy, smoothed.level, 60);
+    featRef.current = smoothed;
 
     // Live beat detection: same energy-flux scheme as the offline analyser.
     const beat = beatRef.current;
@@ -101,13 +129,15 @@ export function useAudioEngine(): AudioEngine {
     if (beat.history.length > 60) beat.history.shift();
     const avg = beat.history.reduce((a, b) => a + b, 0) / beat.history.length;
     const now = ctx.currentTime;
+    const last = beat.recent[beat.recent.length - 1] ?? -Infinity;
     if (
       beat.history.length > 15 &&
       normalised.bass > 0.18 &&
       normalised.bass > avg * 1.38 &&
-      now - beat.last >= 0.22
+      now - last >= 0.22
     ) {
-      beat.last = now;
+      beat.recent.push(now);
+      if (beat.recent.length > 4) beat.recent.shift();
     }
 
     return featRef.current;
@@ -115,8 +145,16 @@ export function useAudioEngine(): AudioEngine {
 
   const sinceBeat = useCallback(() => {
     const ctx = ctxRef.current;
-    if (!ctx || beatRef.current.last === -Infinity) return Infinity;
-    return ctx.currentTime - beatRef.current.last;
+    const recent = beatRef.current.recent;
+    if (!ctx || recent.length === 0) return Infinity;
+    return ctx.currentTime - recent[recent.length - 1];
+  }, []);
+
+  const recentBeats = useCallback(() => {
+    const ctx = ctxRef.current;
+    if (!ctx) return [];
+    const now = ctx.currentTime;
+    return beatRef.current.recent.map((t) => now - t).sort((a, b) => a - b);
   }, []);
 
   const captureStream = useCallback(() => streamDestRef.current?.stream ?? null, []);
@@ -131,5 +169,5 @@ export function useAudioEngine(): AudioEngine {
     };
   }, []);
 
-  return { attach, readFeatures, sinceBeat, captureStream, resume, ready };
+  return { attach, readFeatures, sinceBeat, recentBeats, captureStream, resume, ready };
 }

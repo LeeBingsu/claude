@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
-import type { LyricLine, OfflineAnalysis, TrackMeta } from '@/lib/types';
+import type { LyricLine, OfflineAnalysis, ThemeName, TrackMeta } from '@/lib/types';
 import { parseLrc } from '@/lib/lrc';
 import { analyzeBuffer } from '@/lib/audioFeatures';
 import { useAudioEngine } from '@/hooks/useAudioEngine';
@@ -26,6 +26,7 @@ export default function StudioPage() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [audioName, setAudioName] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [theme, setTheme] = useState<ThemeName>('aurora');
 
   // Refs shared across the live loop and exporters.
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -46,6 +47,8 @@ export default function StudioPage() {
   displayMetaRef.current = displayMeta;
   const linesRef = useRef(lines);
   linesRef.current = lines;
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
 
   const exporter = useExporter({
     canvas: () => canvasRef.current,
@@ -55,6 +58,7 @@ export default function StudioPage() {
     analysis: () => analysisRef.current,
     lines: () => linesRef.current,
     meta: () => displayMetaRef.current,
+    theme: () => themeRef.current,
     setLiveLoopEnabled: (v) => (liveLoopEnabled.current = v),
   });
 
@@ -199,12 +203,37 @@ export default function StudioPage() {
         <h2>
           <span className="step">3</span> Stage
         </h2>
+        <div className="theme-row" role="radiogroup" aria-label="Visual theme">
+          {(
+            [
+              ['aurora', 'Aurora', '#36d6ff', '#b36bff'],
+              ['inferno', 'Inferno', '#ffb136', '#ff4d6b'],
+              ['velvet', 'Velvet', '#ff6bd5', '#9b6bff'],
+              ['noir', 'Noir', '#cfd8ec', '#7fe8ff'],
+            ] as const
+          ).map(([key, label, c1, c2]) => (
+            <button
+              key={key}
+              role="radio"
+              aria-checked={theme === key}
+              className={`theme-chip${theme === key ? ' active' : ''}`}
+              onClick={() => setTheme(key)}
+            >
+              <span
+                className="swatch"
+                style={{ background: `linear-gradient(135deg, ${c1}, ${c2})` }}
+              />
+              {label}
+            </button>
+          ))}
+        </div>
         <KineticStage
           canvasRef={canvasRef}
           lines={lines}
           meta={displayMeta}
           engine={engine}
           analysis={analysis}
+          theme={theme}
           timeAt={timeAt}
           liveLoopEnabled={liveLoopEnabled}
         />
@@ -215,8 +244,9 @@ export default function StudioPage() {
         {!studioReady && (
           <p className="hint">
             The stage goes live once a track is resolved, synced lyrics are found and audio is
-            loaded. Typography reacts to the low end in real time: beats kick the kinetic scale,
-            bass drives the liquid slice distortion and RGB split.
+            loaded. Everything rides the music: beats fire shockwaves, camera shake, glitch tears
+            and screen flashes; bass drives the liquid distortion and RGB split; the spectrum ring,
+            god rays and particle field breathe with the section energy.
           </p>
         )}
       </section>
