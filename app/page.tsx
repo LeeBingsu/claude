@@ -28,6 +28,8 @@ export default function StudioPage() {
   const [analyzing, setAnalyzing] = useState(false);
   const [theme, setTheme] = useState<ThemeName>('aurora');
   const [mode, setMode] = useState<VisualMode>('cinematic');
+  /** Manual lyric nudge in seconds: positive = lyrics later, negative = earlier. */
+  const [lyricShift, setLyricShift] = useState(0);
 
   // Refs shared across the live loop and exporters.
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -37,8 +39,24 @@ export default function StudioPage() {
   const liveLoopEnabled = useRef(true);
   const [analysis, setAnalysis] = useState<OfflineAnalysis | null>(null);
 
+  // Apply the manual sync nudge once, up front — every consumer (live sync,
+  // stage, both exporters) sees the same shifted timeline.
+  const shiftedLines = useMemo<LyricLine[]>(() => {
+    if (lyricShift === 0) return lines;
+    return lines.map((l) => ({
+      ...l,
+      time: Math.max(0, l.time + lyricShift),
+      end: Math.max(0.01, l.end + lyricShift),
+      words: l.words.map((w) => ({
+        ...w,
+        time: Math.max(0, w.time + lyricShift),
+        end: Math.max(0.01, w.end + lyricShift),
+      })),
+    }));
+  }, [lines, lyricShift]);
+
   const engine = useAudioEngine();
-  const { timeAt } = useLyricSync(audioRef, lines);
+  const { timeAt } = useLyricSync(audioRef, shiftedLines);
 
   const displayMeta = useMemo(
     () => (title || artist ? { title: title || 'Untitled', artist: artist || 'Unknown artist' } : null),
@@ -46,8 +64,8 @@ export default function StudioPage() {
   );
   const displayMetaRef = useRef(displayMeta);
   displayMetaRef.current = displayMeta;
-  const linesRef = useRef(lines);
-  linesRef.current = lines;
+  const linesRef = useRef(shiftedLines);
+  linesRef.current = shiftedLines;
   const themeRef = useRef(theme);
   themeRef.current = theme;
   const modeRef = useRef(mode);
@@ -124,15 +142,17 @@ export default function StudioPage() {
           return URL.createObjectURL(file);
         });
         setAudioName(file.name);
-        // A duration is now available — retry lyrics if the first pass failed.
-        if (lyricStatus === 'error') void fetchLyrics();
+        // The audio duration is now known — re-run the lyric lookup so LRCLIB
+        // can pick the record whose duration matches this exact master, which
+        // fixes most "slightly off" sync caused by alternate versions.
+        if (displayMetaRef.current) void fetchLyrics();
       } catch (err) {
         alert(`Could not decode that audio file: ${err instanceof Error ? err.message : err}`);
       } finally {
         setAnalyzing(false);
       }
     },
-    [fetchLyrics, lyricStatus],
+    [fetchLyrics],
   );
 
   const onPlay = useCallback(() => {
@@ -252,7 +272,7 @@ export default function StudioPage() {
         </div>
         <KineticStage
           canvasRef={canvasRef}
-          lines={lines}
+          lines={shiftedLines}
           meta={displayMeta}
           engine={engine}
           analysis={analysis}
@@ -263,6 +283,35 @@ export default function StudioPage() {
         />
         <audio ref={audioRef} src={audioUrl ?? undefined} preload="auto" hidden />
         <TransportBar audioRef={audioRef} src={audioUrl} onPlay={onPlay} disabled={!audioUrl} />
+        {lines.length > 0 && (
+          <div className="offset-row">
+            <span className="offset-label">Lyric sync</span>
+            <button className="btn mini" onClick={() => setLyricShift((s) => +(s - 0.5).toFixed(2))}>
+              −0.5s
+            </button>
+            <button className="btn mini" onClick={() => setLyricShift((s) => +(s - 0.1).toFixed(2))}>
+              −0.1s
+            </button>
+            <span className="offset-value">
+              {lyricShift > 0 ? '+' : ''}
+              {lyricShift.toFixed(1)}s
+            </span>
+            <button className="btn mini" onClick={() => setLyricShift((s) => +(s + 0.1).toFixed(2))}>
+              +0.1s
+            </button>
+            <button className="btn mini" onClick={() => setLyricShift((s) => +(s + 0.5).toFixed(2))}>
+              +0.5s
+            </button>
+            {lyricShift !== 0 && (
+              <button className="btn mini" onClick={() => setLyricShift(0)}>
+                Reset
+              </button>
+            )}
+            <span className="offset-hint">
+              lyrics showing late → press − · showing early → press + (applies to exports too)
+            </span>
+          </div>
+        )}
         {!studioReady && (
           <p className="hint">
             The stage goes live once a track is resolved, synced lyrics are found and audio is

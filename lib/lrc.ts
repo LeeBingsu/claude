@@ -11,10 +11,14 @@ function tagToSeconds(min: string, sec: string, frac?: string): number {
 /**
  * Parses standard and "enhanced" (word-timestamped) LRC into LyricLines.
  * Lines without word tags get per-word times estimated by character weight,
- * which is what karaoke renderers conventionally do.
+ * which is what karaoke renderers conventionally do. Honours the LRC
+ * `[offset:±ms]` tag (positive offset = lyrics display earlier).
  */
 export function parseLrc(lrc: string, trackDuration = Infinity): LyricLine[] {
   const raw: { time: number; body: string }[] = [];
+
+  const offsetTag = lrc.match(/^\[offset:\s*([+-]?\d+)\s*\]/m);
+  const offsetSec = offsetTag ? Number(offsetTag[1]) / 1000 : 0;
 
   for (const line of lrc.split(/\r?\n/)) {
     LINE_TAG.lastIndex = 0;
@@ -27,7 +31,7 @@ export function parseLrc(lrc: string, trackDuration = Infinity): LyricLine[] {
     }
     if (stamps.length === 0) continue; // metadata tag or plain text
     const body = line.slice(lastEnd).trim();
-    for (const t of stamps) raw.push({ time: t, body });
+    for (const t of stamps) raw.push({ time: Math.max(0, t - offsetSec), body });
   }
 
   raw.sort((a, b) => a.time - b.time);
@@ -35,7 +39,7 @@ export function parseLrc(lrc: string, trackDuration = Infinity): LyricLine[] {
   const lines: LyricLine[] = raw.map((entry, i) => {
     const next = raw[i + 1];
     const end = Math.min(next ? next.time : entry.time + 8, trackDuration);
-    const { text, words } = parseBody(entry.body, entry.time, end);
+    const { text, words } = parseBody(entry.body, entry.time, end, offsetSec);
     return { time: entry.time, end, text, words };
   });
 
@@ -43,7 +47,12 @@ export function parseLrc(lrc: string, trackDuration = Infinity): LyricLine[] {
   return lines.filter((l) => l.text.length > 0);
 }
 
-function parseBody(body: string, start: number, end: number): { text: string; words: LyricWord[] } {
+function parseBody(
+  body: string,
+  start: number,
+  end: number,
+  offsetSec = 0,
+): { text: string; words: LyricWord[] } {
   WORD_TAG.lastIndex = 0;
   if (!WORD_TAG.test(body)) {
     return { text: body, words: estimateWords(body, start, end) };
@@ -59,7 +68,7 @@ function parseBody(body: string, start: number, end: number): { text: string; wo
   while ((m = WORD_TAG.exec(body)) !== null) {
     const chunk = body.slice(lastIndex, m.index).trim();
     if (chunk) parts.push({ time: lastTime, text: chunk });
-    lastTime = tagToSeconds(m[1], m[2], m[3]);
+    lastTime = Math.max(0, tagToSeconds(m[1], m[2], m[3]) - offsetSec);
     lastIndex = WORD_TAG.lastIndex;
   }
   const tail = body.slice(lastIndex).trim();

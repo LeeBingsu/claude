@@ -339,6 +339,45 @@ input:focus {
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
 }
 
+/* ── Lyric sync nudge ───────────────────────────────────────────────────── */
+
+.offset-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.offset-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  margin-right: 4px;
+}
+
+.btn.mini {
+  padding: 7px 12px;
+  font-size: 0.82rem;
+  border-radius: 9px;
+}
+
+.offset-value {
+  min-width: 56px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.offset-hint {
+  flex-basis: 100%;
+  color: var(--ink-dim);
+  font-size: 0.78rem;
+}
+
 /* ── Export ─────────────────────────────────────────────────────────────── */
 
 .export-grid {
