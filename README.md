@@ -62,6 +62,12 @@ You then drop in the audio file you own; it never leaves your machine.
   A slow energy EMA acts as an "epicness" meter that intensifies everything in choruses.
 - **`engine/themes`** — four selectable colour systems (Aurora, Inferno, Velvet, Noir)
   that recolour blobs, rays, particles, karaoke gradients and accents consistently.
+- **"Don't Blink" mode** — a second rendering philosophy switchable in the stage panel:
+  rapid word-by-word hard cuts where each word lands alone and huge the instant it's
+  sung, with deterministic per-word variations (black/white frame inversions, accent
+  words, stacked and vertical compositions, punch-zoom landings, a slow per-line camera
+  push and a word-position tick bar). Same pure-function contract, so it exports
+  identically.
 - **SVG displacement filters** — `feTurbulence` + `feDisplacementMap` (`#liquid-title`),
   with GSAP animating the turbulence frequency and displacement scale, give the DOM hero
   type its liquid breathing. The canvas implements the equivalent distortion at pixel

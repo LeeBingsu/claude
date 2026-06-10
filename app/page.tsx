@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
-import type { LyricLine, OfflineAnalysis, ThemeName, TrackMeta } from '@/lib/types';
+import type { LyricLine, OfflineAnalysis, ThemeName, TrackMeta, VisualMode } from '@/lib/types';
 import { parseLrc } from '@/lib/lrc';
 import { analyzeBuffer } from '@/lib/audioFeatures';
 import { useAudioEngine } from '@/hooks/useAudioEngine';
@@ -27,6 +27,7 @@ export default function StudioPage() {
   const [audioName, setAudioName] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [theme, setTheme] = useState<ThemeName>('aurora');
+  const [mode, setMode] = useState<VisualMode>('cinematic');
 
   // Refs shared across the live loop and exporters.
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -49,6 +50,8 @@ export default function StudioPage() {
   linesRef.current = lines;
   const themeRef = useRef(theme);
   themeRef.current = theme;
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
 
   const exporter = useExporter({
     canvas: () => canvasRef.current,
@@ -59,6 +62,7 @@ export default function StudioPage() {
     lines: () => linesRef.current,
     meta: () => displayMetaRef.current,
     theme: () => themeRef.current,
+    mode: () => modeRef.current,
     setLiveLoopEnabled: (v) => (liveLoopEnabled.current = v),
   });
 
@@ -203,6 +207,25 @@ export default function StudioPage() {
         <h2>
           <span className="step">3</span> Stage
         </h2>
+        <div className="theme-row" role="radiogroup" aria-label="Typography mode">
+          {(
+            [
+              ['cinematic', 'Cinematic', 'Full lines, karaoke glow, atmosphere'],
+              ['blink', "Don't Blink", 'Rapid word-by-word hard cuts, B/W inversions'],
+            ] as const
+          ).map(([key, label, desc]) => (
+            <button
+              key={key}
+              role="radio"
+              aria-checked={mode === key}
+              title={desc}
+              className={`theme-chip${mode === key ? ' active' : ''}`}
+              onClick={() => setMode(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <div className="theme-row" role="radiogroup" aria-label="Visual theme">
           {(
             [
@@ -234,13 +257,12 @@ export default function StudioPage() {
           engine={engine}
           analysis={analysis}
           theme={theme}
+          mode={mode}
           timeAt={timeAt}
           liveLoopEnabled={liveLoopEnabled}
         />
-        {audioUrl && (
-          <audio ref={audioRef} src={audioUrl} preload="auto" crossOrigin="anonymous" hidden />
-        )}
-        <TransportBar audioRef={audioRef} onPlay={onPlay} disabled={!audioUrl} />
+        <audio ref={audioRef} src={audioUrl ?? undefined} preload="auto" hidden />
+        <TransportBar audioRef={audioRef} src={audioUrl} onPlay={onPlay} disabled={!audioUrl} />
         {!studioReady && (
           <p className="hint">
             The stage goes live once a track is resolved, synced lyrics are found and audio is

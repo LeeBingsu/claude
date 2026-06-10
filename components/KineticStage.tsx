@@ -1,7 +1,13 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { EMPTY_FEATURES, type LyricLine, type OfflineAnalysis, type ThemeName } from '@/lib/types';
+import {
+  EMPTY_FEATURES,
+  type LyricLine,
+  type OfflineAnalysis,
+  type ThemeName,
+  type VisualMode,
+} from '@/lib/types';
 import { lineIndexAt } from '@/lib/lrc';
 import { recentBeatsAt, sinceBeatAt } from '@/lib/audioFeatures';
 import { Renderer, STAGE_W, STAGE_H } from '@/engine/renderer';
@@ -14,6 +20,7 @@ interface Props {
   engine: AudioEngine;
   analysis: OfflineAnalysis | null;
   theme: ThemeName;
+  mode: VisualMode;
   /** High-resolution playhead from useLyricSync. */
   timeAt: () => number;
   /** The exporter flips this off while it owns the canvas. */
@@ -32,6 +39,7 @@ export default function KineticStage({
   engine,
   analysis,
   theme,
+  mode,
   timeAt,
   liveLoopEnabled,
 }: Props) {
@@ -72,6 +80,7 @@ export default function KineticStage({
         lineIndex: lineIndexAt(lines, t),
         meta,
         theme,
+        mode,
       });
     };
     raf = requestAnimationFrame(loop);
@@ -81,7 +90,7 @@ export default function KineticStage({
       renderer.dispose();
       rendererRef.current = null;
     };
-  }, [canvasRef, lines, meta, engine, analysis, theme, timeAt, liveLoopEnabled]);
+  }, [canvasRef, lines, meta, engine, analysis, theme, mode, timeAt, liveLoopEnabled]);
 
   return (
     <div className="stage-wrap">

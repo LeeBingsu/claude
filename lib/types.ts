@@ -57,6 +57,15 @@ export interface OfflineAnalysis {
 
 export type ThemeName = 'aurora' | 'inferno' | 'velvet' | 'noir';
 
+/**
+ * Rendering philosophy for the stage:
+ * - 'cinematic': full-line karaoke typography with atmosphere layers.
+ * - 'blink': "Don't Blink"-style rapid word-by-word hard cuts — one huge word
+ *   filling the frame, black/white inversions, punch-zooms, stacked/vertical
+ *   compositions.
+ */
+export type VisualMode = 'cinematic' | 'blink';
+
 /** Everything the pure canvas renderer needs to draw one frame. */
 export interface FrameInput {
   time: number;
@@ -69,6 +78,7 @@ export interface FrameInput {
   lineIndex: number;
   meta: { title: string; artist: string } | null;
   theme: ThemeName;
+  mode: VisualMode;
 }
 
 export const EMPTY_FEATURES: AudioFeatureFrame = {

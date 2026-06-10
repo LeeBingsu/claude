@@ -1,4 +1,4 @@
-import { SPECTRUM_BANDS, type FrameInput, type LyricLine } from '@/lib/types';
+import { SPECTRUM_BANDS, type FrameInput, type LyricLine, type LyricWord } from '@/lib/types';
 import { beatPulse } from '@/lib/audioFeatures';
 import { LineAnimator } from './lineAnimator';
 import { ParticleField } from './particles';
@@ -72,6 +72,14 @@ export class Renderer {
     ctx.fillStyle = '#04050c';
     ctx.fillRect(-24, -24, STAGE_W + 48, STAGE_H + 48);
 
+    if (input.mode === 'blink') {
+      this.drawBlink(ctx, input, pulse, theme);
+      this.drawHud(ctx, input, theme);
+      this.drawVignetteAndGrain(ctx, time);
+      ctx.restore();
+      return;
+    }
+
     this.drawBackground(ctx, time, features.bass, features.level, pulse, theme);
     this.drawGodRays(ctx, time, features.mids, features.energy, theme);
     this.drawShockwaves(ctx, input.recentBeats, features.energy, theme);
@@ -83,6 +91,128 @@ export class Renderer {
     this.drawHud(ctx, input, theme);
     this.drawVignetteAndGrain(ctx, time);
     ctx.restore();
+  }
+
+  // ── "Don't Blink" mode ────────────────────────────────────────────────────
+
+  /**
+   * Rapid word-by-word hard cuts in the classic "Don't Blink" kinetic
+   * typography style: each word lands alone and huge the instant it's sung,
+   * holds until the next one, with deterministic per-word variations —
+   * black/white frame inversions, accent-coloured words, stacked and vertical
+   * compositions, punch-zoom landings and a slow per-line camera push.
+   */
+  private drawBlink(ctx: Ctx2D, input: FrameInput, pulse: number, theme: Theme): void {
+    const { time, features, lines, lineIndex } = input;
+    const line = lineIndex >= 0 ? lines[lineIndex] : undefined;
+    if (!line || time > line.end + 0.45) {
+      this.drawTitleCard(ctx, input, pulse, theme);
+      return;
+    }
+
+    // Latest word that has started (linear scan — lines are short). Held
+    // on screen until the next word starts: that's the style's rhythm.
+    let wi = -1;
+    for (let i = 0; i < line.words.length; i++) {
+      if (line.words[i].time <= time) wi = i;
+      else break;
+    }
+    if (wi === -1) return; // breath before the line's first word
+    const word: LyricWord = line.words[wi];
+    const sinceWord = time - word.time;
+    const h = wordHash(lineIndex, wi);
+
+    // Per-word deterministic styling decisions.
+    const inverted = h % 7 === 0;
+    const accent = !inverted && h % 5 === 2;
+    const vertical = !inverted && word.text.length >= 5 && h % 6 === 3;
+    const stacked = !vertical && wi > 0 && h % 4 === 1;
+    const alignLeft = !vertical && !stacked && h % 10 === 9;
+
+    if (inverted) {
+      ctx.fillStyle = '#f1f2f7';
+      ctx.fillRect(-24, -24, STAGE_W + 48, STAGE_H + 48);
+    }
+
+    // Camera: slow push-in across the line + punch on the word landing.
+    const lineProgress = clamp01((time - line.time) / Math.max(0.001, line.end - line.time));
+    const punch = Math.exp(-sinceWord * 16);
+    const zoom = (1 + lineProgress * 0.07) * (1 + punch * 0.16 + features.bass * 0.02);
+    const rot = (((h % 9) - 4) * 0.9 * Math.PI) / 180;
+
+    ctx.save();
+    ctx.translate(STAGE_W / 2, STAGE_H / 2);
+    ctx.scale(zoom, zoom);
+    ctx.rotate(rot);
+
+    const ink = inverted ? '#0a0b10' : '#f1f2f7';
+    const upper = word.text.toUpperCase();
+
+    // Ghost of the previous word in stacked compositions.
+    if (stacked) {
+      const prev = line.words[wi - 1].text.toUpperCase();
+      const pSize = fitFontSize(ctx, prev, STAGE_W * 0.5, 150);
+      ctx.font = `900 ${pSize}px ${FONT_STACK}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      ctx.globalAlpha = inverted ? 0.22 : 0.3;
+      ctx.fillStyle = ink;
+      ctx.fillText(prev, 0, -STAGE_H * 0.27);
+      ctx.globalAlpha = 1;
+    }
+
+    // Fit the word: vertical words fit the frame height, others the width.
+    const size = vertical
+      ? fitFontSize(ctx, upper, STAGE_H * 0.76, 430)
+      : fitFontSize(ctx, upper, STAGE_W * (alignLeft ? 0.86 : 0.78), upper.length <= 3 ? 460 : 380);
+    ctx.font = `900 ${size}px ${FONT_STACK}`;
+    ctx.textBaseline = 'middle';
+
+    if (vertical) {
+      ctx.rotate(-Math.PI / 2);
+    }
+    ctx.textAlign = alignLeft ? 'left' : 'center';
+    const x = alignLeft ? -STAGE_W * 0.43 : 0;
+    const y = stacked ? STAGE_H * 0.06 : 0;
+
+    // RGB split on hard hits — additive, so dark frames only.
+    const split = !inverted ? Math.max(0, features.bass - 0.45) * 22 + pulse * 6 : 0;
+    if (split > 1.5) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = '#ff2a4d';
+      ctx.fillText(upper, x - split, y);
+      ctx.fillStyle = '#2ad4ff';
+      ctx.fillText(upper, x + split, y);
+      ctx.restore();
+    }
+
+    if (accent) {
+      const g = ctx.createLinearGradient(0, -size / 2, 0, size / 2);
+      g.addColorStop(0, theme.gradTop);
+      g.addColorStop(1, theme.gradBottom);
+      ctx.fillStyle = g;
+      ctx.shadowColor = theme.glow;
+      ctx.shadowBlur = 34 + pulse * 30;
+    } else {
+      ctx.fillStyle = ink;
+      ctx.shadowColor = inverted ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.16)';
+      ctx.shadowBlur = 14;
+    }
+    ctx.fillText(upper, x, y);
+    ctx.shadowBlur = 0;
+
+    // Tiny progress tick: which word of the line we're on.
+    ctx.restore();
+    ctx.fillStyle = inverted ? 'rgba(10,11,16,0.5)' : 'rgba(241,242,247,0.45)';
+    const tickW = 26;
+    const totalW = line.words.length * tickW;
+    for (let i = 0; i < line.words.length; i++) {
+      ctx.globalAlpha = i <= wi ? 0.9 : 0.25;
+      ctx.fillRect(STAGE_W / 2 - totalW / 2 + i * tickW, STAGE_H - 92, tickW - 8, 4);
+    }
+    ctx.globalAlpha = 1;
   }
 
   private isLineActive(input: FrameInput): boolean {
@@ -643,6 +773,21 @@ function makeGrain(): HTMLCanvasElement | OffscreenCanvas {
   }
   ctx.putImageData(img, 0, 0);
   return c;
+}
+
+/** Deterministic per-word hash for "Don't Blink" styling decisions. */
+function wordHash(lineIndex: number, wordIndex: number): number {
+  let h = (lineIndex * 73856093) ^ (wordIndex * 19349663) ^ 0x5bd1e995;
+  h = Math.imul(h ^ (h >>> 13), 0x85ebca6b);
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+
+/** Largest font size (≤ max) at which `text` fits within `targetWidth`. */
+function fitFontSize(ctx: Ctx2D, text: string, targetWidth: number, max: number): number {
+  ctx.font = `900 100px ${FONT_STACK}`;
+  const w100 = (ctx as CanvasRenderingContext2D).measureText(text).width || 1;
+  return Math.min(max, (targetWidth / w100) * 100);
 }
 
 function clamp01(v: number): number {
