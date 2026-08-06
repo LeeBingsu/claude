@@ -3,8 +3,6 @@ package net.jihoon.macestunslam;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.Items;
-import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.EntityHitResult;
@@ -13,15 +11,17 @@ import net.minecraft.util.hit.HitResult;
 /**
  * Runs every client tick. Never touches the camera - it times an already
  * in-flight fall so the mace smash attack lands the instant the vanilla
- * conditions for it are met (falling, minimum fall distance, mace in main
- * hand, a valid entity under the crosshair within range), and optionally
- * ends an elytra glide by swapping in a chestplate to start that fall.
+ * conditions for it are met (falling, minimum fall distance, mace selected
+ * and charged, a valid entity under the crosshair within range). It can also
+ * end an elytra glide by swapping in a chestplate to start that fall, and
+ * handle the mace/sword swap around the hit itself.
  */
 public class StunSlamController {
 
 	private static final int NO_MACE_MESSAGE_INTERVAL_TICKS = 20;
 
 	private final ElytraSwapper elytraSwapper = new ElytraSwapper();
+	private final WeaponSwapper weaponSwapper = new WeaponSwapper();
 
 	private boolean hasAutoJumpedThisHold = false;
 	private int jumpKeyReleaseCountdown = 0;
@@ -41,6 +41,9 @@ public class StunSlamController {
 		}
 
 		elytraSwapper.tick();
+		// Ticked before the key check so a scheduled swap back to the sword
+		// still lands after the player lets go of the key.
+		weaponSwapper.tick(player);
 		releaseJumpKeyIfDue(client);
 
 		boolean keyHeld = MaceStunSlamClient.slamKey.isPressed();
@@ -49,19 +52,23 @@ public class StunSlamController {
 			return;
 		}
 
-		if (!isHoldingMace(player)) {
-			warnNoMace(player);
-			return;
-		}
-
 		ModConfig config = ModConfig.get();
 
+		// Checked before the weapon, since ending the glide is what creates the
+		// fall everything below depends on.
 		if (elytraSwapper.isGliding(player)) {
-			// A glide cannot produce a smash attack, so the only useful action
-			// here is ending it; the fall it drops into is handled next tick.
 			if (config.autoSwapElytra) {
 				elytraSwapper.trySwapToChestplate(client, player);
 			}
+			return;
+		}
+
+		if (!weaponSwapper.isMaceSelected(player)) {
+			if (!config.attributeSwap || !weaponSwapper.selectMace(player)) {
+				warnNoMace(player);
+			}
+			// Either way, wait a tick: the slot change has to reach the server
+			// before the attack, or it lands as a sword hit instead of a slam.
 			return;
 		}
 
@@ -80,12 +87,22 @@ public class StunSlamController {
 			performAttack(client);
 			cooldownTicksRemaining = config.cooldownTicks;
 			hasAutoJumpedThisHold = false;
+
+			if (config.attributeSwap) {
+				weaponSwapper.scheduleSwordSwap(config.swapBackToSwordDelayTicks);
+			}
 		}
 	}
 
 	private boolean isValidSmashWindow(MinecraftClient client, PlayerEntity player, ModConfig config) {
 		boolean falling = !player.isOnGround() && player.getVelocity().y < -0.05;
 		if (!falling || player.fallDistance < config.minFallDistance) {
+			return false;
+		}
+
+		// Read with the mace already selected, so this is the mace's ~33-tick
+		// charge rather than the sword's ~12.5-tick one.
+		if (weaponSwapper.attackCharge(player) < config.minAttackCooldownProgress) {
 			return false;
 		}
 
@@ -104,11 +121,6 @@ public class StunSlamController {
 			client.interactionManager.attackEntity(client.player, entityHit.getEntity());
 			client.player.swingHand(Hand.MAIN_HAND);
 		}
-	}
-
-	private boolean isHoldingMace(PlayerEntity player) {
-		ItemStack mainHand = player.getMainHandStack();
-		return mainHand.isOf(Items.MACE);
 	}
 
 	private void warnNoMace(PlayerEntity player) {

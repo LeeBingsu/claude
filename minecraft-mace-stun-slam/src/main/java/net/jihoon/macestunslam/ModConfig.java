@@ -38,6 +38,21 @@ public class ModConfig {
 	/** Ticks to wait after an elytra swap before another swap may be issued. */
 	public int swapCooldownTicks = 10;
 
+	/** Whether to switch to the mace for the slam and back to the sword afterwards. */
+	public boolean attributeSwap = true;
+
+	/** Required attack charge (0.0-1.0), read with the mace held, before the slam fires. */
+	public float minAttackCooldownProgress = 1.0f;
+
+	/** Ticks after a slam before switching back to the sword. */
+	public int swapBackToSwordDelayTicks = 1;
+
+	/** Hotbar index (0-8) holding the mace, or -1 to scan the hotbar for one. */
+	public int maceHotbarSlot = -1;
+
+	/** Hotbar index (0-8) holding the sword, or -1 to scan the hotbar for one. */
+	public int swordHotbarSlot = -1;
+
 	private static ModConfig instance = new ModConfig();
 
 	public static ModConfig get() {
