@@ -62,6 +62,33 @@ public class ModConfig {
 	/** Charge floor for firing an undercharged slam rather than landing without one. */
 	public float minSalvageCharge = 0.5f;
 
+	/** Vary the mod's fixed tick gaps instead of firing on the same offsets every time. */
+	public boolean humanize = true;
+
+	/** Ticks between the key going down and the sequence starting. */
+	public int reactionDelayMinTicks = 1;
+	public int reactionDelayMaxTicks = 4;
+
+	/** Ticks to wait after a hotbar change before attacking. Never below 1. */
+	public int swapSettleMinTicks = 1;
+	public int swapSettleMaxTicks = 3;
+
+	/** Ticks between clicks of the three-click elytra swap. */
+	public int inventoryClickSpacingMinTicks = 1;
+	public int inventoryClickSpacingMaxTicks = 3;
+
+	/** Extra ticks added to releaseMarginTicks per fall. Only ever fires earlier. */
+	public int releaseMarginJitterTicks = 1;
+
+	/** Master switch for held-left-click sword attacking. */
+	public boolean autoAttack = true;
+
+	/** Max eye-to-target distance in blocks. Vanilla entity reach is 3.0; above that the server rejects the hit. */
+	public double autoAttackMaxReach = 3.0;
+
+	/** Required attack charge (0.0-1.0) before each auto attack. 1.0 = full damage. */
+	public float autoAttackMinCharge = 1.0f;
+
 	private static ModConfig instance = new ModConfig();
 
 	public static ModConfig get() {

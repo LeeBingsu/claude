@@ -14,24 +14,27 @@
   감지로 이어집니다. (활공 상태에서는 스매시 어택이 발동하지 않기 때문에 필요한 단계입니다)
 - ✅ **검 ↔ 메이스 어트리뷰트 스왑**: 슬램 직전에 핫바의 메이스로 자동 전환하고,
   슬램이 나간 직후 다시 검으로 돌아옵니다. 자세한 원리는 아래 참고.
+- ✅ **검 자동 공격**: 검을 들고 좌클릭을 누르고 있으면, 조준한 대상이 사거리 안에 있을 때
+  공격 쿨다운 완충에 맞춰 자동으로 공격합니다. 자세한 내용은 아래 참고.
 - ❌ 카메라(시야) 방향을 자동으로 돌리지 않습니다 (에임봇 아님). 목표물을 조준하는 것은
   플레이어 본인이 해야 합니다.
+- ❌ **킬오라가 아닙니다.** 자동 공격은 조준선이 향한 대상 하나만 때립니다. 주변 반경의
+  엔티티를 조준 없이 자동으로 타격하지 않습니다.
 - ❌ 바람의 돌풍(Wind Charge)을 자동으로 꺼내 던지지는 않습니다. 높이 도약이 필요하면
   오프핸드에 미리 들고 직접 우클릭하세요.
 - ❌ 서버 검증을 우회하지 않습니다. 실제 대미지/스턴 판정은 항상 서버가 계산합니다 —
   이 모드는 그 판정 창(window)에 맞춰 클릭을 대신 넣어줄 뿐입니다.
 
-## ⚠️ 사용 전 확인하세요
+## ⚠️ 사용 범위
 
-다른 사람이 운영하는 멀티플레이 서버에서 사용할 계획이라고 하셨는데, **매크로/자동 입력
-도구는 카메라 조작이 없어도 다수의 서버 규칙(특히 안티치트/공정 플레이 규정)에서
-금지 대상**입니다. 반드시 해당 서버의 규칙을 먼저 확인하고, 애매하면 운영진에게
-문의한 뒤 사용하세요. 밴/징계에 대한 책임은 사용자 본인에게 있습니다.
+이 모드는 **서버 운영자가 자동화를 허용한 환경**을 전제로 만들어졌습니다. 싱글플레이,
+본인 서버, 또는 운영자가 직접 허용한 비공개 서버가 그 대상입니다.
 
-특히 **겉날개 자동 교체(elytra swap)는 인벤토리 클릭을 자동으로 보내는 기능**이라,
-단순 클릭 타이밍 자동화보다 안티치트(예: Grim, NCP 계열)에 훨씬 잘 걸립니다.
-많은 PvP 서버가 이 기능을 명시적으로 금지하거나 서버 측에서 아예 차단합니다.
-설정 파일에서 `autoSwapElytra`를 `false`로 두면 이 기능만 꺼둘 수 있습니다.
+운영자의 허가 없는 공개 서버에서 이 모드를 쓰는 것은 대부분의 서버 규칙 위반이며,
+`humanize` 옵션 역시 그런 용도로 만든 것이 아닙니다. 밴/징계 책임은 사용자에게
+있습니다.
+
+기능별로 개별적으로 끌 수 있습니다: `autoSwapElytra`, `attributeSwap`, `humanize`.
 
 ## 슬램 타이밍: 왜 "가장 늦게" 때리는가
 
@@ -57,6 +60,58 @@
 한 가지 주의: 마지막까지 기다리는 만큼, 대기 중에 상대가 사거리를 벗어나면 슬램이
 안 나가고 낙하 대미지를 그대로 받습니다 (스매시가 적중해야 낙하 대미지가 상쇄됩니다).
 확실하게 즉시 발동하는 기존 동작을 원하면 `maxDamageMode`를 `false`로 두세요.
+
+## 타이밍 변동(humanize)
+
+이 모드의 동작에는 원래 고정된 틱 오프셋이 세 군데 있었습니다. 값이 항상 같으면
+그 자체가 지문이 되므로, `humanize`가 켜져 있으면(기본 `true`) 매번 다른 값을 씁니다.
+
+| 지점 | 고정값이었을 때 | 변동 범위(기본) |
+|---|---|---|
+| 키 입력 → 시퀀스 시작 | 0틱 (같은 틱에 즉시) | 1~4틱 |
+| 슬롯 변경 → 공격 | 항상 정확히 1틱 | 1~3틱 |
+| 겉날개 3연타 클릭 간격 | **한 틱에 3번 전부** | 각 1~3틱 |
+
+세 번째가 가장 컸습니다. 사람은 한 틱(50ms) 안에 서로 다른 슬롯을 세 번 클릭할 수
+없기 때문에, 이건 변동을 주는 문제가 아니라 애초에 물리적으로 불가능한 입력이었습니다.
+이제 클릭을 틱에 걸쳐 큐로 내보냅니다. 부수적으로 desync도 줄어듭니다.
+
+두 가지 설계 원칙이 있습니다.
+
+- **변동은 안전한 방향으로만.** 예를 들어 `releaseMarginJitterTicks`는 발동을 항상
+  *더 이르게*만 만듭니다. 늦어지면 슬램을 놓치지만, 일러지면 대미지만 조금 손해입니다.
+- **틱마다 다시 굴리지 않습니다.** 매 틱 비교되는 임계값을 매 틱 재추첨하면 결국
+  최댓값으로 수렴합니다(먼저 통과하는 추첨이 발동시키므로). 그래서 낙하 단위/스왑
+  단위로 한 번 뽑아 고정합니다.
+
+`humanize`를 `false`로 두면 이전의 고정 타이밍으로 돌아갑니다.
+
+## 검 자동 공격 (좌클릭 홀드)
+
+**조건이 전부 맞을 때만 발동합니다.**
+
+1. `autoAttack`이 켜져 있음 (기본 `true`)
+2. 주손에 검(`#minecraft:swords`)을 들고 있음
+3. 좌클릭을 누르고 있음 (GUI가 열려 있으면 제외)
+4. **조준선이 엔티티를 향하고 있음**
+5. 눈 위치에서 피격 지점까지의 거리가 `autoAttackMaxReach`(기본 3.0) 이하
+6. 공격 충전도가 `autoAttackMinCharge`(기본 1.0 = 완충) 이상
+
+거리는 눈 위치 기준 3D 유클리드 거리로 잽니다. 즉 플레이어를 중심으로 한 구(球)이고,
+수평 거리가 아닙니다. 바닐라가 리치를 판정하는 방식과 같은 기하입니다. 3.0을 넘겨
+설정해도 서버가 거부하므로 의미가 없습니다.
+
+### 왜 믹스인이 필요한가
+
+바닐라도 좌클릭을 홀드하면 자동 공격을 하는데, **고정 10틱 주기**입니다. 검의 완충은
+12.5틱이라 바닐라 홀드 공격은 항상 약 80% 충전에서 나갑니다 — 대미지를 20% 버리는 셈입니다.
+
+그래서 `MinecraftClientAccessor` 믹스인으로 바닐라의 `attackCooldown` 카운터를 계속
+0 위로 유지해 바닐라 리듬을 막고, 완충 시점에 직접 공격합니다. 억제는 **조준 대상이
+사거리 안에 실제로 들어왔을 때만** 걸리므로, 좌클릭 홀드 채굴은 영향을 받지 않습니다.
+
+또한 자동 공격은 스턴슬램 키를 누르고 있지 **않을 때만** 동작합니다. 둘이 같은 공격
+쿨다운을 두고 경쟁하면 어느 쪽도 완충되지 않기 때문입니다.
 
 ## 어트리뷰트 스왑이 동작하는 원리
 
@@ -161,6 +216,14 @@ IntelliJ IDEA를 쓴다면 Gradle 플러그인이 설치되어 있을 경우 `bu
 | `maxDamageMode` | `true` | 착지 직전까지 기다렸다 발동해 낙하 거리(=대미지)를 최대화합니다. `false`면 조건 충족 즉시 발동. |
 | `releaseMarginTicks` | `2` | 예상 착지 몇 틱 전에 발동할지. 핑이 높으면 3~4로 올리세요. |
 | `minSalvageCharge` | `0.5` | 착지 직전까지 완충이 안 됐을 때, 이 충전도 이상이면 덜 충전된 채로라도 발동합니다. |
+| `humanize` | `true` | 고정 틱 오프셋 대신 매번 다른 값을 사용합니다. |
+| `reactionDelayMinTicks` / `MaxTicks` | `1` / `4` | 키 입력 후 시퀀스 시작까지의 지연. |
+| `swapSettleMinTicks` / `MaxTicks` | `1` / `3` | 슬롯 변경 후 공격까지의 대기. 코드상 최소 1틱이 강제됩니다. |
+| `inventoryClickSpacingMinTicks` / `MaxTicks` | `1` / `3` | 겉날개 3연타 클릭 사이 간격. |
+| `releaseMarginJitterTicks` | `1` | `releaseMarginTicks`에 더해지는 변동폭. 발동이 더 일러지기만 합니다. |
+| `autoAttack` | `true` | **검 자동 공격 전체 온/오프.** `false`면 바닐라 기본 동작으로 돌아갑니다. |
+| `autoAttackMaxReach` | `3.0` | 눈 위치에서 대상까지의 최대 거리(블록). 바닐라 리치가 3.0이라 그 이상은 서버가 거부합니다. |
+| `autoAttackMinCharge` | `1.0` | 이 충전도(0.0~1.0) 이상일 때만 공격합니다. `1.0`이 대미지 최대입니다. |
 
 ## 프로젝트 구조
 
@@ -169,12 +232,54 @@ src/main/java/net/jihoon/macestunslam/
   MaceStunSlamClient.java   모드 진입점, 키 바인딩 3종 등록
   StunSlamController.java   매 틱 실행되는 상태 머신 (자동 점프 + 타이밍 판정 + 공격)
   FallPredictor.java        지면까지 레이캐스트 + 중력 시뮬레이션으로 착지 시점 예측
+  Humanizer.java            고정 틱 오프셋 3곳의 변동값 생성(낙하/스왑 단위로 고정)
   ElytraSwapper.java        활공 중 겉날개 → 흉갑 슬롯 교체
   WeaponSwapper.java        검 ↔ 메이스 핫바 전환 + 충전도 확인
+  AutoAttackController.java 좌클릭 홀드 검 자동 공격 (쿨다운 완충 동기화)
   ModConfig.java            JSON 설정 로드/저장
+  mixin/
+    MinecraftClientAccessor.java  바닐라 홀드 공격(고정 10틱) 억제용 accessor
 ```
 
-## 매핑 관련 주의
+## 매핑 검증 결과 (yarn 1.21.11 기준)
+
+FabricMC/yarn 저장소의 `1.21.11` 브랜치 매핑 파일로 직접 대조한 결과입니다.
+
+**확인됨 (수정 불필요)**
+
+| 사용처 | 매핑 | 결과 |
+|---|---|---|
+| `player.isGliding()` | `LivingEntity method_6128 isGliding ()Z` | ✅ Entity가 아닌 LivingEntity에 있음. PlayerEntity가 상속하므로 정상 |
+| `getSelectedSlot()` / `setSelectedSlot(int)` | `method_67532` / `method_61496` | ✅ 둘 다 존재 |
+| `@Accessor("attackCooldown")` | `MinecraftClient field_1771 attackCooldown I` | ✅ **필드명 정확함** |
+| `getAttackCooldownProgress(float)` | `method_7261 (F)F` | ✅ |
+| `getEquippedStack(EquipmentSlot)` | `LivingEntity method_6118` | ✅ |
+| `getMainHandStack()` / `swingHand(Hand)` | `method_6047` / `method_6104` | ✅ |
+| `getEyePos()` / `getVelocity()` / `isOnGround()` | `method_33571` / `method_18798` / `method_24828` | ✅ |
+| `squaredDistanceTo(Entity)` | `method_5858` | ✅ |
+| `Inventory.getStack(int)` | `method_5438 (I)Lclass_1799;` | ✅ 인터페이스에 존재 |
+
+**주의 필요**
+
+- **`fallDistance`는 이제 `double`입니다** (`Entity field_6017 fallDistance D`, 예전엔 `float`).
+  `player.fallDistance < config.minFallDistance` 비교는 float가 double로 승격되어 그대로
+  컴파일되지만, 값을 직접 대입하는 코드를 추가하실 거면 타입에 주의하세요.
+- **`ItemTags.SWORDS`는 확인 실패.** yarn 1.21.11의 `ItemTags.mapping`에는 FIELD 항목이
+  하나도 없고 `of(String)` 메서드뿐입니다. 그래서 검 판별을 `ItemTags.SWORDS` 대신
+  **바닐라 검 6종 명시 비교**(`WeaponSwapper.isSword()`)로 바꿔 두었습니다. 컴파일이
+  보장되는 대신 모드 검은 인식하지 못합니다. 빌드해 보고 `ItemTags.SWORDS`가 해석되면
+  그 한 줄로 되돌리는 편이 낫습니다 (주석에 적어 뒀습니다).
+- **`PlayerInventory`가 `Inventory`를 구현하는지는 미확인.** 1.21.9에서 인벤토리가
+  리팩터링되면서 `getMainStacks()`가 생겼고, `PlayerInventory.mapping`에는 `getStack`이
+  없습니다(인터페이스 상속이면 정상). `player.getInventory().getStack(i)`가 컴파일되지
+  않으면 `getMainStacks().get(i)`로 바꾸세요. 해당 위치는 `ElytraSwapper.findChestplateSlot()`과
+  `WeaponSwapper.resolveSlot()` 두 곳입니다.
+- **야른 매핑 빌드 번호**: `1.21.11+build.1`과 `+build.3` 모두 존재를 확인했습니다.
+  `gradle.properties`에는 `build.1`이 들어 있으니 최신인 `build.3`으로 올리셔도 됩니다.
+- **야른은 1.21.11이 마지막입니다.** Fabric 공지에 따르면 다음 버전부터는 공식 Mojang
+  매핑으로 이전해야 합니다.
+
+## 매핑 관련 주의 (기존 메모)
 
 오프라인 환경이라 1.21.11 야른 매핑을 직접 확인하지 못했습니다. 컴파일 에러가 나면
 아래 세 곳을 확인하세요.
@@ -185,3 +290,8 @@ src/main/java/net/jihoon/macestunslam/
   구버전 매핑에서는 `selectedSlot` public 필드에 직접 대입했습니다.
 - `WeaponSwapper.isSword()` → `ItemTags.SWORDS` (`#minecraft:swords`). 이 상수가 없으면
   `swordHotbarSlot`을 명시적으로 지정해 자동 탐색을 우회할 수 있습니다.
+- `MinecraftClientAccessor` → `MinecraftClient`의 `attackCooldown` 필드. **여기가 가장
+  위험합니다.** 믹스인 accessor는 필드명이 정확히 맞아야 하고, 틀리면 로딩 단계에서
+  크래시합니다(`"required": true`). 필드명이 다르면 `@Accessor("...")` 값을 실제 야른
+  매핑명으로 바꾸세요. 자동 공격을 안 쓸 거라면 `fabric.mod.json`의 `mixins` 배열을
+  비우고 `AutoAttackController`와 `mixin/` 패키지를 지워도 나머지 기능은 그대로 동작합니다.

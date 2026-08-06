@@ -19,14 +19,19 @@ public class StunSlamController {
 
 	private static final int NO_MACE_MESSAGE_INTERVAL_TICKS = 20;
 
-	private final ElytraSwapper elytraSwapper = new ElytraSwapper();
+	private final Humanizer humanizer = new Humanizer();
+	private final ElytraSwapper elytraSwapper = new ElytraSwapper(humanizer);
 	private final WeaponSwapper weaponSwapper = new WeaponSwapper();
 	private final FallPredictor fallPredictor = new FallPredictor();
+	private final AutoAttackController autoAttackController = new AutoAttackController();
 
 	private boolean hasAutoJumpedThisHold = false;
+	private boolean wasKeyHeldLastTick = false;
 	private int jumpKeyReleaseCountdown = 0;
 	private int cooldownTicksRemaining = 0;
 	private int noMaceMessageCooldown = 0;
+	private int reactionDelayRemaining = 0;
+	private int swapSettleRemaining = 0;
 
 	public void onClientTick(MinecraftClient client) {
 		PlayerEntity player = client.player;
@@ -40,20 +45,36 @@ public class StunSlamController {
 			cooldownTicksRemaining--;
 		}
 
-		elytraSwapper.tick();
-		// Ticked before the key check so a scheduled swap back to the sword
-		// still lands after the player lets go of the key.
+		// Ticked before the key check so in-flight inventory clicks and a
+		// scheduled swap back to the sword still land after the key is let go.
+		elytraSwapper.tick(client, player);
 		weaponSwapper.tick(player);
 		releaseJumpKeyIfDue(client);
 		handleStandaloneKeys(client, player);
 
+		if (player.isOnGround()) {
+			humanizer.resetFall();
+		}
+
+		ModConfig config = ModConfig.get();
+
 		boolean keyHeld = MaceStunSlamClient.slamKey.isPressed();
 		if (!keyHeld) {
+			// Runs only outside a slam sequence, so the two never compete for
+			// the same attack cooldown.
+			autoAttackController.tick(client, player);
 			resetHoldState(client);
 			return;
 		}
 
-		ModConfig config = ModConfig.get();
+		if (!wasKeyHeldLastTick) {
+			wasKeyHeldLastTick = true;
+			reactionDelayRemaining = config.humanize ? humanizer.reactionDelayTicks() : 0;
+		}
+		if (reactionDelayRemaining > 0) {
+			reactionDelayRemaining--;
+			return;
+		}
 
 		// Checked before the weapon, since ending the glide is what creates the
 		// fall everything below depends on.
@@ -67,9 +88,16 @@ public class StunSlamController {
 		if (!weaponSwapper.isMaceSelected(player)) {
 			if (!config.attributeSwap || !weaponSwapper.selectMace(player)) {
 				warnNoMace(player);
+			} else {
+				swapSettleRemaining = config.humanize ? humanizer.swapSettleTicks() : 1;
 			}
-			// Either way, wait a tick: the slot change has to reach the server
-			// before the attack, or it lands as a sword hit instead of a slam.
+			return;
+		}
+
+		// The slot change has to reach the server before the attack, or it
+		// lands as a sword hit and no smash happens.
+		if (swapSettleRemaining > 0) {
+			swapSettleRemaining--;
 			return;
 		}
 
@@ -88,6 +116,7 @@ public class StunSlamController {
 			performAttack(client);
 			cooldownTicksRemaining = config.cooldownTicks;
 			hasAutoJumpedThisHold = false;
+			humanizer.resetFall();
 
 			if (config.attributeSwap) {
 				weaponSwapper.scheduleSwordSwap(config.swapBackToSwordDelayTicks);
@@ -117,8 +146,9 @@ public class StunSlamController {
 		// air is more damage - hold until landing is close enough that another
 		// tick risks losing the hit entirely.
 		int ticksToImpact = fallPredictor.ticksToImpact(client, player);
+		int releaseMargin = config.humanize ? humanizer.releaseMarginTicks() : config.releaseMarginTicks;
 		boolean bottomless = ticksToImpact == FallPredictor.NO_IMPACT;
-		boolean lastChance = ticksToImpact <= config.releaseMarginTicks;
+		boolean lastChance = ticksToImpact <= releaseMargin;
 
 		if (charge >= config.minAttackCooldownProgress) {
 			// Nothing left to wait for but altitude; over a void there is no
@@ -176,6 +206,9 @@ public class StunSlamController {
 
 	private void resetHoldState(MinecraftClient client) {
 		hasAutoJumpedThisHold = false;
+		wasKeyHeldLastTick = false;
+		reactionDelayRemaining = 0;
+		swapSettleRemaining = 0;
 		if (jumpKeyReleaseCountdown > 0) {
 			jumpKeyReleaseCountdown = 0;
 			client.options.jumpKey.setPressed(false);

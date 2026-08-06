@@ -3,7 +3,6 @@ package net.jihoon.macestunslam;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
-import net.minecraft.registry.tag.ItemTags;
 
 import java.util.function.Predicate;
 
@@ -101,7 +100,19 @@ public class WeaponSwapper {
 		return stack.isOf(Items.MACE);
 	}
 
-	private boolean isSword(ItemStack stack) {
-		return stack.isIn(ItemTags.SWORDS);
+	/**
+	 * Explicit item list rather than the {@code #minecraft:swords} tag: the
+	 * yarn 1.21.11 ItemTags mapping carries no named tag constants, so
+	 * {@code ItemTags.SWORDS} may not resolve. Swap this body for
+	 * {@code stack.isIn(ItemTags.SWORDS)} if it does compile - that version
+	 * also covers modded swords.
+	 */
+	public static boolean isSword(ItemStack stack) {
+		return stack.isOf(Items.WOODEN_SWORD)
+				|| stack.isOf(Items.STONE_SWORD)
+				|| stack.isOf(Items.IRON_SWORD)
+				|| stack.isOf(Items.GOLDEN_SWORD)
+				|| stack.isOf(Items.DIAMOND_SWORD)
+				|| stack.isOf(Items.NETHERITE_SWORD);
 	}
 }
