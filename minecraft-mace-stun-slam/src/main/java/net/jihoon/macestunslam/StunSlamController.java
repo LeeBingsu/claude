@@ -11,14 +11,17 @@ import net.minecraft.util.hit.EntityHitResult;
 import net.minecraft.util.hit.HitResult;
 
 /**
- * Runs every client tick. Does not touch the camera or inventory - it only
- * times an already-in-flight fall so the mace smash attack lands the instant
- * the vanilla conditions for it are met (falling, minimum fall distance,
- * mace in main hand, a valid entity under the crosshair within range).
+ * Runs every client tick. Never touches the camera - it times an already
+ * in-flight fall so the mace smash attack lands the instant the vanilla
+ * conditions for it are met (falling, minimum fall distance, mace in main
+ * hand, a valid entity under the crosshair within range), and optionally
+ * ends an elytra glide by swapping in a chestplate to start that fall.
  */
 public class StunSlamController {
 
 	private static final int NO_MACE_MESSAGE_INTERVAL_TICKS = 20;
+
+	private final ElytraSwapper elytraSwapper = new ElytraSwapper();
 
 	private boolean hasAutoJumpedThisHold = false;
 	private int jumpKeyReleaseCountdown = 0;
@@ -37,6 +40,7 @@ public class StunSlamController {
 			cooldownTicksRemaining--;
 		}
 
+		elytraSwapper.tick();
 		releaseJumpKeyIfDue(client);
 
 		boolean keyHeld = MaceStunSlamClient.slamKey.isPressed();
@@ -51,6 +55,15 @@ public class StunSlamController {
 		}
 
 		ModConfig config = ModConfig.get();
+
+		if (elytraSwapper.isGliding(player)) {
+			// A glide cannot produce a smash attack, so the only useful action
+			// here is ending it; the fall it drops into is handled next tick.
+			if (config.autoSwapElytra) {
+				elytraSwapper.trySwapToChestplate(client, player);
+			}
+			return;
+		}
 
 		if (config.autoJump && player.isOnGround() && !hasAutoJumpedThisHold) {
 			client.options.jumpKey.setPressed(true);

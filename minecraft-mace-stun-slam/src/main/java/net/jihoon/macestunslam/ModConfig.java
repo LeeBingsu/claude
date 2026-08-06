@@ -32,6 +32,12 @@ public class ModConfig {
 	/** Whether pressing the key while grounded should trigger a jump automatically. */
 	public boolean autoJump = true;
 
+	/** Whether holding the key while gliding should swap the elytra out for a chestplate. */
+	public boolean autoSwapElytra = true;
+
+	/** Ticks to wait after an elytra swap before another swap may be issued. */
+	public int swapCooldownTicks = 10;
+
 	private static ModConfig instance = new ModConfig();
 
 	public static ModConfig get() {
