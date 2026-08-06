@@ -1,5 +1,7 @@
 {
 	"key.categories.mace-stun-slam": "메이스 스턴슬램",
 	"key.mace-stun-slam.slam": "자동 스턴슬램",
-	"message.mace-stun-slam.no-mace": "주손에 메이스를 장착해야 자동 스턴슬램을 사용할 수 있습니다"
+	"key.mace-stun-slam.elytra-swap": "겉날개 → 흉갑 교체",
+	"key.mace-stun-slam.weapon-swap": "검 ↔ 메이스 전환",
+	"message.mace-stun-slam.no-mace": "핫바에 메이스가 있어야 자동 스턴슬램을 사용할 수 있습니다"
 }

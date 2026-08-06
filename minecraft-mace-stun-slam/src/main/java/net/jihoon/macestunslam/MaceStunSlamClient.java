@@ -11,20 +11,33 @@ public class MaceStunSlamClient implements ClientModInitializer {
 
 	public static final String MOD_ID = "mace-stun-slam";
 
+	private static final String CATEGORY = "key.categories.mace-stun-slam";
+
+	/** Held down: runs the whole sequence (glide exit, mace swap, timed slam, sword swap). */
 	public static KeyBinding slamKey;
+
+	/** Tapped: swap the elytra for a chestplate, nothing else. */
+	public static KeyBinding elytraSwapKey;
+
+	/** Tapped: toggle between the mace and the sword. */
+	public static KeyBinding weaponSwapKey;
 
 	@Override
 	public void onInitializeClient() {
 		ModConfig.load();
 
-		slamKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-				"key.mace-stun-slam.slam",
-				InputUtil.Type.KEYSYM,
-				GLFW.GLFW_KEY_V,
-				"key.categories.mace-stun-slam"
-		));
+		slamKey = register("key.mace-stun-slam.slam", GLFW.GLFW_KEY_V);
+		// Unbound by default - these overlap with the slam key's job, so they
+		// only matter to players who want the steps under separate fingers.
+		elytraSwapKey = register("key.mace-stun-slam.elytra-swap", GLFW.GLFW_KEY_UNKNOWN);
+		weaponSwapKey = register("key.mace-stun-slam.weapon-swap", GLFW.GLFW_KEY_UNKNOWN);
 
 		StunSlamController controller = new StunSlamController();
 		ClientTickEvents.END_CLIENT_TICK.register(controller::onClientTick);
+	}
+
+	private static KeyBinding register(String translationKey, int defaultKey) {
+		return KeyBindingHelper.registerKeyBinding(
+				new KeyBinding(translationKey, InputUtil.Type.KEYSYM, defaultKey, CATEGORY));
 	}
 }

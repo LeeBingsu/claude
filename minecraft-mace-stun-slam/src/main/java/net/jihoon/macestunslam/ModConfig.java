@@ -53,6 +53,15 @@ public class ModConfig {
 	/** Hotbar index (0-8) holding the sword, or -1 to scan the hotbar for one. */
 	public int swordHotbarSlot = -1;
 
+	/** Hold the slam until just before landing, trading airtime for smash damage. */
+	public boolean maxDamageMode = true;
+
+	/** Ticks before predicted impact at which the held slam is released. Raise on high ping. */
+	public int releaseMarginTicks = 2;
+
+	/** Charge floor for firing an undercharged slam rather than landing without one. */
+	public float minSalvageCharge = 0.5f;
+
 	private static ModConfig instance = new ModConfig();
 
 	public static ModConfig get() {

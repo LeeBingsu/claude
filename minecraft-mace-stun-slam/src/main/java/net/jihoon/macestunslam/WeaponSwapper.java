@@ -51,6 +51,11 @@ public class WeaponSwapper {
 		return select(player, slot);
 	}
 
+	/** Manual mace/sword toggle for the standalone keybind. */
+	public boolean toggleWeapon(PlayerEntity player) {
+		return isMaceSelected(player) ? selectSword(player) : selectMace(player);
+	}
+
 	public void scheduleSwordSwap(int delayTicks) {
 		pendingSwordSwapTicks = Math.max(1, delayTicks);
 	}

@@ -6,7 +6,6 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.EntityHitResult;
-import net.minecraft.util.hit.HitResult;
 
 /**
  * Runs every client tick. Never touches the camera - it times an already
@@ -22,6 +21,7 @@ public class StunSlamController {
 
 	private final ElytraSwapper elytraSwapper = new ElytraSwapper();
 	private final WeaponSwapper weaponSwapper = new WeaponSwapper();
+	private final FallPredictor fallPredictor = new FallPredictor();
 
 	private boolean hasAutoJumpedThisHold = false;
 	private int jumpKeyReleaseCountdown = 0;
@@ -45,6 +45,7 @@ public class StunSlamController {
 		// still lands after the player lets go of the key.
 		weaponSwapper.tick(player);
 		releaseJumpKeyIfDue(client);
+		handleStandaloneKeys(client, player);
 
 		boolean keyHeld = MaceStunSlamClient.slamKey.isPressed();
 		if (!keyHeld) {
@@ -100,20 +101,52 @@ public class StunSlamController {
 			return false;
 		}
 
+		if (!hasTargetInRange(client, player, config)) {
+			return false;
+		}
+
 		// Read with the mace already selected, so this is the mace's ~33-tick
 		// charge rather than the sword's ~12.5-tick one.
-		if (weaponSwapper.attackCharge(player) < config.minAttackCooldownProgress) {
-			return false;
+		float charge = weaponSwapper.attackCharge(player);
+
+		if (!config.maxDamageMode) {
+			return charge >= config.minAttackCooldownProgress;
 		}
 
-		HitResult target = client.crosshairTarget;
-		if (!(target instanceof EntityHitResult entityHit)) {
-			return false;
+		// The smash bonus grows with fall distance, so every extra tick in the
+		// air is more damage - hold until landing is close enough that another
+		// tick risks losing the hit entirely.
+		int ticksToImpact = fallPredictor.ticksToImpact(client, player);
+		boolean bottomless = ticksToImpact == FallPredictor.NO_IMPACT;
+		boolean lastChance = ticksToImpact <= config.releaseMarginTicks;
+
+		if (charge >= config.minAttackCooldownProgress) {
+			// Nothing left to wait for but altitude; over a void there is no
+			// landing to wait for at all, so take the hit now.
+			return lastChance || bottomless;
 		}
 
+		// Still charging. Firing undercharged is bad, but landing with no slam
+		// at all is worse - so salvage the hit on the way out.
+		return lastChance && charge >= config.minSalvageCharge;
+	}
+
+	private boolean hasTargetInRange(MinecraftClient client, PlayerEntity player, ModConfig config) {
+		if (!(client.crosshairTarget instanceof EntityHitResult entityHit)) {
+			return false;
+		}
 		Entity entity = entityHit.getEntity();
 		double rangeSq = config.attackRangeBlocks * config.attackRangeBlocks;
 		return player.squaredDistanceTo(entity) <= rangeSq;
+	}
+
+	private void handleStandaloneKeys(MinecraftClient client, PlayerEntity player) {
+		while (MaceStunSlamClient.elytraSwapKey.wasPressed()) {
+			elytraSwapper.trySwapToChestplate(client, player);
+		}
+		while (MaceStunSlamClient.weaponSwapKey.wasPressed()) {
+			weaponSwapper.toggleWeapon(player);
+		}
 	}
 
 	private void performAttack(MinecraftClient client) {
