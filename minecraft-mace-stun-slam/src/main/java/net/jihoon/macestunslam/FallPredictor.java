@@ -50,7 +50,9 @@ public class FallPredictor {
 	 *         block below, or -1 when nothing is within range.
 	 */
 	private double distanceToGround(MinecraftClient client, PlayerEntity player) {
-		Vec3d start = player.getPos();
+		// Built from the coordinate getters rather than a position accessor:
+		// getPos() no longer resolves in 1.21.11, while getX/getY/getZ are stable.
+		Vec3d start = new Vec3d(player.getX(), player.getY(), player.getZ());
 		Vec3d end = start.subtract(0.0, MAX_SCAN_DISTANCE, 0.0);
 
 		BlockHitResult hit = client.world.raycast(new RaycastContext(
