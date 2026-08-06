@@ -1,0 +1,25 @@
+{
+	"schemaVersion": 1,
+	"id": "mace-stun-slam",
+	"version": "${version}",
+	"name": "Mace Stun Slam Auto",
+	"description": "지정한 키를 누르고 있는 동안 메이스 스매시 어택(스턴슬램)의 낙하/타이밍을 자동으로 맞춰 공격해주는 클라이언트 전용 모드.",
+	"authors": [
+		"jihoonlee1005"
+	],
+	"contact": {},
+	"license": "MIT",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"net.jihoon.macestunslam.MaceStunSlamClient"
+		]
+	},
+	"mixins": [],
+	"depends": {
+		"fabricloader": ">=0.16.0",
+		"minecraft": "~1.21.11",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}
