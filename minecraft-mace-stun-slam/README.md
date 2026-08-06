@@ -147,11 +147,35 @@
 - [Fabric API](https://modrinth.com/mod/fabric-api) (1.21.11용 최신 빌드)
 - Java 21+ (모드 빌드 시)
 
-## 빌드 방법
+## 빌드 방법 ① GitHub Actions (자동)
 
-이 저장소에는 네트워크 제약으로 인해 Gradle Wrapper 바이너리(`gradlew`,
-`gradle-wrapper.jar`)와 정확한 최신 버전 번호(야른 매핑 빌드, Loom 버전, Fabric API
-버전)를 직접 채워 넣지 못했습니다. 로컬에서 아래 순서로 진행하세요.
+`.github/workflows/build-mod.yml`이 `minecraft-mace-stun-slam/` 아래가 바뀔 때마다
+자동으로 빌드합니다. Actions 탭에서 수동 실행(`workflow_dispatch`)도 가능합니다.
+
+- 성공하면 **Artifacts에 `mace-stun-slam-jar`** 이 올라옵니다. 받아서 압축을 풀고
+  `.minecraft/mods`에 Fabric API와 함께 넣으면 됩니다. (`-dev`, `-sources` jar은
+  제외되어 실제로 넣을 jar 하나만 나옵니다)
+- 실패하면 `build-reports` 아티팩트에 리포트가 올라옵니다. 믹스인/remap 오류는
+  콘솔보다 여기에 자세히 남습니다.
+
+이 저장소에는 Gradle Wrapper 바이너리(`gradlew`, `gradle-wrapper.jar`)가 없어서,
+워크플로우는 래퍼 대신 Gradle 8.10을 직접 설치해 `gradle build`를 실행합니다
+(`gradle-wrapper.properties`에 적힌 버전과 맞춰 둔 값입니다).
+
+로컬에서 래퍼를 만들어 커밋하면 워크플로우의 `Set up Gradle` 단계를
+`gradle/actions/setup-gradle@v4` 기본 설정으로 두고 `./gradlew build`를 쓰는 편이
+더 재현성이 좋습니다.
+
+```bash
+cd minecraft-mace-stun-slam
+gradle wrapper --gradle-version 8.10
+git add gradlew gradlew.bat gradle/wrapper/gradle-wrapper.jar
+```
+
+## 빌드 방법 ② 로컬
+
+정확한 최신 버전 번호(Loom 버전, Loader/Fabric API 버전)는 아직 미검증입니다.
+로컬에서 아래 순서로 진행하세요.
 
 1. `gradle.properties`를 열어 `# TODO verify` 주석이 붙은 값들을
    https://fabricmc.net/develop/ 에서 1.21.11 기준 최신 값으로 갱신합니다.
