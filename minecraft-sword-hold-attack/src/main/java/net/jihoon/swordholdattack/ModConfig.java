@@ -28,7 +28,6 @@ public class ModConfig {
 	public double maxReach = 3.0;
 
 	/**
-<<<<<<< HEAD
 	 * Seconds between swings, rolled fresh for each one as a real number.
 	 *
 	 * <p>The fraction matters even though attacks only leave on tick boundaries.
@@ -40,23 +39,6 @@ public class ModConfig {
 	 */
 	public double minIntervalSeconds = 0.5;
 	public double maxIntervalSeconds = 0.625;
-=======
-	 * Ticks between swings, rolled fresh for each one. 20 ticks = 1 second, so
-	 * the defaults are 0.60s to 0.75s.
-	 *
-	 * <p>Varying the interval rather than a charge threshold is what actually
-	 * produces spread. A sword charges in 12.5 ticks, so any interval at or
-	 * above 13 lands at full charge - the interval keeps varying while damage
-	 * per swing stays maximal. Going below 11 drops under
-	 * {@link AttackThresholds#CRIT_AND_SWEEP} and gives up crits and sweeps.
-	 *
-	 * <p>Sub-tick values are not expressible and would not matter: attacks leave
-	 * on tick boundaries, and the server buckets them into its own ticks either
-	 * way, so nothing downstream can observe finer timing than this.
-	 */
-	public int minIntervalTicks = 11;
-	public int maxIntervalTicks = 12;
->>>>>>> 9df52b028dd897d3df4a544ab059836699cafba8
 
 	/**
 	 * Hard floor - a swing is held back until charge reaches this, whatever the
