@@ -1,14 +1,16 @@
-name: Build Fabric mod
+name: Build Fabric mods
 
 on:
   push:
     branches: ['**']
     paths:
       - 'minecraft-mace-stun-slam/**'
+      - 'minecraft-sword-hold-attack/**'
       - '.github/workflows/build-mod.yml'
   pull_request:
     paths:
       - 'minecraft-mace-stun-slam/**'
+      - 'minecraft-sword-hold-attack/**'
       - '.github/workflows/build-mod.yml'
   workflow_dispatch:
 
@@ -24,9 +26,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
+    strategy:
+      # One mod failing should not hide the other's result.
+      fail-fast: false
+      matrix:
+        mod:
+          - minecraft-mace-stun-slam
+          - minecraft-sword-hold-attack
+
+    name: build (${{ matrix.mod }})
+
     defaults:
       run:
-        working-directory: minecraft-mace-stun-slam
+        working-directory: ${{ matrix.mod }}
 
     steps:
       - name: Checkout
@@ -64,14 +76,14 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v5
         with:
-          name: mace-stun-slam-jar
+          name: ${{ matrix.mod }}-jar
           # Paths are relative to the workspace root, not working-directory.
           # The remapped jar is the one that goes in .minecraft/mods; the
           # -dev and -sources jars are excluded.
           path: |
-            minecraft-mace-stun-slam/build/libs/*.jar
-            !minecraft-mace-stun-slam/build/libs/*-dev.jar
-            !minecraft-mace-stun-slam/build/libs/*-sources.jar
+            ${{ matrix.mod }}/build/libs/*.jar
+            !${{ matrix.mod }}/build/libs/*-dev.jar
+            !${{ matrix.mod }}/build/libs/*-sources.jar
           if-no-files-found: error
           retention-days: 30
 
@@ -81,9 +93,9 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v5
         with:
-          name: build-reports
+          name: ${{ matrix.mod }}-build-reports
           path: |
-            minecraft-mace-stun-slam/build/reports/
-            minecraft-mace-stun-slam/build/tmp/
+            ${{ matrix.mod }}/build/reports/
+            ${{ matrix.mod }}/build/tmp/
           if-no-files-found: ignore
           retention-days: 7

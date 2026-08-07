@@ -1,0 +1,13 @@
+{
+	"required": true,
+	"minVersion": "0.8",
+	"package": "net.jihoon.swordholdattack.mixin",
+	"compatibilityLevel": "JAVA_21",
+	"mixins": [],
+	"client": [
+		"MinecraftClientAccessor"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}
