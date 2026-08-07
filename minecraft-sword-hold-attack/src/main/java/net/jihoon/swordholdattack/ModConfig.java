@@ -28,14 +28,24 @@ public class ModConfig {
 	public double maxReach = 3.0;
 
 	/**
-	 * Charge required per swing, rolled fresh between these bounds each time.
-	 * Both defaults sit above {@link AttackThresholds#CRIT_AND_SWEEP}, so every
-	 * swing stays eligible for crits and sweep attacks. Dropping the lower bound
-	 * under that cliff costs those outright, which is a far bigger loss than the
-	 * damage multiplier alone suggests.
+	 * Ticks between swings, rolled fresh for each one. 20 ticks = 1 second, so
+	 * the defaults are 0.60s to 0.75s.
+	 *
+	 * <p>Varying the interval rather than a charge threshold is what actually
+	 * produces spread. A sword charges in 12.5 ticks, so any interval at or
+	 * above 13 lands at full charge - the interval keeps varying while damage
+	 * per swing stays maximal. Going below 11 drops under
+	 * {@link AttackThresholds#CRIT_AND_SWEEP} and gives up crits and sweeps.
 	 */
-	public float minCharge = 0.85f;
-	public float maxCharge = 0.95f;
+	public int minIntervalTicks = 12;
+	public int maxIntervalTicks = 15;
+
+	/**
+	 * Hard floor - a swing is held back until charge reaches this, whatever the
+	 * rolled interval says. Guards the case where something else reset the
+	 * cooldown, so the crit/sweep guarantee cannot be lost by accident.
+	 */
+	public float minCharge = AttackThresholds.CRIT_AND_SWEEP;
 
 	private static ModConfig instance = new ModConfig();
 

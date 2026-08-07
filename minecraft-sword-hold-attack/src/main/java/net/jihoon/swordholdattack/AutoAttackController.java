@@ -26,21 +26,30 @@ public class AutoAttackController {
 	 */
 	private static final int VANILLA_SUPPRESS_TICKS = 4;
 
-	private static final float UNSET = -1.0f;
+	private static final int UNSET = -1;
 
 	private final Random random = new Random();
 
+	/** Ticks elapsed since this controller last swung. */
+	private int ticksSinceAttack = 0;
+
 	/**
-	 * Charge required for the next swing, rolled once and held until that swing
-	 * happens. Re-rolling every tick would not randomise anything: charge climbs
-	 * past the whole range, so the first tick whose roll it clears is the one
-	 * that fires, and every swing would land at the bottom of the range.
+	 * Interval this swing is waiting for, rolled once and held until it happens.
+	 * Re-rolling every tick would not randomise anything: the elapsed count
+	 * climbs past the whole range, so the first tick whose roll it clears is the
+	 * one that fires, and every swing would land at the range minimum.
 	 */
-	private float requiredCharge = UNSET;
+	private int targetInterval = UNSET;
 
 	public void tick(MinecraftClient client) {
 		PlayerEntity player = client.player;
 		ModConfig config = ModConfig.get();
+
+		// Counted before any guard, so time spent without a target still
+		// accumulates and a swing is ready the moment one appears.
+		if (ticksSinceAttack < Integer.MAX_VALUE) {
+			ticksSinceAttack++;
+		}
 
 		if (!config.enabled || player == null || client.world == null || client.interactionManager == null) {
 			return;
@@ -68,25 +77,31 @@ public class AutoAttackController {
 		// once a real target is in range, so held-click mining is untouched.
 		((MinecraftClientAccessor) client).setAttackCooldown(VANILLA_SUPPRESS_TICKS);
 
-		if (requiredCharge == UNSET) {
-			requiredCharge = rollRequiredCharge(config);
+		if (targetInterval == UNSET) {
+			targetInterval = rollInterval(config);
 		}
-		if (player.getAttackCooldownProgress(0.5f) < requiredCharge) {
+		if (ticksSinceAttack < targetInterval) {
+			return;
+		}
+		// Independent of the interval: something else may have reset the
+		// cooldown, and a swing under this charge loses crits and sweeps.
+		if (player.getAttackCooldownProgress(0.5f) < config.minCharge) {
 			return;
 		}
 
 		client.interactionManager.attackEntity(player, entityHit.getEntity());
 		player.swingHand(Hand.MAIN_HAND);
 
-		// The next swing gets its own value.
-		requiredCharge = UNSET;
+		ticksSinceAttack = 0;
+		// The next swing gets its own interval.
+		targetInterval = UNSET;
 	}
 
-	private float rollRequiredCharge(ModConfig config) {
+	private int rollInterval(ModConfig config) {
 		// Tolerates the bounds being configured the wrong way round.
-		float low = Math.max(0.0f, Math.min(config.minCharge, config.maxCharge));
-		float high = Math.min(1.0f, Math.max(config.minCharge, config.maxCharge));
-		return low >= high ? low : low + random.nextFloat() * (high - low);
+		int low = Math.max(1, Math.min(config.minIntervalTicks, config.maxIntervalTicks));
+		int high = Math.max(config.minIntervalTicks, config.maxIntervalTicks);
+		return low >= high ? low : low + random.nextInt(high - low + 1);
 	}
 
 	/**
