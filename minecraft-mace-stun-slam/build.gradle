@@ -1,5 +1,6 @@
 plugins {
-	id 'fabric-loom' version "${loom_version}"
+	// Renamed for 1.21.11 - the old 'fabric-loom' id no longer resolves.
+	id 'net.fabricmc.fabric-loom-remap' version "${loom_version}"
 	id 'maven-publish'
 }
 

@@ -95,7 +95,12 @@
 3. 좌클릭을 누르고 있음 (GUI가 열려 있으면 제외)
 4. **조준선이 엔티티를 향하고 있음**
 5. 눈 위치에서 피격 지점까지의 거리가 `autoAttackMaxReach`(기본 3.0) 이하
-6. 공격 충전도가 `autoAttackMinCharge`(기본 1.0 = 완충) 이상
+6. 공격 충전도가 요구치 이상 — 요구치는 매 타격마다 `autoAttackMinCharge`~`MaxCharge`
+   (기본 0.80~0.90)에서 새로 뽑습니다
+
+요구 충전도는 **타격 단위로 한 번 뽑아 고정**합니다. 매 틱 재추첨하면 충전도가 범위를
+훑고 올라가면서 가장 먼저 통과하는 추첨에 발동해버려, 결과적으로 항상 범위의 최솟값에
+붙습니다. 무작위성이 사라지는 거죠 — humanize 쪽 래치와 같은 이유입니다.
 
 거리는 눈 위치 기준 3D 유클리드 거리로 잽니다. 즉 플레이어를 중심으로 한 구(球)이고,
 수평 거리가 아닙니다. 바닐라가 리치를 판정하는 방식과 같은 기하입니다. 3.0을 넘겨
@@ -147,11 +152,35 @@
 - [Fabric API](https://modrinth.com/mod/fabric-api) (1.21.11용 최신 빌드)
 - Java 21+ (모드 빌드 시)
 
-## 빌드 방법
+## 빌드 방법 ① GitHub Actions (자동)
 
-이 저장소에는 네트워크 제약으로 인해 Gradle Wrapper 바이너리(`gradlew`,
-`gradle-wrapper.jar`)와 정확한 최신 버전 번호(야른 매핑 빌드, Loom 버전, Fabric API
-버전)를 직접 채워 넣지 못했습니다. 로컬에서 아래 순서로 진행하세요.
+`.github/workflows/build-mod.yml`이 `minecraft-mace-stun-slam/` 아래가 바뀔 때마다
+자동으로 빌드합니다. Actions 탭에서 수동 실행(`workflow_dispatch`)도 가능합니다.
+
+- 성공하면 **Artifacts에 `mace-stun-slam-jar`** 이 올라옵니다. 받아서 압축을 풀고
+  `.minecraft/mods`에 Fabric API와 함께 넣으면 됩니다. (`-dev`, `-sources` jar은
+  제외되어 실제로 넣을 jar 하나만 나옵니다)
+- 실패하면 `build-reports` 아티팩트에 리포트가 올라옵니다. 믹스인/remap 오류는
+  콘솔보다 여기에 자세히 남습니다.
+
+이 저장소에는 Gradle Wrapper 바이너리(`gradlew`, `gradle-wrapper.jar`)가 없어서,
+워크플로우는 래퍼 대신 Gradle 8.10을 직접 설치해 `gradle build`를 실행합니다
+(`gradle-wrapper.properties`에 적힌 버전과 맞춰 둔 값입니다).
+
+로컬에서 래퍼를 만들어 커밋하면 워크플로우의 `Set up Gradle` 단계를
+`gradle/actions/setup-gradle@v4` 기본 설정으로 두고 `./gradlew build`를 쓰는 편이
+더 재현성이 좋습니다.
+
+```bash
+cd minecraft-mace-stun-slam
+gradle wrapper --gradle-version 8.10
+git add gradlew gradlew.bat gradle/wrapper/gradle-wrapper.jar
+```
+
+## 빌드 방법 ② 로컬
+
+정확한 최신 버전 번호(Loom 버전, Loader/Fabric API 버전)는 아직 미검증입니다.
+로컬에서 아래 순서로 진행하세요.
 
 1. `gradle.properties`를 열어 `# TODO verify` 주석이 붙은 값들을
    https://fabricmc.net/develop/ 에서 1.21.11 기준 최신 값으로 갱신합니다.
@@ -223,7 +252,7 @@ IntelliJ IDEA를 쓴다면 Gradle 플러그인이 설치되어 있을 경우 `bu
 | `releaseMarginJitterTicks` | `1` | `releaseMarginTicks`에 더해지는 변동폭. 발동이 더 일러지기만 합니다. |
 | `autoAttack` | `true` | **검 자동 공격 전체 온/오프.** `false`면 바닐라 기본 동작으로 돌아갑니다. |
 | `autoAttackMaxReach` | `3.0` | 눈 위치에서 대상까지의 최대 거리(블록). 바닐라 리치가 3.0이라 그 이상은 서버가 거부합니다. |
-| `autoAttackMinCharge` | `1.0` | 이 충전도(0.0~1.0) 이상일 때만 공격합니다. `1.0`이 대미지 최대입니다. |
+| `autoAttackMinCharge` / `MaxCharge` | `0.80` / `0.90` | 매 타격마다 이 범위에서 요구 충전도를 새로 뽑습니다. 두 값을 같게 하면 고정값이 됩니다. |
 
 ## 프로젝트 구조
 

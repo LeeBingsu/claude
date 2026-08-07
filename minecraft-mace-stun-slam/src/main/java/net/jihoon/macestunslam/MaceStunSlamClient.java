@@ -4,14 +4,20 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.option.KeyBinding;
-import net.minecraft.client.util.InputUtil;
+import net.minecraft.util.Identifier;
 import org.lwjgl.glfw.GLFW;
 
 public class MaceStunSlamClient implements ClientModInitializer {
 
 	public static final String MOD_ID = "mace-stun-slam";
 
-	private static final String CATEGORY = "key.categories.mace-stun-slam";
+	// 1.21.9+ takes a Category object rather than the plain translation key
+	// string older versions accepted. Category.create(String) exists but is
+	// private, so the Identifier overload is the only way in. The label is
+	// looked up as key.categories.<namespace>.<path>, which the lang files
+	// carry alongside the old flat key.
+	private static final KeyBinding.Category CATEGORY =
+			KeyBinding.Category.create(Identifier.of(MOD_ID, "main"));
 
 	/** Held down: runs the whole sequence (glide exit, mace swap, timed slam, sword swap). */
 	public static KeyBinding slamKey;
@@ -37,7 +43,8 @@ public class MaceStunSlamClient implements ClientModInitializer {
 	}
 
 	private static KeyBinding register(String translationKey, int defaultKey) {
+		// The (String, int, Category) constructor defaults to a KEYSYM binding.
 		return KeyBindingHelper.registerKeyBinding(
-				new KeyBinding(translationKey, InputUtil.Type.KEYSYM, defaultKey, CATEGORY));
+				new KeyBinding(translationKey, defaultKey, CATEGORY));
 	}
 }

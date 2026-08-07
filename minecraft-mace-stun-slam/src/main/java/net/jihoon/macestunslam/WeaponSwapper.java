@@ -46,7 +46,7 @@ public class WeaponSwapper {
 	}
 
 	public boolean selectSword(PlayerEntity player) {
-		int slot = resolveSlot(player, ModConfig.get().swordHotbarSlot, this::isSword);
+		int slot = resolveSlot(player, ModConfig.get().swordHotbarSlot, WeaponSwapper::isSword);
 		return select(player, slot);
 	}
 
