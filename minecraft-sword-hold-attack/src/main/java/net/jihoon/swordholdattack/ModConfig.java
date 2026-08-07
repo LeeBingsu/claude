@@ -36,9 +36,13 @@ public class ModConfig {
 	 * above 13 lands at full charge - the interval keeps varying while damage
 	 * per swing stays maximal. Going below 11 drops under
 	 * {@link AttackThresholds#CRIT_AND_SWEEP} and gives up crits and sweeps.
+	 *
+	 * <p>Sub-tick values are not expressible and would not matter: attacks leave
+	 * on tick boundaries, and the server buckets them into its own ticks either
+	 * way, so nothing downstream can observe finer timing than this.
 	 */
-	public int minIntervalTicks = 12;
-	public int maxIntervalTicks = 15;
+	public int minIntervalTicks = 11;
+	public int maxIntervalTicks = 12;
 
 	/**
 	 * Hard floor - a swing is held back until charge reaches this, whatever the
