@@ -26,9 +26,13 @@ public class AutoAttackController {
 	 */
 	private static final int VANILLA_SUPPRESS_TICKS = 4;
 
+<<<<<<< HEAD
 	private static final float UNSET = -1.0f;
 
 	private static final float TICKS_PER_SECOND = 20.0f;
+=======
+	private static final int UNSET = -1;
+>>>>>>> 9df52b028dd897d3df4a544ab059836699cafba8
 
 	private final Random random = new Random();
 
@@ -36,6 +40,7 @@ public class AutoAttackController {
 	private int ticksSinceAttack = 0;
 
 	/**
+<<<<<<< HEAD
 	 * Interval this swing is waiting for, in ticks, rolled once and held until
 	 * it happens. Re-rolling every tick would not randomise anything: the
 	 * elapsed count climbs past the whole range, so the first tick whose roll it
@@ -46,6 +51,14 @@ public class AutoAttackController {
 	 * the distribution of intervals an observer sees.
 	 */
 	private float targetInterval = UNSET;
+=======
+	 * Interval this swing is waiting for, rolled once and held until it happens.
+	 * Re-rolling every tick would not randomise anything: the elapsed count
+	 * climbs past the whole range, so the first tick whose roll it clears is the
+	 * one that fires, and every swing would land at the range minimum.
+	 */
+	private int targetInterval = UNSET;
+>>>>>>> 9df52b028dd897d3df4a544ab059836699cafba8
 
 	public void tick(MinecraftClient client) {
 		PlayerEntity player = client.player;
@@ -103,6 +116,7 @@ public class AutoAttackController {
 		targetInterval = UNSET;
 	}
 
+<<<<<<< HEAD
 	private float rollInterval(ModConfig config) {
 		// Tolerates the bounds being configured the wrong way round.
 		float low = (float) Math.min(config.minIntervalSeconds, config.maxIntervalSeconds) * TICKS_PER_SECOND;
@@ -110,6 +124,13 @@ public class AutoAttackController {
 		low = Math.max(1.0f, low);
 		high = Math.max(low, high);
 		return low >= high ? low : low + random.nextFloat() * (high - low);
+=======
+	private int rollInterval(ModConfig config) {
+		// Tolerates the bounds being configured the wrong way round.
+		int low = Math.max(1, Math.min(config.minIntervalTicks, config.maxIntervalTicks));
+		int high = Math.max(config.minIntervalTicks, config.maxIntervalTicks);
+		return low >= high ? low : low + random.nextInt(high - low + 1);
+>>>>>>> 9df52b028dd897d3df4a544ab059836699cafba8
 	}
 
 	/**
