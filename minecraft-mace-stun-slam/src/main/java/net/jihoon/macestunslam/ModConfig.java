@@ -91,8 +91,8 @@ public class ModConfig {
 	 * time. Set both to the same value for a fixed threshold; 1.0 is maximum
 	 * damage but fires at a charge no human input can produce.
 	 */
-	public float autoAttackMinCharge = 0.80f;
-	public float autoAttackMaxCharge = 0.90f;
+	public float autoAttackMinCharge = 0.85f;
+	public float autoAttackMaxCharge = 0.95f;
 
 	private static ModConfig instance = new ModConfig();
 
