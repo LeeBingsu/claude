@@ -86,8 +86,13 @@ public class ModConfig {
 	/** Max eye-to-target distance in blocks. Vanilla entity reach is 3.0; above that the server rejects the hit. */
 	public double autoAttackMaxReach = 3.0;
 
-	/** Required attack charge (0.0-1.0) before each auto attack. 1.0 = full damage. */
-	public float autoAttackMinCharge = 1.0f;
+	/**
+	 * Attack charge required per swing, rolled fresh between these bounds each
+	 * time. Set both to the same value for a fixed threshold; 1.0 is maximum
+	 * damage but fires at a charge no human input can produce.
+	 */
+	public float autoAttackMinCharge = 0.85f;
+	public float autoAttackMaxCharge = 0.95f;
 
 	private static ModConfig instance = new ModConfig();
 

@@ -1,0 +1,101 @@
+name: Build Fabric mods
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'minecraft-mace-stun-slam/**'
+      - 'minecraft-sword-hold-attack/**'
+      - '.github/workflows/build-mod.yml'
+  pull_request:
+    paths:
+      - 'minecraft-mace-stun-slam/**'
+      - 'minecraft-sword-hold-attack/**'
+      - '.github/workflows/build-mod.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-mod-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      # One mod failing should not hide the other's result.
+      fail-fast: false
+      matrix:
+        mod:
+          - minecraft-mace-stun-slam
+          - minecraft-sword-hold-attack
+
+    name: build (${{ matrix.mod }})
+
+    defaults:
+      run:
+        working-directory: ${{ matrix.mod }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      # The repo has gradle-wrapper.properties but no gradlew/gradle-wrapper.jar,
+      # so Gradle is installed here instead of invoking a wrapper that isn't there.
+      # The version matches what gradle-wrapper.properties declares, and Loom for
+      # 1.21.11 requires well above the 8.x line.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.1'
+
+      - name: Show resolved versions
+        run: |
+          echo "--- gradle.properties ---"
+          cat gradle.properties
+          gradle --version
+
+      - name: Build
+        run: gradle build --stacktrace
+
+      - name: List build output
+        if: success()
+        run: ls -la build/libs
+
+      - name: Upload mod jar
+        if: success()
+        uses: actions/upload-artifact@v5
+        with:
+          name: ${{ matrix.mod }}-jar
+          # Paths are relative to the workspace root, not working-directory.
+          # The remapped jar is the one that goes in .minecraft/mods; the
+          # -dev and -sources jars are excluded.
+          path: |
+            ${{ matrix.mod }}/build/libs/*.jar
+            !${{ matrix.mod }}/build/libs/*-dev.jar
+            !${{ matrix.mod }}/build/libs/*-sources.jar
+          if-no-files-found: error
+          retention-days: 30
+
+      # Loom failures usually explain themselves in the console, but mixin and
+      # remap problems leave their detail in these reports.
+      - name: Upload build reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: ${{ matrix.mod }}-build-reports
+          path: |
+            ${{ matrix.mod }}/build/reports/
+            ${{ matrix.mod }}/build/tmp/
+          if-no-files-found: ignore
+          retention-days: 7
