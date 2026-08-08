@@ -1,0 +1,47 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "temp-mail",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "temp-mail",
+      // `wrangler d1 create temp-mail` 를 실행한 뒤 출력된 id 로 교체하세요.
+      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+    }
+  ],
+
+  "triggers": {
+    // 10분마다 만료된 주소/메일을 정리합니다.
+    "crons": ["*/10 * * * *"]
+  },
+
+  "observability": {
+    "enabled": true
+  },
+
+  "vars": {
+    // 임시 주소에 사용할 도메인 목록. Cloudflare Email Routing 이 설정된
+    // 도메인이어야 실제로 메일이 들어옵니다. 콤마로 여러 개를 넣을 수 있습니다.
+    "MAIL_DOMAINS": "example.com",
+    // 주소 기본 수명(분). UI 의 "연장" 버튼은 이 값만큼 뒤로 미룹니다.
+    "INBOX_TTL_MINUTES": "60",
+    // 하나의 주소가 보관하는 최대 메일 수. 넘으면 오래된 것부터 지웁니다.
+    "MAX_MESSAGES_PER_INBOX": "50",
+    // D1 에 인라인으로 저장할 첨부 1개의 최대 크기(바이트). 넘으면 메타데이터만 남깁니다.
+    "MAX_ATTACHMENT_BYTES": "512000",
+    // "1" 이면 POST /api/dev/ingest 로 .eml 을 직접 주입할 수 있습니다.
+    // 로컬 개발 전용 — 배포 환경에서는 반드시 "0" 으로 두세요.
+    // 로컬에서는 .dev.vars 로 덮어씁니다 (.dev.vars.example 참고).
+    "ALLOW_DEV_INGEST": "0"
+  }
+}
