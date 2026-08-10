@@ -47,12 +47,34 @@ genuine. This mod is the version that costs nothing to run.
 
 
 ---------------------------------------------------------------
-  WHAT YOU NEED
+  WHAT YOU WERE GIVEN, AND WHAT YOU NEED
 ---------------------------------------------------------------
 
-  * JDK 21
-  * Python 3 (for the code generator)
-  * The map-license source folder
+In the folder:
+
+  src/ build.gradle gradlew ...   the mod source
+  tools/generate_codes.py         the code generator
+  dist/READ-ME-FIRST.txt          template to send to buyers
+  dist/issue-codes.yml            optional GitHub Actions
+                                  workflow for minting codes
+  README.md, USAGE.md             fuller documentation
+
+You need JDK 21 and Python 3. Gradle is not a separate install -
+the wrapper in the folder fetches it.
+
+You build this yourself rather than being handed a finished jar,
+because the world it protects and the codes it accepts are both
+compiled into the jar. A prebuilt one would be locked to
+somebody else's map and somebody else's codes.
+
+Do these three before your first release:
+
+  1. Put your own world's details in gate.json      (STEP 1)
+  2. Mint your own codes                            (STEP 3)
+  3. Change the INTEGRITY_KEY string in
+     src/main/java/net/jihoon/maplicense/LicenseStore.java
+     to any other text, so activation records from another
+     build do not validate against yours
 
 
 ---------------------------------------------------------------
@@ -141,7 +163,10 @@ receives it.
 
 The cost is that you cannot mint these in advance - you need the
 buyer's Minecraft username first, so every sale means minting
-and rebuilding. The issuing workflow makes that one button.
+and rebuilding. If you keep the mod in a GitHub repository, copy
+dist/issue-codes.yml into .github/workflows/ and that becomes
+one button on the Actions tab: fill in the buyer's username, and
+the run mints the code, rebuilds, and hands you both.
 
 Use --for-uuid <uuid> instead of --for-player if you are offline
 or already know the UUID.

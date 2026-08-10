@@ -1,0 +1,253 @@
+# Copy this to .github/workflows/issue-codes.yml in your own repository to mint
+# activation codes from the Actions tab instead of your own machine.
+#
+# What one run does: mints the codes, appends their hashes to codes.json, bumps
+# the mod version, commits both, builds the jar, and uploads the codes and the
+# jar as two artifacts.
+#
+# Leave "for_player" empty for codes any account can redeem. Put a Minecraft
+# username in it for a code only that account can redeem.
+#
+# The plaintext codes are written outside the checkout so they can never be
+# committed. Set a repository secret named CODE_BATCH_PASSPHRASE to have the
+# batch encrypted with AES256 before it is uploaded.
+
+name: Issue map-license activation codes
+
+# Manual only. Minting codes is a deliberate act with a lasting consequence -
+# the digest list it appends to is what every future jar verifies against - so
+# it must never fire off a push.
+on:
+  workflow_dispatch:
+    inputs:
+      count:
+        description: 'How many codes to mint'
+        required: true
+        default: '200'
+      batch_name:
+        description: 'Batch label (used for the artifact and commit message)'
+        required: true
+        default: 'batch1'
+      for_player:
+        description: 'Minecraft username to bind these codes to (leave empty for codes any account can redeem)'
+        required: false
+        default: ''
+      retention_days:
+        description: 'Days to keep the code artifact downloadable'
+        required: true
+        default: '1'
+
+permissions:
+  # Needed to push the updated digest list back. Without that commit the minted
+  # codes would exist only in the artifact and verify against nothing.
+  contents: write
+
+# Two runs appending to the same codes.json would race on the push and one
+# batch would be silently lost, so they queue instead.
+concurrency:
+  group: issue-codes
+  cancel-in-progress: false
+
+env:
+  # Set for a repository whose root is the mod itself. If you nest the mod in a
+  # subfolder, put that folder here and prefix HASHES with it.
+  MOD_DIR: .
+  HASHES: src/main/resources/map-license/codes.json
+
+jobs:
+  issue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Validate input
+        run: |
+          count='${{ inputs.count }}'
+          if ! [[ "$count" =~ ^[0-9]+$ ]] || [ "$count" -lt 1 ] || [ "$count" -gt 50000 ]; then
+            echo "::error::count must be a whole number between 1 and 50000 (got '$count')"
+            exit 1
+          fi
+
+          # Constrained to the Minecraft username charset, which also keeps the
+          # value from carrying anything shell-significant into the mint step.
+          player='${{ inputs.for_player }}'
+          if [ -n "$player" ] && ! [[ "$player" =~ ^[A-Za-z0-9_]{3,16}$ ]]; then
+            echo "::error::for_player must be a Minecraft username: 3-16 of A-Z a-z 0-9 _ (got '$player')"
+            exit 1
+          fi
+
+      - name: Record digest count before
+        id: before
+        run: |
+          before=$(python3 -c "import json;d=json.load(open('$HASHES'));print(len(d['hashes'])+len(d.get('boundHashes',[])))")
+          echo "count=$before" >> "$GITHUB_OUTPUT"
+          echo "Digest list currently holds $before code(s)."
+
+      # Written to the runner temp directory, never inside the checkout. The
+      # plaintext must not be commit-able even by accident, and the build
+      # workflow fails if it ever finds a code file in the repo.
+      - name: Mint codes
+        id: mint
+        run: |
+          batch='${{ inputs.batch_name }}'
+          out="$RUNNER_TEMP/codes-$batch.txt"
+          bind=''
+          if [ -n '${{ inputs.for_player }}' ]; then
+            bind="--for-player=${{ inputs.for_player }}"
+          fi
+          python3 "$MOD_DIR/tools/generate_codes.py" \
+            --count '${{ inputs.count }}' \
+            --out-codes "$out" \
+            --out-hashes "$HASHES" \
+            $bind
+          echo "plaintext=$out" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the batch landed
+        id: verify
+        run: |
+          after=$(python3 -c "import json;d=json.load(open('$HASHES'));print(len(d['hashes'])+len(d.get('boundHashes',[])))")
+          added=$(( after - ${{ steps.before.outputs.count }} ))
+          if [ "$added" -ne '${{ inputs.count }}' ]; then
+            echo "::error::Expected ${{ inputs.count }} new digest(s), got $added. Not committing."
+            exit 1
+          fi
+          if ls "$MOD_DIR"/tools/codes*.txt >/dev/null 2>&1; then
+            echo "::error::Plaintext codes ended up inside the checkout. Not committing."
+            exit 1
+          fi
+          echo "after=$after" >> "$GITHUB_OUTPUT"
+
+      # Encrypted when CODE_BATCH_PASSPHRASE is set, plaintext otherwise. The
+      # repository is private either way, so this is defence in depth rather
+      # than the thing standing between the codes and the public.
+      - name: Package the batch
+        id: package
+        env:
+          PASSPHRASE: ${{ secrets.CODE_BATCH_PASSPHRASE }}
+        run: |
+          src='${{ steps.mint.outputs.plaintext }}'
+          if [ -n "$PASSPHRASE" ]; then
+            gpg --batch --yes --symmetric --cipher-algo AES256 \
+              --passphrase "$PASSPHRASE" --output "$src.gpg" "$src"
+            rm -f "$src"
+            echo "path=$src.gpg" >> "$GITHUB_OUTPUT"
+            echo "encrypted=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::CODE_BATCH_PASSPHRASE is not set - the batch is uploaded unencrypted."
+            echo "path=$src" >> "$GITHUB_OUTPUT"
+            echo "encrypted=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload the batch
+        uses: actions/upload-artifact@v5
+        with:
+          name: map-license-codes-${{ inputs.batch_name }}
+          path: ${{ steps.package.outputs.path }}
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention_days }}
+
+      # Every jar is named after mod_version, so without a bump two builds
+      # carrying different digest lists would land on disk under the same
+      # filename with no way to tell which one knows the newer codes.
+      - name: Bump the mod version
+        id: bump
+        run: |
+          python3 - "$MOD_DIR/gradle.properties" >> "$GITHUB_OUTPUT" <<'PY'
+          import re, sys
+
+          path = sys.argv[1]
+          text = open(path, encoding="utf-8").read()
+
+          match = re.search(r"^mod_version=([0-9]+)\.([0-9]+)\.([0-9]+)[ \t]*$", text, re.M)
+          if not match:
+              sys.exit("::error::mod_version is not in X.Y.Z form; refusing to guess a bump")
+
+          old = f"{match.group(1)}.{match.group(2)}.{match.group(3)}"
+          new = f"{match.group(1)}.{int(match.group(2)) + 1}.0"
+
+          open(path, "w", encoding="utf-8").write(
+              text[:match.start()] + f"mod_version={new}" + text[match.end():])
+          print(f"old={old}")
+          print(f"new={new}")
+          PY
+
+      - name: Commit the digest list and version
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$HASHES" "$MOD_DIR/gradle.properties"
+
+          if git diff --cached --quiet; then
+            echo "::error::codes.json is unchanged - nothing to commit."
+            exit 1
+          fi
+
+          git commit -m "Issue ${{ inputs.count }} activation code(s) (${{ inputs.batch_name }}), v${{ steps.bump.outputs.new }}" \
+                     -m "Digest list now holds ${{ steps.verify.outputs.after }} code(s). Plaintext lives only in this run's artifact."
+
+          for attempt in 1 2 3; do
+            if git push origin HEAD:'${{ github.ref_name }}'; then
+              exit 0
+            fi
+            echo "Push failed (attempt $attempt), rebasing on the latest branch tip."
+            git pull --rebase origin '${{ github.ref_name }}'
+            sleep $((attempt * 4))
+          done
+
+          echo "::error::Could not push the digest list. The artifact's codes verify against nothing - discard the batch."
+          exit 1
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.1'
+
+      # Pushes made with GITHUB_TOKEN deliberately do not trigger other
+      # workflows, so build-mod.yml will not pick this commit up. Building here
+      # is what guarantees a jar that actually contains the new digests.
+      - name: Build the jar carrying these codes
+        working-directory: ${{ env.MOD_DIR }}
+        run: gradle build --stacktrace
+
+      - name: Upload the jar
+        uses: actions/upload-artifact@v5
+        with:
+          name: map-license-jar-v${{ steps.bump.outputs.new }}-${{ inputs.batch_name }}
+          path: |
+            ${{ env.MOD_DIR }}/build/libs/*.jar
+            !${{ env.MOD_DIR }}/build/libs/*-dev.jar
+            !${{ env.MOD_DIR }}/build/libs/*-sources.jar
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Summary
+        run: |
+          {
+            echo "### Batch \`${{ inputs.batch_name }}\` issued"
+            echo
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| Codes minted | ${{ inputs.count }} |"
+            echo "| Digest list total | ${{ steps.verify.outputs.after }} |"
+            echo "| Bound to account | ${{ inputs.for_player || 'no - any account may redeem' }} |"
+            echo "| Mod version | ${{ steps.bump.outputs.old }} → **${{ steps.bump.outputs.new }}** |"
+            echo "| Encrypted | ${{ steps.package.outputs.encrypted }} |"
+            echo "| Artifact retention | ${{ inputs.retention_days }} day(s) |"
+            echo
+            echo "Download **map-license-codes-${{ inputs.batch_name }}** and save it somewhere permanent."
+            echo "The artifact expires and the codes cannot be recovered from the digest list."
+            echo
+            echo "Ship \`map-license-${{ steps.bump.outputs.new }}.jar\` with the map - earlier jars do not"
+            echo "contain these digests and will reject every code in this batch."
+          } >> "$GITHUB_STEP_SUMMARY"
