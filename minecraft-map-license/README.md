@@ -11,6 +11,8 @@
 >   맵·모드와 함께 압축 파일에 그대로 넣으면 됩니다.
 > - [dist/MAP-AUTHOR-GUIDE.txt](dist/MAP-AUTHOR-GUIDE.txt) — **맵 제작자에게 배포할 영어 안내문.**
 >   이 모드를 다른 맵 제작자에게 넘길 때 함께 주면 됩니다.
+> - [dist/map_license_colab.ipynb](dist/map_license_colab.ipynb) — **Google Colab 노트북.**
+>   JDK·Python 설치 없이 브라우저에서 코드 발급부터 jar 빌드까지 끝냅니다.
 
 ```
 맵 구매 → 코드 발급 → 모드 설치 + 월드 진입 → 코드 입력 → 해당 계정으로 영구 해금

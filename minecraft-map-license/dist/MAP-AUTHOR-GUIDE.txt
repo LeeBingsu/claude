@@ -57,10 +57,19 @@ In the folder:
   dist/READ-ME-FIRST.txt          template to send to buyers
   dist/issue-codes.yml            optional GitHub Actions
                                   workflow for minting codes
+  dist/map_license_colab.ipynb    do all of this in a browser
+                                  instead, with nothing installed
   README.md, USAGE.md             fuller documentation
 
 You need JDK 21 and Python 3. Gradle is not a separate install -
 the wrapper in the folder fetches it.
+
+If you would rather install nothing at all, open
+dist/map_license_colab.ipynb in Google Colab
+(colab.research.google.com -> Upload). It walks through steps 1
+to 5 below as fill-in-the-blank forms and hands you the finished
+jar. You still need to read STEP 2 - no notebook can wire your
+map's progression for you.
 
 You build this yourself rather than being handed a finished jar,
 because the world it protects and the codes it accepts are both
