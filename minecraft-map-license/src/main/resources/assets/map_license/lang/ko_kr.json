@@ -1,0 +1,20 @@
+{
+	"screen.map-license.title": "이 맵은 활성화 코드가 필요합니다",
+	"screen.map-license.code": "활성화 코드",
+	"screen.map-license.activate": "활성화",
+	"screen.map-license.explain": "코드는 1회만 사용할 수 있으며 이 계정에 영구히 연결됩니다.",
+
+	"message.map-license.activated": "활성화되었습니다. 이제 이 계정으로 맵을 플레이할 수 있습니다.",
+	"message.map-license.already-active": "이미 이 계정으로 활성화된 맵입니다.",
+	"message.map-license.already-used": "이미 사용된 코드입니다.",
+	"message.map-license.empty": "활성화 코드를 입력하세요.",
+	"message.map-license.invalid": "올바르지 않은 코드입니다.",
+	"message.map-license.not-gated": "이 월드는 라이선스가 필요하지 않습니다.",
+	"message.map-license.timeout": "활성화 코드가 입력되지 않았습니다.",
+	"message.map-license.too-many-attempts": "시도 횟수가 너무 많습니다. 잠시 후 다시 시도하세요.",
+
+	"message.map-license.status-active": "%s: 이 계정으로 활성화되어 있습니다 (활성화 시각 %s).",
+	"message.map-license.status-locked": "%s: 잠겨 있습니다. 활성화 코드를 입력하세요.",
+	"message.map-license.revoked": "%s 의 활성화를 해제했습니다. 코드는 계속 사용 완료 상태입니다.",
+	"message.map-license.revoke-missing": "%s 은(는) 이 맵에 대한 활성화 기록이 없습니다."
+}

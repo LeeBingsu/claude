@@ -1,0 +1,6 @@
+{
+	"_comment": "Salted SHA-256 digests of every code this build accepts. Generate with: python3 tools/generate_codes.py --count 200 --out-codes tools/codes-batch1.txt --out-hashes src/main/resources/map-license/codes.json",
+
+	"salt": "AAAAAAAAAAAAAAAAAAAAAA==",
+	"hashes": []
+}

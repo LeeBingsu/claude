@@ -1,0 +1,7 @@
+# Build output
+build/
+.gradle/
+
+# Plaintext activation codes - the batches you hand to buyers.
+# These must never reach the repository or the jar.
+tools/codes*.txt
