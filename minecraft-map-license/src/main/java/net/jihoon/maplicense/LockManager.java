@@ -91,7 +91,7 @@ public final class LockManager {
 
 			if (lock.ticks > timeoutTicks) {
 				it.remove();
-				player.networkHandler.disconnect(Text.translatable("message.map-license.timeout"));
+				player.networkHandler.disconnect(Messages.of("message.map-license.timeout"));
 				continue;
 			}
 
@@ -103,7 +103,7 @@ public final class LockManager {
 			// Resent on a timer because the client may still be on the terrain
 			// loading screen when the first prompt lands, which would eat it.
 			if (lock.ticks % PROMPT_INTERVAL_TICKS == 1) {
-				ServerPlayNetworking.send(player, GatePromptS2C.locked(MapLicense.gate()));
+				MapLicense.sendPrompt(player);
 			}
 		}
 	}

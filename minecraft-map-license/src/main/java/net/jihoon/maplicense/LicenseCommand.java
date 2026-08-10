@@ -50,18 +50,18 @@ public final class LicenseCommand {
 		ServerPlayerEntity player = source.getPlayerOrThrow();
 
 		if (!MapLicense.isGatedWorld()) {
-			source.sendFeedback(() -> Text.translatable("message.map-license.not-gated"), false);
+			source.sendFeedback(() -> Messages.of("message.map-license.not-gated"), false);
 			return 1;
 		}
 
 		long activatedAt = MapLicense.store().activatedAt(MapLicense.gate().mapId(), player.getUuid());
 		if (activatedAt < 0) {
-			source.sendFeedback(() -> Text.translatable("message.map-license.status-locked",
+			source.sendFeedback(() -> Messages.of("message.map-license.status-locked",
 					MapLicense.gate().title()), false);
 			return 0;
 		}
 
-		source.sendFeedback(() -> Text.translatable("message.map-license.status-active",
+		source.sendFeedback(() -> Messages.of("message.map-license.status-active",
 				MapLicense.gate().title(), TIMESTAMP.format(Instant.ofEpochMilli(activatedAt))), false);
 		return 1;
 	}
@@ -78,12 +78,12 @@ public final class LicenseCommand {
 
 		if (removed) {
 			LicenseFlag.set(target, false);
-			source.sendFeedback(() -> Text.translatable("message.map-license.revoked",
+			source.sendFeedback(() -> Messages.of("message.map-license.revoked",
 					target.getGameProfile().name()), true);
 			return 1;
 		}
 
-		source.sendError(Text.translatable("message.map-license.revoke-missing",
+		source.sendError(Messages.of("message.map-license.revoke-missing",
 				target.getGameProfile().name()));
 		return 0;
 	}
