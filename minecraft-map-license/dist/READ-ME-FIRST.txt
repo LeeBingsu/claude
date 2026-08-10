@@ -1,0 +1,174 @@
+===============================================================
+  [MAP NAME] - INSTALLATION AND ACTIVATION
+===============================================================
+
+Thank you for your purchase!
+
+This map is unlocked with a personal activation code. You enter
+the code once, and the map stays unlocked for your Minecraft
+account from then on.
+
+Please read the "KEEP YOUR CODE" section below before you start.
+
+
+---------------------------------------------------------------
+  WHAT YOU SHOULD HAVE
+---------------------------------------------------------------
+
+  1. This instruction file
+  2. The map folder
+  3. map-license-x.y.z.jar      (the mod that unlocks the map)
+  4. Your activation code       -->  [YOUR CODE HERE]
+
+If any of these is missing, contact [SUPPORT CONTACT] before
+going further.
+
+
+---------------------------------------------------------------
+  WHAT YOU NEED
+---------------------------------------------------------------
+
+  * Minecraft: Java Edition, version 1.21.11
+  * Fabric Loader 0.16 or newer
+        https://fabricmc.net/use/installer/
+  * Fabric API for 1.21.11
+        https://modrinth.com/mod/fabric-api
+
+Fabric is a free mod loader. The installer takes about a minute
+and adds a new profile to your Minecraft launcher. This map does
+not work on Bedrock Edition, Realms, or the Marketplace.
+
+
+---------------------------------------------------------------
+  INSTALLING
+---------------------------------------------------------------
+
+Step 1. Install Fabric Loader for Minecraft 1.21.11 using the
+        link above, then start the Minecraft launcher once and
+        select the new "fabric-loader-1.21.11" profile.
+
+Step 2. Open your Minecraft folder.
+
+        Windows   Press Win+R, type  %appdata%\.minecraft
+        macOS     ~/Library/Application Support/minecraft
+        Linux     ~/.minecraft
+
+Step 3. Put BOTH of these files into the "mods" folder.
+        Create the folder if it is not there yet.
+
+           - map-license-x.y.z.jar     (included with your purchase)
+           - fabric-api-....jar        (downloaded from the link above)
+
+Step 4. Put the map folder into the "saves" folder, next to your
+        other worlds.
+
+Step 5. Start Minecraft using the Fabric profile, and open the
+        map from your singleplayer world list.
+
+IMPORTANT: If you were sent more than one map-license jar, keep
+only the one with the HIGHEST version number and delete the rest.
+Older versions do not recognise newer codes.
+
+
+---------------------------------------------------------------
+  ACTIVATING
+---------------------------------------------------------------
+
+When you enter the world, a code window opens by itself.
+
+  1. Type your activation code.
+  2. Press Enter, or click Activate.
+  3. When it says the map is activated, the window closes and
+     you can play.
+
+That is it. The window will not appear again on this computer.
+
+You do not have to be careful about how you type the code.
+Capitals, lowercase, hyphens and spaces all work the same, and
+the letters I, l and O are read as the digits 1 and 0. Any of
+these are the same code:
+
+        ABCD-EFGH-JKMN-PQRS
+        abcd efgh jkmn pqrs
+        ABCDEFGHJKMNPQRS
+
+While the window is open your character cannot move, break or
+place blocks, or use items. Nothing can hurt you during this
+time. If you do not enter a code within 5 minutes you will be
+disconnected - simply rejoin and enter it then.
+
+If the window does not appear (this can happen on a multiplayer
+server), open the chat and type:
+
+        /maplicense activate YOUR-CODE-HERE
+
+
+---------------------------------------------------------------
+  KEEP YOUR CODE
+---------------------------------------------------------------
+
+Save your code somewhere safe, even after you have activated.
+
+You will need it again if you:
+
+  * reinstall Minecraft or your operating system
+  * move to a different computer
+  * delete the "config" folder in your Minecraft directory
+
+Treat the code like a password. Anyone who has it can use it,
+so please do not post it publicly or send it to other people.
+It cannot be replaced if it is given away.
+
+
+---------------------------------------------------------------
+  IF SOMETHING GOES WRONG
+---------------------------------------------------------------
+
+"That code is not valid"
+        Check for typos first. If the code is definitely
+        correct, your copy of the mod may be older than your
+        code - ask [SUPPORT CONTACT] for the latest jar.
+
+"That code has already been used"
+        This code has already been activated on this computer.
+        If that was not you, contact [SUPPORT CONTACT].
+
+"Your account already owns this map"
+        Good news - you are already unlocked. Just play.
+
+"Too many attempts"
+        You entered ten wrong codes, or typed them too quickly.
+        Leave the world and rejoin to reset it.
+
+"No activation code was entered"
+        The five minute timer ran out. Rejoin and try again.
+
+The code window never appears
+        Check that the map-license jar and Fabric API are both
+        in your "mods" folder, and that you launched Minecraft
+        with the Fabric profile rather than the normal one.
+
+The world opens but the story never starts
+        The mod is probably not loaded. See the point above -
+        the map needs the mod to run, not just to unlock.
+
+The game crashes on startup
+        Almost always a version mismatch. Confirm all three:
+        Minecraft 1.21.11, Fabric Loader 0.16+, and a Fabric API
+        build for 1.21.11.
+
+Still stuck? Contact [SUPPORT CONTACT] and include your
+Minecraft username and the exact message you are seeing.
+
+
+---------------------------------------------------------------
+  A NOTE ON SHARING
+---------------------------------------------------------------
+
+This map took a long time to build. Copying the files is easy,
+but every code is issued once and tied to the account that used
+it. Please do not redistribute the map, the mod, or your code.
+
+Thank you for supporting the map. Have fun!
+
+                                          - [YOUR NAME HERE]
