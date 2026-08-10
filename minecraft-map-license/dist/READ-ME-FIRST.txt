@@ -115,9 +115,10 @@ You will need it again if you:
   * move to a different computer
   * delete the "config" folder in your Minecraft directory
 
-Treat the code like a password. Anyone who has it can use it,
-so please do not post it publicly or send it to other people.
-It cannot be replaced if it is given away.
+Treat the code like a password: do not post it publicly or send
+it to anyone else. Depending on how it was issued it may work
+for whoever receives it, and it cannot be replaced once it is
+given away.
 
 
 ---------------------------------------------------------------
