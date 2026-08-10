@@ -14,6 +14,10 @@ on:
         description: 'Batch label (used for the artifact and commit message)'
         required: true
         default: 'batch1'
+      for_player:
+        description: 'Minecraft username to bind these codes to (leave empty for codes any account can redeem)'
+        required: false
+        default: ''
       retention_days:
         description: 'Days to keep the code artifact downloadable'
         required: true
@@ -53,10 +57,18 @@ jobs:
             exit 1
           fi
 
+          # Constrained to the Minecraft username charset, which also keeps the
+          # value from carrying anything shell-significant into the mint step.
+          player='${{ inputs.for_player }}'
+          if [ -n "$player" ] && ! [[ "$player" =~ ^[A-Za-z0-9_]{3,16}$ ]]; then
+            echo "::error::for_player must be a Minecraft username: 3-16 of A-Z a-z 0-9 _ (got '$player')"
+            exit 1
+          fi
+
       - name: Record digest count before
         id: before
         run: |
-          before=$(python3 -c "import json;print(len(json.load(open('$HASHES'))['hashes']))")
+          before=$(python3 -c "import json;d=json.load(open('$HASHES'));print(len(d['hashes'])+len(d.get('boundHashes',[])))")
           echo "count=$before" >> "$GITHUB_OUTPUT"
           echo "Digest list currently holds $before code(s)."
 
@@ -68,16 +80,21 @@ jobs:
         run: |
           batch='${{ inputs.batch_name }}'
           out="$RUNNER_TEMP/codes-$batch.txt"
+          bind=''
+          if [ -n '${{ inputs.for_player }}' ]; then
+            bind="--for-player=${{ inputs.for_player }}"
+          fi
           python3 "$MOD_DIR/tools/generate_codes.py" \
             --count '${{ inputs.count }}' \
             --out-codes "$out" \
-            --out-hashes "$HASHES"
+            --out-hashes "$HASHES" \
+            $bind
           echo "plaintext=$out" >> "$GITHUB_OUTPUT"
 
       - name: Verify the batch landed
         id: verify
         run: |
-          after=$(python3 -c "import json;print(len(json.load(open('$HASHES'))['hashes']))")
+          after=$(python3 -c "import json;d=json.load(open('$HASHES'));print(len(d['hashes'])+len(d.get('boundHashes',[])))")
           added=$(( after - ${{ steps.before.outputs.count }} ))
           if [ "$added" -ne '${{ inputs.count }}' ]; then
             echo "::error::Expected ${{ inputs.count }} new digest(s), got $added. Not committing."
@@ -207,6 +224,7 @@ jobs:
             echo "| --- | --- |"
             echo "| Codes minted | ${{ inputs.count }} |"
             echo "| Digest list total | ${{ steps.verify.outputs.after }} |"
+            echo "| Bound to account | ${{ inputs.for_player || 'no - any account may redeem' }} |"
             echo "| Mod version | ${{ steps.bump.outputs.old }} → **${{ steps.bump.outputs.new }}** |"
             echo "| Encrypted | ${{ steps.package.outputs.encrypted }} |"
             echo "| Artifact retention | ${{ inputs.retention_days }} day(s) |"

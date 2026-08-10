@@ -125,9 +125,11 @@ It cannot be replaced if it is given away.
 ---------------------------------------------------------------
 
 "That code is not valid"
-        Check for typos first. If the code is definitely
+        Check for typos first. If you gave a Minecraft username
+        when you bought the map, your code only works on THAT
+        account - make sure you are logged into it. If both are
         correct, your copy of the mod may be older than your
-        code - ask [SUPPORT CONTACT] for the latest jar.
+        code, so ask [SUPPORT CONTACT] for the latest jar.
 
 "That code has already been used"
         This code has already been activated on this computer.

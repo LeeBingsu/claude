@@ -50,7 +50,7 @@
 
 | 메시지 | 뜻 | 대처 |
 | --- | --- | --- |
-| 올바르지 않은 코드입니다 | 코드가 목록에 없음 | 오타 확인. 맞다면 판매자가 준 jar 버전이 낮을 수 있으니 최신 jar를 요청하세요 |
+| 올바르지 않은 코드입니다 | 코드가 목록에 없음 | 오타 확인. 구매할 때 닉네임을 알려줬다면 **그 계정으로 접속했는지** 확인하세요. 둘 다 맞다면 판매자에게 최신 jar를 요청하세요 |
 | 이미 사용된 코드입니다 | 이 PC에서 이미 쓴 코드 | 다른 계정으로 다시 쓸 수 없습니다. 판매자에게 문의하세요 |
 | 이미 이 계정으로 활성화된 맵입니다 | 이미 해금 완료 | 그대로 플레이하면 됩니다 |
 | 시도 횟수가 너무 많습니다 | 10회 초과 또는 너무 빠른 연속 입력 | 잠시 기다리거나, 나갔다가 다시 들어오면 초기화됩니다 |
@@ -101,6 +101,18 @@ python3 tools/generate_codes.py --count 200 \
     --out-hashes src/main/resources/map-license/codes.json
 ./gradlew clean build
 ```
+
+**유출돼도 한 명만 쓰게 하려면** 구매자 닉네임을 받아 계정에 고정해서 발급합니다.
+그 계정에서만 열리고, 다른 계정이 입력하면 튕깁니다.
+
+```bash
+python3 tools/generate_codes.py --count 1 --for-player Notch \
+    --out-codes tools/codes-notch.txt \
+    --out-hashes src/main/resources/map-license/codes.json
+```
+
+미리 찍어 둘 수 없다는 점만 다릅니다 — 구매자를 알아야 발급되므로 판매할 때마다
+발급 + 재빌드가 필요합니다.
 
 #### 3. 배포
 
@@ -170,7 +182,7 @@ disconnected** — just rejoin and try again.
 
 | Message | Meaning | What to do |
 | --- | --- | --- |
-| That code is not valid | The code is not in this jar's list | Check for typos. If the code is right, ask the seller for the latest jar — yours may predate the code |
+| That code is not valid | The code is not in this jar's list | Check for typos. If you gave a username when buying, make sure you are logged into **that** account. If both are right, ask the seller for the latest jar |
 | That code has already been used | Already redeemed on this computer | It cannot be reused on another account. Contact the seller |
 | Your account already owns this map | Already unlocked | Just play |
 | Too many attempts | Over 10 tries, or entries too close together | Wait a moment, or rejoin the world to reset the counter |
@@ -222,6 +234,18 @@ python3 tools/generate_codes.py --count 200 \
     --out-hashes src/main/resources/map-license/codes.json
 ./gradlew clean build
 ```
+
+**To make a leaked code useless to everyone else**, take the buyer's username
+and bind the code to their account. Only that account can redeem it.
+
+```bash
+python3 tools/generate_codes.py --count 1 --for-player Notch \
+    --out-codes tools/codes-notch.txt \
+    --out-hashes src/main/resources/map-license/codes.json
+```
+
+The trade-off is that bound codes cannot be minted in advance - you need the
+buyer first, so each sale means minting and rebuilding.
 
 #### 3. Ship it
 

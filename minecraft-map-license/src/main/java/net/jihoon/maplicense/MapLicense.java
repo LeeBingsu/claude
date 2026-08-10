@@ -154,11 +154,22 @@ public class MapLicense implements ModInitializer {
 			return;
 		}
 
+		// A pool code is redeemable by anyone; a bound code only hashes into the
+		// list when the account typing it is the one it was minted for. Trying the
+		// pool first keeps bound codes from costing a lookup for the common case.
 		String codeHash = CODES.hash(code);
+		boolean bound = false;
+
 		if (!CODES.contains(codeHash)) {
-			LOGGER.info("Rejected activation code from {} (invalid)", player.getGameProfile().name());
-			reject(player, "message.map-license.invalid");
-			return;
+			codeHash = CODES.hash(code, player.getUuid());
+			bound = CODES.containsBound(codeHash);
+
+			if (!bound) {
+				LOGGER.info("Rejected activation code from {} (not a valid code for this account)",
+						player.getGameProfile().name());
+				reject(player, "message.map-license.invalid");
+				return;
+			}
 		}
 
 		if (STORE.isCodeUsed(GATE.mapId(), codeHash)) {
@@ -168,7 +179,8 @@ public class MapLicense implements ModInitializer {
 		}
 
 		STORE.activate(GATE.mapId(), player.getUuid(), player.getGameProfile().name(), codeHash);
-		LOGGER.info("Activated '{}' for {} ({})", GATE.mapId(), player.getGameProfile().name(), player.getUuid());
+		LOGGER.info("Activated '{}' for {} ({}) with a {} code", GATE.mapId(),
+				player.getGameProfile().name(), player.getUuid(), bound ? "account-bound" : "pool");
 
 		LicenseFlag.set(player, true);
 		LOCKS.release(player);
