@@ -1,0 +1,227 @@
+===============================================================
+  MAP LICENSE - GUIDE FOR MAP AUTHORS
+  Minecraft 1.21.11 / Fabric        Mod by Hi_Its_I
+===============================================================
+
+This mod locks one specific world behind a one-time activation
+code. A buyer enters their code once, and it is bound to their
+Minecraft account from then on.
+
+There is no license server. Everything needed to check a code
+ships inside the jar, so you do not have to host or pay for
+anything.
+
+
+---------------------------------------------------------------
+  READ THIS FIRST - WHAT IT DOES AND DOES NOT DO
+---------------------------------------------------------------
+
+It stops:
+
+  * "download the leaked zip and play"  - the files alone are
+    not enough, a code is needed
+  * unpacking the jar to find codes     - only hashes ship in
+    it, and there is no key inside to mint new ones
+  * one buyer sharing their code around - on that computer the
+    code is spent after the first use
+
+It does not stop:
+
+  * the same code being used again on a DIFFERENT computer.
+    Without a server there is nowhere to record that a code was
+    already spent, so a leaked code works again on a fresh
+    install. This is the main limit of the design.
+  * taking a code back once it is out. There is no server to
+    push a revocation to.
+  * somebody editing the jar. Any check running on the player's
+    own machine can be removed by someone determined enough.
+
+If you need leaked codes to stop working, or one-time use
+enforced across computers, you need a license server. This mod
+is the version that costs nothing to run.
+
+
+---------------------------------------------------------------
+  WHAT YOU NEED
+---------------------------------------------------------------
+
+  * JDK 21
+  * Python 3 (for the code generator)
+  * The map-license source folder
+
+
+---------------------------------------------------------------
+  STEP 1 - POINT THE MOD AT YOUR WORLD
+---------------------------------------------------------------
+
+Open your finished map with the mod installed, and run this as
+an operator:
+
+        /maplicense fingerprint
+
+It prints the world's name and seed. Put them into
+src/main/resources/map-license/gate.json :
+
+        {
+            "mapId": "my-story-map",
+            "title": "My Story Map",
+            "markerFile": "map-license.json",
+            "worldNames": ["my story map"],
+            "seeds": [-4172144997902289642],
+            "lockTimeoutSeconds": 300
+        }
+
+Any one of the three signals - world name, seed, or a marker
+file in the world folder - is enough to trigger the lock. They
+overlap on purpose: a marker file can be deleted and a folder
+can be renamed, but the seed lives in level.dat and changing it
+desyncs any terrain that was not pre-generated.
+
+This file is compiled into the jar, not read from the config
+folder. A file the player can edit is a file the player can
+empty.
+
+
+---------------------------------------------------------------
+  STEP 2 - MAKE THE MOD LOAD-BEARING  (IMPORTANT)
+---------------------------------------------------------------
+
+If someone simply deletes the mod, nothing runs and nothing is
+locked. The mod cannot prevent that by itself. What it gives
+you instead is a hook your map can depend on.
+
+Every player's licence state is mirrored into a scoreboard
+objective named "maplicense":
+
+        execute if score @s maplicense matches 1 run \
+            function mymap:chapter1/start
+
+Wire your map's progression - doors, chapter triggers, story
+functions - through that score. A world opened without the mod
+never has the objective at all, so the score is never 1 and the
+story never advances.
+
+Skip this step and the mod is only a speed bump. Do it, and
+removing the mod breaks the map instead of freeing it.
+
+
+---------------------------------------------------------------
+  STEP 3 - MINT YOUR CODES
+---------------------------------------------------------------
+
+        python3 tools/generate_codes.py --count 200 \
+            --out-codes tools/codes-batch1.txt \
+            --out-hashes src/main/resources/map-license/codes.json
+
+This writes two files:
+
+  tools/codes-batch1.txt
+        The real codes. These are what you sell. THIS IS THE
+        ONLY COPY THAT WILL EVER EXIST - they cannot be
+        recovered from the jar. Back it up, and never ship it.
+
+  codes.json
+        Hashes only. This is what goes into the jar.
+
+Running it again against the same codes.json keeps the salt and
+ADDS to the list, so a second batch does not kill the first.
+
+Mint generously the first time. 5,000 codes add about 166 KB to
+the jar, which is nothing next to a map, and it saves you
+rebuilding every time you need more.
+
+
+---------------------------------------------------------------
+  STEP 4 - BUILD
+---------------------------------------------------------------
+
+        ./gradlew clean build
+
+The jar lands in build/libs/ . Ship the one with the HIGHEST
+version number - it recognises the codes from every batch you
+have minted so far.
+
+Codes only work in a jar built AFTER they were minted. If you
+mint a batch and forget to rebuild, every code in it will be
+rejected.
+
+
+---------------------------------------------------------------
+  STEP 5 - PACKAGE AND SELL
+---------------------------------------------------------------
+
+Send each buyer a zip like this:
+
+        MyStoryMap.zip
+        +-- READ-ME-FIRST.txt      (fill in the placeholders)
+        +-- map-license-1.2.0.jar  (highest version)
+        +-- MyStoryMap/            (the world folder)
+
+READ-ME-FIRST.txt has four placeholders. The code differs per
+buyer, so this file is filled in once per sale:
+
+        [MAP NAME]         your map's name
+        [YOUR CODE HERE]   one line from your batch file
+        [SUPPORT CONTACT]  your email or Discord
+        [YOUR NAME HERE]   your name
+
+Check none survived before sending:
+
+        grep -n "\[[A-Z ]*\]" READ-ME-FIRST.txt
+
+Keep a record of which code went to which order. Nothing tracks
+that for you, and you will need it the first time somebody asks
+for help.
+
+
+---------------------------------------------------------------
+  RUNNING IT DAY TO DAY
+---------------------------------------------------------------
+
+Operator commands:
+
+        /maplicense fingerprint       show this world's name/seed
+        /maplicense revoke <player>   unbind an account
+
+"revoke" is for the case where a code got bound to the wrong
+account. The code itself stays spent afterwards, so unbinding
+does not create a code that works twice - give the player a
+fresh code from your batch.
+
+Buyer says their code is rejected:
+        Their jar is probably older than their code. Send them
+        the current jar.
+
+Buyer got a new computer:
+        They enter the same code again. Activation is stored in
+        config/map-license/activations.json on their machine,
+        so a fresh install has no record of it.
+
+
+---------------------------------------------------------------
+  RULES THAT WILL BITE YOU IF YOU BREAK THEM
+---------------------------------------------------------------
+
+  1. Never ship, commit, or publish tools/codes*.txt .
+     That file is every unsold code you own.
+
+  2. Never hand-edit codes.json, and never change its salt.
+     Every code you already sold stops working.
+
+  3. Change the INTEGRITY_KEY string in LicenseStore.java
+     before your first release, so activation records from
+     someone else's build do not validate against yours.
+
+  4. Always rebuild after minting, and always ship the highest
+     version number.
+
+
+---------------------------------------------------------------
+  CREDITS
+---------------------------------------------------------------
+
+  Licensing mod    Hi_Its_I
+
+  Free to use for your own maps. The limits described at the
+  top are real - please be honest with your buyers about them
+  rather than promising protection this cannot deliver.

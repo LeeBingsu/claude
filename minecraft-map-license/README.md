@@ -9,6 +9,8 @@
 > - [USAGE.md](USAGE.md) — 한국어·영어, 플레이어용과 제작자용을 모두 포함한 저장소 문서
 > - [dist/READ-ME-FIRST.txt](dist/READ-ME-FIRST.txt) — **구매자에게 배포할 영어 안내문.**
 >   맵·모드와 함께 압축 파일에 그대로 넣으면 됩니다.
+> - [dist/MAP-AUTHOR-GUIDE.txt](dist/MAP-AUTHOR-GUIDE.txt) — **맵 제작자에게 배포할 영어 안내문.**
+>   이 모드를 다른 맵 제작자에게 넘길 때 함께 주면 됩니다.
 
 ```
 맵 구매 → 코드 발급 → 모드 설치 + 월드 진입 → 코드 입력 → 해당 계정으로 영구 해금
@@ -224,3 +226,7 @@ PC가 갖고 있지 않은 비밀이 존재할 수 없기 때문입니다. 여�
 ## 요구 사항
 
 - Minecraft 1.21.11 / Fabric Loader 0.16 이상 / Fabric API / Java 21
+
+## 만든 사람
+
+모드 개발: **Hi_Its_I**

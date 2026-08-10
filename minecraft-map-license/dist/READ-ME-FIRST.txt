@@ -169,6 +169,14 @@ This map took a long time to build. Copying the files is easy,
 but every code is issued once and tied to the account that used
 it. Please do not redistribute the map, the mod, or your code.
 
+
+---------------------------------------------------------------
+  CREDITS
+---------------------------------------------------------------
+
+  Map              [YOUR NAME HERE]
+  Licensing mod    Hi_Its_I
+
 Thank you for supporting the map. Have fun!
 
                                           - [YOUR NAME HERE]

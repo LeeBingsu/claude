@@ -5,7 +5,7 @@
 	"name": "Map License",
 	"description": "지정한 월드를 1회용 활성화 코드로 잠그고, 코드를 플레이어의 계정 UUID에 영구히 묶어 두는 모드.",
 	"authors": [
-		"jihoonlee1005"
+		"Hi_Its_I"
 	],
 	"contact": {},
 	"license": "MIT",

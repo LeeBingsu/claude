@@ -241,3 +241,9 @@ from every batch issued so far.
   from their digests, so that file is the only copy. Back it up.
 - Never hand-edit `codes.json` or change its salt — codes already sold stop working.
 - Change the `LicenseStore.INTEGRITY_KEY` string before you release.
+
+---
+
+## 만든 사람 / Credits
+
+모드 개발 / Licensing mod by **Hi_Its_I**
