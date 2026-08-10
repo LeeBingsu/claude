@@ -6,11 +6,13 @@ on:
     paths:
       - 'minecraft-mace-stun-slam/**'
       - 'minecraft-sword-hold-attack/**'
+      - 'minecraft-map-license/**'
       - '.github/workflows/build-mod.yml'
   pull_request:
     paths:
       - 'minecraft-mace-stun-slam/**'
       - 'minecraft-sword-hold-attack/**'
+      - 'minecraft-map-license/**'
       - '.github/workflows/build-mod.yml'
   workflow_dispatch:
 
@@ -33,6 +35,7 @@ jobs:
         mod:
           - minecraft-mace-stun-slam
           - minecraft-sword-hold-attack
+          - minecraft-map-license
 
     name: build (${{ matrix.mod }})
 
@@ -50,10 +53,10 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      # The repo has gradle-wrapper.properties but no gradlew/gradle-wrapper.jar,
-      # so Gradle is installed here instead of invoking a wrapper that isn't there.
-      # The version matches what gradle-wrapper.properties declares, and Loom for
-      # 1.21.11 requires well above the 8.x line.
+      # Only minecraft-map-license ships a full wrapper; the other two have
+      # gradle-wrapper.properties without gradlew/gradle-wrapper.jar. Installing
+      # Gradle directly covers all three. The version matches what the wrapper
+      # properties declare, and Loom for 1.21.11 requires well above the 8.x line.
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -64,6 +67,19 @@ jobs:
           echo "--- gradle.properties ---"
           cat gradle.properties
           gradle --version
+
+      # The plaintext activation codes are the one secret this design has, and
+      # they only exist on the author's machine. Committing a batch would publish
+      # every unsold code to anyone who can read the repository, so fail loudly
+      # rather than build a release around a leak.
+      - name: Check no plaintext activation codes were committed
+        if: matrix.mod == 'minecraft-map-license'
+        run: |
+          if ls tools/codes*.txt >/dev/null 2>&1; then
+            echo "::error::Plaintext activation codes are present in tools/. Remove them, treat the batch as burned, and mint a new one."
+            exit 1
+          fi
+          echo "No plaintext code files present."
 
       - name: Build
         run: gradle build --stacktrace
