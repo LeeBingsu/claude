@@ -11,6 +11,7 @@ import net.jihoon.maplicense.net.ActivationResultS2C;
 import net.jihoon.maplicense.net.GatePromptS2C;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -104,7 +105,27 @@ public class MapLicense implements ModInitializer {
 		}
 
 		LOCKS.lock(player);
-		ServerPlayNetworking.send(player, GatePromptS2C.locked(GATE));
+		sendPrompt(player);
+	}
+
+	/**
+	 * Asks the player for their code, by screen where possible and by chat where
+	 * not.
+	 *
+	 * <p>On a dedicated server a player can arrive without the mod installed
+	 * client-side. They would receive a payload they cannot decode, see nothing,
+	 * and be disconnected five minutes later with no idea why - so they get told
+	 * about the command instead. The text is literal rather than translated
+	 * because the lang files ship with the mod they are missing.
+	 */
+	public static void sendPrompt(ServerPlayerEntity player) {
+		if (ServerPlayNetworking.canSend(player, GatePromptS2C.ID)) {
+			ServerPlayNetworking.send(player, GatePromptS2C.locked(GATE));
+			return;
+		}
+
+		player.sendMessage(Text.literal("[" + GATE.title() + "] This map needs an activation code. "
+				+ "Type: /maplicense activate <your code>"), false);
 	}
 
 	/**
@@ -152,14 +173,26 @@ public class MapLicense implements ModInitializer {
 		LicenseFlag.set(player, true);
 		LOCKS.release(player);
 		accept(player, "message.map-license.activated");
-		ServerPlayNetworking.send(player, GatePromptS2C.unlocked(GATE));
+
+		if (ServerPlayNetworking.canSend(player, GatePromptS2C.ID)) {
+			ServerPlayNetworking.send(player, GatePromptS2C.unlocked(GATE));
+		}
 	}
 
 	private static void accept(ServerPlayerEntity player, String key) {
-		ServerPlayNetworking.send(player, new ActivationResultS2C(true, key));
+		respond(player, true, key);
 	}
 
 	private static void reject(ServerPlayerEntity player, String key) {
-		ServerPlayNetworking.send(player, new ActivationResultS2C(false, key));
+		respond(player, false, key);
+	}
+
+	/** Answers on the activation screen when there is one, in chat when there is not. */
+	private static void respond(ServerPlayerEntity player, boolean ok, String key) {
+		if (ServerPlayNetworking.canSend(player, ActivationResultS2C.ID)) {
+			ServerPlayNetworking.send(player, new ActivationResultS2C(ok, key));
+		} else {
+			player.sendMessage(Messages.of(key), false);
+		}
 	}
 }
