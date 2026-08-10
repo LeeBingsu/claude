@@ -118,18 +118,43 @@ jobs:
           if-no-files-found: error
           retention-days: ${{ inputs.retention_days }}
 
-      - name: Commit the digest list
+      # Every jar is named after mod_version, so without a bump two builds
+      # carrying different digest lists would land on disk under the same
+      # filename with no way to tell which one knows the newer codes.
+      - name: Bump the mod version
+        id: bump
+        run: |
+          python3 - "$MOD_DIR/gradle.properties" >> "$GITHUB_OUTPUT" <<'PY'
+          import re, sys
+
+          path = sys.argv[1]
+          text = open(path, encoding="utf-8").read()
+
+          match = re.search(r"^mod_version=([0-9]+)\.([0-9]+)\.([0-9]+)[ \t]*$", text, re.M)
+          if not match:
+              sys.exit("::error::mod_version is not in X.Y.Z form; refusing to guess a bump")
+
+          old = f"{match.group(1)}.{match.group(2)}.{match.group(3)}"
+          new = f"{match.group(1)}.{int(match.group(2)) + 1}.0"
+
+          open(path, "w", encoding="utf-8").write(
+              text[:match.start()] + f"mod_version={new}" + text[match.end():])
+          print(f"old={old}")
+          print(f"new={new}")
+          PY
+
+      - name: Commit the digest list and version
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add "$HASHES"
+          git add "$HASHES" "$MOD_DIR/gradle.properties"
 
           if git diff --cached --quiet; then
             echo "::error::codes.json is unchanged - nothing to commit."
             exit 1
           fi
 
-          git commit -m "Add ${{ inputs.count }} activation code(s) (${{ inputs.batch_name }})" \
+          git commit -m "Issue ${{ inputs.count }} activation code(s) (${{ inputs.batch_name }}), v${{ steps.bump.outputs.new }}" \
                      -m "Digest list now holds ${{ steps.verify.outputs.after }} code(s). Plaintext lives only in this run's artifact."
 
           for attempt in 1 2 3; do
@@ -165,7 +190,7 @@ jobs:
       - name: Upload the jar
         uses: actions/upload-artifact@v5
         with:
-          name: map-license-jar-${{ inputs.batch_name }}
+          name: map-license-jar-v${{ steps.bump.outputs.new }}-${{ inputs.batch_name }}
           path: |
             ${{ env.MOD_DIR }}/build/libs/*.jar
             !${{ env.MOD_DIR }}/build/libs/*-dev.jar
@@ -182,12 +207,13 @@ jobs:
             echo "| --- | --- |"
             echo "| Codes minted | ${{ inputs.count }} |"
             echo "| Digest list total | ${{ steps.verify.outputs.after }} |"
+            echo "| Mod version | ${{ steps.bump.outputs.old }} → **${{ steps.bump.outputs.new }}** |"
             echo "| Encrypted | ${{ steps.package.outputs.encrypted }} |"
             echo "| Artifact retention | ${{ inputs.retention_days }} day(s) |"
             echo
             echo "Download **map-license-codes-${{ inputs.batch_name }}** and save it somewhere permanent."
             echo "The artifact expires and the codes cannot be recovered from the digest list."
             echo
-            echo "Ship **map-license-jar-${{ inputs.batch_name }}** with the map - earlier jars do not"
+            echo "Ship \`map-license-${{ steps.bump.outputs.new }}.jar\` with the map - earlier jars do not"
             echo "contain these digests and will reject every code in this batch."
           } >> "$GITHUB_STEP_SUMMARY"
