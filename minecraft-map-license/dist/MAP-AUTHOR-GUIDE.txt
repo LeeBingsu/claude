@@ -1,0 +1,309 @@
+===============================================================
+  MAP LICENSE - GUIDE FOR MAP AUTHORS
+  Minecraft 1.21.11 / Fabric        Mod by Hi_Its_I
+===============================================================
+
+This mod locks one specific world behind a one-time activation
+code. A buyer enters their code once, and it is bound to their
+Minecraft account from then on.
+
+There is no license server. Everything needed to check a code
+ships inside the jar, so you do not have to host or pay for
+anything.
+
+
+---------------------------------------------------------------
+  READ THIS FIRST - WHAT IT DOES AND DOES NOT DO
+---------------------------------------------------------------
+
+It stops:
+
+  * "download the leaked zip and play"  - the files alone are
+    not enough, a code is needed
+  * unpacking the jar to find codes     - only hashes ship in
+    it, and there is no key inside to mint new ones
+  * one buyer sharing their code around - spent after the first
+    use on that computer, and with account-bound codes useless
+    to anyone else at all
+
+It does not stop:
+
+  * a leaked POOL code being used again on a different
+    computer. Without a server there is nowhere to record that
+    a code was already spent, so it works again on a fresh
+    install. Use account-bound codes (below) where this
+    matters.
+  * taking a code back once it is out. There is no server to
+    push a revocation to.
+  * a cracked launcher that lets its user set any UUID. Bound
+    codes stop code sharing between real accounts, not that.
+  * somebody editing the jar. Any check running on the player's
+    own machine can be removed by someone determined enough.
+
+Account-bound codes are the answer to a leaked code being used
+by strangers. What still needs a real license server is taking
+back a code you already handed out, and proving an account is
+genuine. This mod is the version that costs nothing to run.
+
+
+---------------------------------------------------------------
+  WHAT YOU WERE GIVEN, AND WHAT YOU NEED
+---------------------------------------------------------------
+
+In the folder:
+
+  src/ build.gradle gradlew ...   the mod source
+  tools/generate_codes.py         the code generator
+  dist/READ-ME-FIRST.txt          template to send to buyers
+  dist/issue-codes.yml            optional GitHub Actions
+                                  workflow for minting codes
+  dist/map_license_colab.ipynb    do all of this in a browser
+                                  instead, with nothing installed
+  README.md, USAGE.md             fuller documentation
+
+You need JDK 21 and Python 3. Gradle is not a separate install -
+the wrapper in the folder fetches it.
+
+If you would rather install nothing at all, open
+dist/map_license_colab.ipynb in Google Colab
+(colab.research.google.com -> Upload). It walks through steps 1
+to 5 below as fill-in-the-blank forms and hands you the finished
+jar. You still need to read STEP 2 - no notebook can wire your
+map's progression for you.
+
+You build this yourself rather than being handed a finished jar,
+because the world it protects and the codes it accepts are both
+compiled into the jar. A prebuilt one would be locked to
+somebody else's map and somebody else's codes.
+
+Do these three before your first release:
+
+  1. Put your own world's details in gate.json      (STEP 1)
+  2. Mint your own codes                            (STEP 3)
+  3. Change the INTEGRITY_KEY string in
+     src/main/java/net/jihoon/maplicense/LicenseStore.java
+     to any other text, so activation records from another
+     build do not validate against yours
+
+
+---------------------------------------------------------------
+  STEP 1 - POINT THE MOD AT YOUR WORLD
+---------------------------------------------------------------
+
+Open your finished map with the mod installed, and run this as
+an operator:
+
+        /maplicense fingerprint
+
+It prints the world's name and seed. Put them into
+src/main/resources/map-license/gate.json :
+
+        {
+            "mapId": "my-story-map",
+            "title": "My Story Map",
+            "markerFile": "map-license.json",
+            "worldNames": ["my story map"],
+            "seeds": [-4172144997902289642],
+            "lockTimeoutSeconds": 300
+        }
+
+Any one of the three signals - world name, seed, or a marker
+file in the world folder - is enough to trigger the lock. They
+overlap on purpose: a marker file can be deleted and a folder
+can be renamed, but the seed lives in level.dat and changing it
+desyncs any terrain that was not pre-generated.
+
+This file is compiled into the jar, not read from the config
+folder. A file the player can edit is a file the player can
+empty.
+
+
+---------------------------------------------------------------
+  STEP 2 - MAKE THE MOD LOAD-BEARING  (IMPORTANT)
+---------------------------------------------------------------
+
+If someone simply deletes the mod, nothing runs and nothing is
+locked. The mod cannot prevent that by itself. What it gives
+you instead is a hook your map can depend on.
+
+Every player's licence state is mirrored into a scoreboard
+objective named "maplicense":
+
+        execute if score @s maplicense matches 1 run \
+            function mymap:chapter1/start
+
+Wire your map's progression - doors, chapter triggers, story
+functions - through that score. A world opened without the mod
+never has the objective at all, so the score is never 1 and the
+story never advances.
+
+Skip this step and the mod is only a speed bump. Do it, and
+removing the mod breaks the map instead of freeing it.
+
+
+---------------------------------------------------------------
+  STEP 3 - MINT YOUR CODES
+---------------------------------------------------------------
+
+There are two kinds, and they behave very differently once a
+code leaks. You can use both.
+
+POOL CODES - any account can redeem them
+
+        python3 tools/generate_codes.py --count 200 \
+            --out-codes tools/codes-batch1.txt \
+            --out-hashes src/main/resources/map-license/codes.json
+
+Mint these in bulk ahead of time and hand out one line per sale.
+If a buyer publishes their code, everyone who has it can use it,
+because nothing outside their own computer knows it was spent.
+
+ACCOUNT-BOUND CODES - one account, and only that one
+
+        python3 tools/generate_codes.py --count 1 \
+            --for-player Notch \
+            --out-codes tools/codes-notch.txt \
+            --out-hashes src/main/resources/map-license/codes.json
+
+The buyer's account UUID is mixed into the stored hash, so the
+same code typed on any other account produces a different hash
+and is rejected. A leaked bound code is useless to whoever
+receives it.
+
+The cost is that you cannot mint these in advance - you need the
+buyer's Minecraft username first, so every sale means minting
+and rebuilding. If you keep the mod in a GitHub repository, copy
+dist/issue-codes.yml into .github/workflows/ and that becomes
+one button on the Actions tab: fill in the buyer's username, and
+the run mints the code, rebuilds, and hands you both.
+
+Use --for-uuid <uuid> instead of --for-player if you are offline
+or already know the UUID.
+
+The plaintext file records which account a bound batch belongs
+to on its first line. Keep that line - the codes themselves look
+identical either way:
+
+        # bound to account 069a79f4-44e9-4726-a5be-fca90e38aaf5
+        J8G9-AW14-25H9-742P
+
+WARNING: a bound code entered on the wrong account reports
+"That code is not valid", exactly like a made-up code. The jar
+holds only hashes, so it cannot tell the two apart. When a buyer
+says their code does not work, check the username you bound it
+to before anything else.
+
+Either way, the run writes two files:
+
+  tools/codes-batch1.txt
+        The real codes. These are what you sell. THIS IS THE
+        ONLY COPY THAT WILL EVER EXIST - they cannot be
+        recovered from the jar. Back it up, and never ship it.
+
+  codes.json
+        Hashes only. This is what goes into the jar.
+
+Running it again against the same codes.json keeps the salt and
+ADDS to the list, so a second batch does not kill the first.
+
+Mint generously the first time. 5,000 codes add about 166 KB to
+the jar, which is nothing next to a map, and it saves you
+rebuilding every time you need more.
+
+
+---------------------------------------------------------------
+  STEP 4 - BUILD
+---------------------------------------------------------------
+
+        ./gradlew clean build
+
+The jar lands in build/libs/ . Ship the one with the HIGHEST
+version number - it recognises the codes from every batch you
+have minted so far.
+
+Codes only work in a jar built AFTER they were minted. If you
+mint a batch and forget to rebuild, every code in it will be
+rejected.
+
+
+---------------------------------------------------------------
+  STEP 5 - PACKAGE AND SELL
+---------------------------------------------------------------
+
+Send each buyer a zip like this:
+
+        MyStoryMap.zip
+        +-- READ-ME-FIRST.txt      (fill in the placeholders)
+        +-- map-license-1.2.0.jar  (highest version)
+        +-- MyStoryMap/            (the world folder)
+
+READ-ME-FIRST.txt has four placeholders. The code differs per
+buyer, so this file is filled in once per sale:
+
+        [MAP NAME]         your map's name
+        [YOUR CODE HERE]   one line from your batch file
+        [SUPPORT CONTACT]  your email or Discord
+        [YOUR NAME HERE]   your name
+
+Check none survived before sending:
+
+        grep -n "\[[A-Z ]*\]" READ-ME-FIRST.txt
+
+Keep a record of which code went to which order. Nothing tracks
+that for you, and you will need it the first time somebody asks
+for help.
+
+
+---------------------------------------------------------------
+  RUNNING IT DAY TO DAY
+---------------------------------------------------------------
+
+Operator commands:
+
+        /maplicense fingerprint       show this world's name/seed
+        /maplicense revoke <player>   unbind an account
+
+"revoke" is for the case where a code got bound to the wrong
+account. The code itself stays spent afterwards, so unbinding
+does not create a code that works twice - give the player a
+fresh code from your batch.
+
+Buyer says their code is rejected:
+        If it is a bound code, check the username you bound it
+        to - a typo there looks exactly like an invalid code.
+        Otherwise their jar is probably older than their code,
+        so send them the current one.
+
+Buyer got a new computer:
+        They enter the same code again. Activation is stored in
+        config/map-license/activations.json on their machine,
+        so a fresh install has no record of it.
+
+
+---------------------------------------------------------------
+  RULES THAT WILL BITE YOU IF YOU BREAK THEM
+---------------------------------------------------------------
+
+  1. Never ship, commit, or publish tools/codes*.txt .
+     That file is every unsold code you own.
+
+  2. Never hand-edit codes.json, and never change its salt.
+     Every code you already sold stops working.
+
+  3. Change the INTEGRITY_KEY string in LicenseStore.java
+     before your first release, so activation records from
+     someone else's build do not validate against yours.
+
+  4. Always rebuild after minting, and always ship the highest
+     version number.
+
+
+---------------------------------------------------------------
+  CREDITS
+---------------------------------------------------------------
+
+  Licensing mod    Hi_Its_I
+
+  Free to use for your own maps. The limits described at the
+  top are real - please be honest with your buyers about them
+  rather than promising protection this cannot deliver.

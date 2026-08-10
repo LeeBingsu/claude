@@ -1,3 +1,17 @@
+# Copy this to .github/workflows/issue-codes.yml in your own repository to mint
+# activation codes from the Actions tab instead of your own machine.
+#
+# What one run does: mints the codes, appends their hashes to codes.json, bumps
+# the mod version, commits both, builds the jar, and uploads the codes and the
+# jar as two artifacts.
+#
+# Leave "for_player" empty for codes any account can redeem. Put a Minecraft
+# username in it for a code only that account can redeem.
+#
+# The plaintext codes are written outside the checkout so they can never be
+# committed. Set a repository secret named CODE_BATCH_PASSPHRASE to have the
+# batch encrypted with AES256 before it is uploaded.
+
 name: Issue map-license activation codes
 
 # Manual only. Minting codes is a deliberate act with a lasting consequence -
@@ -35,8 +49,10 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  MOD_DIR: minecraft-map-license
-  HASHES: minecraft-map-license/src/main/resources/map-license/codes.json
+  # Set for a repository whose root is the mod itself. If you nest the mod in a
+  # subfolder, put that folder here and prefix HASHES with it.
+  MOD_DIR: .
+  HASHES: src/main/resources/map-license/codes.json
 
 jobs:
   issue:
