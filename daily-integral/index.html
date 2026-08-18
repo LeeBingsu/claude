@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>매일 적분 · Daily Integral</title>
+<meta name="description" content="하루 한 문제씩 푸는 개인용 적분 연습 사이트">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90' font-family='Times New Roman'>&#8747;</text></svg>">
+<link rel="stylesheet" href="vendor/katex/katex.min.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <span class="sym">&#8747;</span>
+      <div>
+        <h1>매일 적분</h1>
+        <div class="tag">하루 한 문제, 적분만</div>
+      </div>
+    </div>
+    <span class="pill flame" id="streakPill" title="연속 학습일">&#128293; <b id="streakVal">0</b>일</span>
+    <span class="pill" id="resetPill" title="다음 문제까지 남은 시간">&#8635; <b id="resetVal">--:--:--</b></span>
+    <button class="icon-btn" id="themeBtn" title="테마 전환" aria-label="테마 전환">&#9681;</button>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-view="daily" aria-selected="true">오늘의 문제</button>
+    <button role="tab" data-view="practice" aria-selected="false">연습 모드</button>
+    <button role="tab" data-view="archive" aria-selected="false">아카이브</button>
+    <button role="tab" data-view="stats" aria-selected="false">통계</button>
+  </nav>
+
+  <!-- ------------------------------------------------------ 문제 화면 -->
+  <section id="playView">
+    <div class="levels" id="levelBar"></div>
+
+    <div class="card">
+      <div class="card-head">
+        <span class="chip" id="topicChip">주제</span>
+        <span class="chip" id="dateChip"></span>
+        <span class="chip mode hidden" id="modeChip"></span>
+        <span class="spacer"></span>
+        <span class="muted" id="attemptChip"></span>
+      </div>
+
+      <div class="problem" id="problemBox"></div>
+
+      <div class="answer-row">
+        <input id="answerInput" type="text" autocomplete="off" autocapitalize="off"
+               spellcheck="false" placeholder="예: x^3/3 + C     (적분상수는 생략해도 됩니다)">
+        <button class="btn" id="submitBtn">정답 확인</button>
+      </div>
+
+      <div class="palette" id="palette"></div>
+      <div class="preview" id="preview"><span class="label">입력 미리보기</span><span id="previewBody" class="muted">여기에 수식이 표시됩니다</span></div>
+
+      <div class="actions">
+        <button class="btn ghost sm" id="hintBtn">힌트 보기</button>
+        <button class="btn ghost sm" id="revealBtn">해설 보기</button>
+        <span class="spacer"></span>
+        <button class="btn ghost sm hidden" id="nextBtn">다음 문제 &rarr;</button>
+      </div>
+
+      <div class="hintbox" id="hintBox"></div>
+      <div class="feedback" id="feedback"></div>
+
+      <div class="solution" id="solution">
+        <h3>풀이 과정</h3>
+        <div class="steps" id="steps"></div>
+        <div class="final"><span class="lab">정답</span><span id="finalAnswer"></span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><span class="chip">입력 규칙</span></div>
+      <p class="muted" style="margin:8px 0 0">
+        곱셈은 <code>2x</code>처럼 붙여 써도 되고 <code>2*x</code>도 됩니다 &middot;
+        거듭제곱 <code>x^2</code> &middot; 분수 <code>(x+1)/2</code> &middot;
+        근호 <code>sqrt(x)</code> &middot; 로그 <code>ln(x)</code> &middot;
+        절댓값 <code>|x|</code> &middot; 역삼각 <code>asin, acos, atan</code> &middot;
+        상수 <code>pi</code>, <code>e</code>.
+        적분상수 <code>+C</code>는 있어도 없어도 정답으로 인정합니다.
+        표현이 달라도 <b>상수 차이만</b> 나면 정답입니다.
+      </p>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------ 아카이브 -->
+  <section id="archiveView" class="hidden">
+    <div class="card">
+      <div class="card-head"><span class="chip">최근 35일</span><span class="spacer"></span>
+        <span class="muted">아카이브 기록은 연속 학습일에 영향을 주지 않습니다</span></div>
+      <div class="archive-grid" id="archiveGrid" style="margin-top:12px"></div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------ 통계 -->
+  <section id="statsView" class="hidden">
+    <div class="card">
+      <div class="card-head"><span class="chip">기록</span></div>
+      <div class="grid" style="margin-top:12px" id="statGrid"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="chip">난이도별 진행</span><span class="spacer"></span>
+        <span class="muted">문제 은행 소진율</span></div>
+      <div class="grid" style="margin-top:12px" id="levelStats"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="chip">데이터</span></div>
+      <p class="muted" style="margin:8px 0 12px">
+        모든 기록은 이 브라우저의 localStorage 에만 저장됩니다. 서버로 전송되지 않습니다.
+      </p>
+      <button class="btn ghost sm" id="resetDataBtn">기록 전체 삭제</button>
+    </div>
+  </section>
+
+  <footer>
+    개인 학습용으로 직접 만든 적분 연습 사이트 &middot; 문제 <b id="bankCount">0</b>개 수록
+  </footer>
+</div>
+
+<script src="vendor/katex/katex.min.js"></script>
+<script src="parser.js"></script>
+<script src="problems.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
