@@ -105,6 +105,8 @@ header.top {
 .levels .dot.easy { background: #34d399; }
 .levels .dot.medium { background: #fbbf24; }
 .levels .dot.hard { background: #fb7185; }
+.levels .dot.monster { background: #a855f7; }
+.levels button[data-level="monster"][aria-selected="true"] { border-color: #a855f7; }
 .levels .check { color: var(--ok); font-size: 13px; }
 
 /* ---------------------------------------------------------------- 카드 */

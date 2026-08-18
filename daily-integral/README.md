@@ -21,17 +21,35 @@ cd daily-integral && python3 -m http.server 8000
 인터넷 연결 없이도 완전히 동작합니다. 수식 렌더링에 쓰는 KaTeX 를
 `vendor/katex/` 에 포함해 두었습니다 (MIT, `vendor/katex/LICENSE`).
 
+## 수록 문제 — 532문항 · 4단계
+
+| 단계 | 문항 | 다루는 것 |
+|---|---:|---|
+| 쉬움 | 163 | 거듭제곱 법칙, 다항식, 기본 삼각·지수·로그, 1차식 치환, 기본 쌍곡선함수 |
+| 보통 | 147 | 치환적분, 부분적분, 반각공식, 부분분수, 역삼각·역쌍곡선 적분표 |
+| 어려움 | 161 | 삼각·쌍곡선 치환, 완전제곱, 고차 삼각함수, 순환 부분적분, 유리화 치환 |
+| **몬스터** | 61 | $x^{4}\pm1$ 유리식, $\sqrt{\tan x}$, 바이어슈트라스 치환, 삼중 부분적분, $\sec^5$, $(\arcsin x)^2$ |
+
+난이도는 원본 사이트의 easy/medium/hard 감각에 맞췄고, **몬스터**는 그보다 한 단계 위로
+따로 만든 등급입니다. 한 단계를 다 돌기 전에는 같은 문제가 다시 나오지 않으므로
+쉬움은 163일, 몬스터는 61일 주기로 순환합니다.
+
+**쌍곡선함수**는 전 단계에 걸쳐 들어 있습니다 —
+$\sinh,\cosh,\tanh,\operatorname{sech},\operatorname{csch},\coth$ 의 기본 적분부터
+$\operatorname{arsinh}/\operatorname{arcosh}/\operatorname{artanh}$ 적분표,
+쌍곡선 치환 $x=a\sinh\theta$, $\int\operatorname{sech}^{3}x\,dx$,
+$\int e^{ax}\sinh bx\,dx$, $\int\sinh^{4}x\,dx$ 까지.
+
 ## 기능
 
 | 기능 | 설명 |
 |---|---|
-| 오늘의 문제 | 날짜에서 결정되는 문제. 난이도별로 하루 한 문제씩 |
-| 난이도 3단계 | 쉬움 24 · 보통 24 · 어려움 20 (총 68문항) |
+| 오늘의 문제 | 날짜에서 결정되는 문제. 단계별로 하루 한 문제씩 |
 | 연속 학습일 | 오늘의 문제를 풀면 이어지는 스트릭. 하루 건너뛰면 초기화 |
 | 힌트 / 해설 | 문제마다 힌트 2개와 단계별 풀이 |
-| 연습 모드 | 난이도별 무한 랜덤 출제. 기록과 스트릭에 영향 없음 |
+| 연습 모드 | 단계별 무한 랜덤 출제. 기록과 스트릭에 영향 없음 |
 | 아카이브 | 최근 35일 문제를 다시 풀기. 스트릭에 영향 없음 |
-| 통계 | 해결 수, 최고 스트릭, 첫 시도 성공률, 난이도별 소진율 |
+| 통계 | 해결 수, 최고 스트릭, 첫 시도 성공률, 단계별 소진율 |
 | 테마 | 다크 / 라이트 |
 
 기록은 브라우저 `localStorage` 에만 저장되고 외부로 전송되지 않습니다.
@@ -43,15 +61,18 @@ cd daily-integral && python3 -m http.server 8000
 덕분에 아래가 모두 정답 처리됩니다.
 
 ```
-∫ 5/x dx      →  5ln(x) · 5ln|x| · ln(x^5) · 5ln(x) - 7   모두 정답
-∫ sin²x dx    →  x/2 - sin(2x)/4 · x/2 - sin(x)cos(x)/2   모두 정답
+∫ 5/x dx        →  5ln(x) · 5ln|x| · ln(x^5) · 5ln(x) - 7          모두 정답
+∫ sin²x dx      →  x/2 - sin(2x)/4 · x/2 - sin(x)cos(x)/2          모두 정답
+∫ dx/√(x²+1)    →  asinh(x) · ln(x+sqrt(x^2+1))                    모두 정답
+∫ sech x dx     →  atan(sinh(x)) · 2atan(tanh(x/2))                모두 정답
 ```
 
 적분상수 `+C` 는 써도 되고 안 써도 됩니다. 계수만 틀린 경우
 "피적분함수의 몇 배가 되는지" 를 알려 줍니다.
 
 입력 문법: `2x` 또는 `2*x`, `x^2`, `(x+1)/2`, `sqrt(x)`, `ln(x)`, `|x|`,
-`asin/acos/atan`, `sin^2(x)`, `pi`, `e`.
+`asin/acos/atan`, `sinh/cosh/tanh/sech/csch/coth`, `asinh/acosh/atanh`,
+`sin^2(x)`, `pi`, `e`.
 
 ## 파일 구성
 
@@ -59,37 +80,45 @@ cd daily-integral && python3 -m http.server 8000
 index.html      화면 구조
 styles.css      테마 토큰 + 레이아웃 (다크/라이트)
 parser.js       수식 토크나이저·파서·평가기·LaTeX 변환·채점 비교
-problems.js     문제 은행 68문항 (피적분함수, 기준 부정적분, 힌트, 풀이)
+generate.js     문제 은행 생성기 (유형별 템플릿 + 매개변수)
+problems.js     생성된 문제 은행 532문항 — 직접 고치지 말 것
 app.js          일일 출제, 스트릭, 아카이브, 통계, 입력 처리
-verify.js       문제 은행 자가 검증 (node verify.js)
+verify.js       배포된 문제 은행 재검증 (node verify.js)
 grade-test.js   채점 엔진 회귀 테스트 (node grade-test.js)
 vendor/katex/   KaTeX 0.16.11 (MIT)
 ```
 
-## 문제 추가하기
+## 문제 추가·수정하기
 
-`problems.js` 의 배열에 항목을 하나 추가하고 `node verify.js` 를 실행하면
-기준 부정적분을 수치 미분해 피적분함수와 맞는지 자동으로 확인해 줍니다.
-
-```js
-{
-  id: 'm25', topic: '치환적분',
-  integrand: 'x/(x^2+1)',                  // 채점·검증용 ASCII
-  latex: '\\dfrac{x}{x^{2}+1}',            // 문제 표시용
-  answer: 'ln(x^2+1)/2',                   // 기준 부정적분 (+C 생략)
-  answerLatex: '\\dfrac{1}{2}\\ln(x^{2}+1)+C',
-  domain: [0.1, 2.5],                      // 특이점을 피한 비교 구간
-  hints: ['분모의 도함수가 $2x$ 다.', '...'],   // $...$ 안은 수식으로 렌더링
-  steps: ['$u=x^{2}+1$', '...']
-}
-```
-
-`domain` 은 채점 시 표본을 뽑는 구간이므로 분모가 0 이 되거나
-로그·근호의 정의역을 벗어나는 지점을 피해서 잡아야 합니다.
-
-## 검증
+`problems.js` 는 **자동 생성 파일**입니다. 직접 고치지 말고 `generate.js` 의
+유형(family)을 고친 뒤 다시 생성합니다.
 
 ```bash
-node verify.js       # 68문항 전부: 기준 답을 미분하면 피적분함수가 되는가
-node grade-test.js   # 동치 표현/오답 25건에 대한 채점 결과
+node generate.js     # problems.js 재생성 (검증 실패 시 파일을 쓰지 않고 중단)
+node verify.js       # 생성된 파일을 독립적으로 재검증
+node grade-test.js   # 채점 엔진 회귀 테스트
 ```
+
+유형 하나는 이렇게 생겼습니다. 매개변수를 바꾸면 문항이 한꺼번에 늘어납니다.
+
+```js
+[1, 2, 6].forEach(function (a) {
+  [1, 3, 4, 9].forEach(function (b) {
+    add('medium', '치환적분',
+        C(a, 1, 'x/(x^2+' + b + ')'),        // 피적분함수
+        C(a, 2, 'ln(x^2+' + b + ')'), {      // 기준 부정적분 (+C 생략)
+      domain: [0.1, 2.6],                    // 특이점을 피한 비교 구간
+      hints: ['분모의 도함수가 $2x$ 다.', '...'],   // $...$ 안은 수식으로 렌더링
+      steps: ['$u=x^{2}+' + b + '$', '...']
+    });
+  });
+});
+```
+
+`generate.js` 는 만든 문항마다 기준 부정적분을 수치 미분해 피적분함수와
+일치하는지 확인하고, **한 건이라도 어긋나면 `problems.js` 를 쓰지 않고 멈춥니다.**
+문제 표시용 LaTeX 와 정답 LaTeX 는 파서의 변환기가 자동으로 만들며,
+계수 1·분모 1 같은 군더더기는 생성 시 정리됩니다.
+
+`domain` 은 채점 표본을 뽑는 구간이므로 분모가 0 이 되거나
+로그·근호의 정의역을 벗어나는 지점, 그리고 $\tan/\sec$ 의 극점을 피해야 합니다.

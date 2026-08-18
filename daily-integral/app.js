@@ -14,8 +14,7 @@
       best: 0,
       lastSolvedDay: null,
       days: {},                       // '2026-08-18': { easy: {solved, attempts, hints, revealed} }
-      practice: { solved: 0, attempts: 0 },
-      seen: { easy: [], medium: [], hard: [] }
+      practice: { solved: 0, attempts: 0 }
     };
   }
 
@@ -375,6 +374,7 @@
     PROBLEMS.levels.forEach(function (lv) {
       var b = document.createElement('button');
       b.setAttribute('aria-selected', String(lv === session.level));
+      b.setAttribute('data-level', lv);
       var dot = document.createElement('span');
       dot.className = 'dot ' + lv;
       b.appendChild(dot);
@@ -431,8 +431,8 @@
   // ------------------------------------------------------------- 통계
 
   function renderStats() {
-    var solvedByLevel = { easy: 0, medium: 0, hard: 0 };
-    var uniqueByLevel = { easy: {}, medium: {}, hard: {} };
+    var solvedByLevel = {}, uniqueByLevel = {};
+    PROBLEMS.levels.forEach(function (lv) { solvedByLevel[lv] = 0; uniqueByLevel[lv] = {}; });
     var totalAttempts = 0, totalSolved = 0, daysActive = 0;
 
     Object.keys(store.days).forEach(function (k) {

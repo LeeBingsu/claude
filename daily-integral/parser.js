@@ -314,10 +314,14 @@
     csc: '\\csc', cot: '\\cot', sinh: '\\sinh', cosh: '\\cosh', tanh: '\\tanh',
     asin: '\\arcsin', acos: '\\arccos', atan: '\\arctan',
     arcsin: '\\arcsin', arccos: '\\arccos', arctan: '\\arctan',
+    sech: '\\operatorname{sech}', csch: '\\operatorname{csch}', coth: '\\coth',
+    asinh: '\\operatorname{arsinh}', acosh: '\\operatorname{arcosh}', atanh: '\\operatorname{artanh}',
+    arcsinh: '\\operatorname{arsinh}', arccosh: '\\operatorname{arcosh}', arctanh: '\\operatorname{artanh}',
     sgn: '\\operatorname{sgn}'
   };
 
   function prec(n) {
+    if (n.k === 'paren') return prec(n.a);
     if (n.k === 'bin') {
       if (n.op === '+' || n.op === '-') return 1;
       if (n.op === '*') return 2;
@@ -328,9 +332,17 @@
     return 5;
   }
 
+  var LATEX_OPTS = {};
+
   function wrap(child, minPrec) {
     var s = toLatex(child);
     return prec(child) < minPrec ? '\\left(' + s + '\\right)' : s;
+  }
+
+  // sin x, ln x 처럼 인자가 단순하면 괄호를 생략해 읽기 좋게 만든다
+  function isSimpleArg(n) {
+    while (n && n.k === 'paren') n = n.a;
+    return !!n && (n.k === 'var' || n.k === 'const' || n.k === 'num');
   }
 
   function fmtNum(v) {
@@ -352,6 +364,10 @@
         if (n.fn === 'abs') return '\\left|' + toLatex(n.a) + '\\right|';
         if (n.fn === 'exp') return 'e^{' + toLatex(n.a) + '}';
         var head = LATEX_FN[n.fn] || '\\operatorname{' + n.fn + '}';
+        if ((n.fn === 'ln' || n.fn === 'log') && LATEX_OPTS.lnAbs) {
+          return head + '\\left|' + toLatex(n.a) + '\\right|';
+        }
+        if (isSimpleArg(n.a)) return head + ' ' + toLatex(n.a);
         return head + '\\left(' + toLatex(n.a) + '\\right)';
       }
       case 'bin': {
@@ -369,8 +385,8 @@
           // -3e^{2x} 를 (-3)e^{2x} 로 쓰지 않도록 앞의 음수는 그대로 붙인다
           var left = n.a.k === 'neg' ? '-' + wrap(n.a.a, 2) : wrap(n.a, 2);
           var right = wrap(n.b, 2);
-          var glue = n.implicit ? ' ' : ' \\cdot ';
-          if (n.implicit && /[0-9.]$/.test(left) && /^[0-9.]/.test(right)) glue = ' \\cdot ';
+          // 3*x 는 3x 로, 3*2 처럼 숫자끼리일 때만 곱셈 점을 찍는다
+          var glue = /^[0-9.]/.test(right) ? ' \\cdot ' : ' ';
           return left + glue + right;
         }
         return wrap(n.a, 1) + ' ' + n.op + ' ' + wrap(n.b, 1);
@@ -464,6 +480,9 @@
     usesFree: usesFree,
     derivative: derivative,
     compareAntiderivative: compareAntiderivative,
-    latexOf: function (src) { return toLatex(parse(src)); }
+    latexOf: function (src, opts) {
+      LATEX_OPTS = opts || {};
+      try { return toLatex(parse(src)); } finally { LATEX_OPTS = {}; }
+    }
   };
 });
