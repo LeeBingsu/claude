@@ -49,12 +49,12 @@
 
       <div class="answer-row">
         <input id="answerInput" type="text" autocomplete="off" autocapitalize="off"
-               spellcheck="false" placeholder="예: x^3/3 + C     (적분상수는 생략해도 됩니다)">
+               spellcheck="false" placeholder="예:  x³/3 + C     (적분상수는 생략해도 됩니다)">
         <button class="btn" id="submitBtn">정답 확인</button>
       </div>
 
       <div class="palette" id="palette"></div>
-      <div class="preview" id="preview"><span class="label">입력 미리보기</span><span id="previewBody" class="muted">여기에 수식이 표시됩니다</span></div>
+      <div class="preview empty" id="preview"><span class="label">미리보기</span><span id="previewBody" class="muted">입력한 식이 여기에 수식으로 표시됩니다</span></div>
 
       <div class="actions">
         <button class="btn ghost sm" id="hintBtn">힌트 보기</button>
@@ -76,12 +76,20 @@
     <div class="card">
       <div class="card-head"><span class="chip">입력 규칙</span></div>
       <p class="muted" style="margin:8px 0 0">
-        곱셈은 <code>2x</code>처럼 붙여 써도 되고 <code>2*x</code>도 됩니다 &middot;
-        거듭제곱 <code>x^2</code> &middot; 분수 <code>(x+1)/2</code> &middot;
-        근호 <code>sqrt(x)</code> &middot; 로그 <code>ln(x)</code> &middot;
-        절댓값 <code>|x|</code> &middot; 역삼각 <code>asin, acos, atan</code> &middot;
-        상수 <code>pi</code>, <code>e</code>.
-        적분상수 <code>+C</code>는 있어도 없어도 정답으로 인정합니다.
+        치기 쉬운 대로 쓰면 화면에는 예쁘게 바뀝니다 &mdash;
+        <code>*</code> 는 <b>&middot;</b> 로, <code>^2</code> 는 <b>&sup2;</b> 로,
+        <code>sqrt(</code> 는 <b>&radic;(</b> 로, <code>pi</code> 는 <b>&pi;</b> 로.
+        입력한 식은 바로 아래에 수식으로 그려집니다.
+      </p>
+      <p class="muted" style="margin:10px 0 0">
+        곱셈은 <code>2x</code>처럼 붙여 써도 됩니다 &middot;
+        거듭제곱 <code>x^2</code> 또는 <code>x&sup2;</code> &middot;
+        분수 <code>(x+1)/2</code> &middot; 근호 <code>sqrt(x)</code> &middot;
+        로그 <code>ln(x)</code> &middot; 절댓값 <code>|x|</code> &middot;
+        역삼각 <code>asin, acos, atan</code> &middot;
+        쌍곡선 <code>sinh, cosh, tanh, sech</code> &middot;
+        역쌍곡선 <code>asinh, acosh, atanh</code>.
+        적분상수 <code>+C</code>는 있어도 없어도 정답으로 인정하고,
         표현이 달라도 <b>상수 차이만</b> 나면 정답입니다.
       </p>
     </div>

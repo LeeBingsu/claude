@@ -344,6 +344,70 @@
     }
   }
 
+  // ------------------------------------------------------------- 예쁜 입력
+
+  // 타이핑하는 대로 * 는 ·, ^2 는 ², sqrt 는 √, pi 는 π 로 바꿔 보여 준다.
+  // 파서가 이 기호들을 그대로 읽으므로 채점에는 영향이 없다.
+  var SUP = {
+    '0': '\u2070', '1': '\u00b9', '2': '\u00b2', '3': '\u00b3', '4': '\u2074',
+    '5': '\u2075', '6': '\u2076', '7': '\u2077', '8': '\u2078', '9': '\u2079',
+    '-': '\u207b'
+  };
+  var SUP_DIGITS = '\u2070\u00b9\u00b2\u00b3\u2074\u2075\u2076\u2077\u2078\u2079\u207b';
+
+  function ends(str, tail) {
+    return str.length >= tail.length && str.slice(str.length - tail.length) === tail;
+  }
+
+  // 방금 입력한 자리만 살펴본다. 커서가 튀지 않도록 앞쪽 문자열만 손댄다.
+  function prettifyAtCaret(value, caret) {
+    var before = value.slice(0, caret), after = value.slice(caret);
+    var last = before.slice(-1);
+    var cut = 0, put = null;
+
+    if (last === '*') { cut = 1; put = '\u00b7'; }
+    else if (ends(before, 'sqrt(')) { cut = 5; put = '\u221a('; }
+    else if (ends(before, 'pi') && !/[A-Za-z]/.test(before.slice(-3, -2))) { cut = 2; put = '\u03c0'; }
+    else if (/\^[0-9-]$/.test(before)) { cut = 2; put = SUP[last]; }
+    else if (/[0-9]$/.test(before)) {
+      // 위첨자 바로 뒤에 이어 친 숫자만 위첨자로 (x^12 -> x¹²)
+      var prev = before.slice(-2, -1);
+      if (prev && SUP_DIGITS.indexOf(prev) >= 0) { cut = 1; put = SUP[last]; }
+    }
+
+    if (put === null) return null;
+    before = before.slice(0, before.length - cut) + put;
+    return { value: before + after, caret: before.length };
+  }
+
+  // 붙여넣기처럼 한꺼번에 들어온 값은 전체를 훑어서 바꾼다.
+  function prettifyAll(value) {
+    return value
+      .replace(/sqrt\s*\(/g, '\u221a(')
+      .replace(/(^|[^A-Za-z])pi(?![A-Za-z])/g, '$1\u03c0')
+      .replace(/\*/g, '\u00b7')
+      .replace(/\^(-?[0-9]+)(?![0-9])/g, function (_, d) {
+        var out = '';
+        for (var i = 0; i < d.length; i++) out += SUP[d[i]];
+        return out;
+      });
+  }
+
+  function onAnswerInput(e) {
+    var inp = $('answerInput');
+    if (e && e.inputType === 'insertFromPaste') {
+      inp.value = prettifyAll(inp.value);
+      inp.setSelectionRange(inp.value.length, inp.value.length);
+    } else if (!e || e.inputType !== 'deleteContentBackward') {
+      var res = prettifyAtCaret(inp.value, inp.selectionStart);
+      if (res) {
+        inp.value = res.value;
+        inp.setSelectionRange(res.caret, res.caret);
+      }
+    }
+    updatePreview();
+  }
+
   // ------------------------------------------------------------- 미리보기
 
   function updatePreview() {
@@ -352,14 +416,16 @@
     var box = $('preview');
     box.classList.remove('err');
     if (!raw) {
+      box.classList.add('empty');
       body.className = 'muted';
-      body.textContent = '여기에 수식이 표시됩니다';
+      body.textContent = '입력한 식이 여기에 수식으로 표시됩니다';
       return;
     }
+    box.classList.remove('empty');
     body.className = '';
     try {
       var tex = MathExpr.latexOf(raw);
-      renderTex(body, tex, false, raw);
+      renderTex(body, '\\displaystyle ' + tex, false, raw);
     } catch (e) {
       box.classList.add('err');
       body.textContent = e.message;
@@ -532,10 +598,12 @@
   // ------------------------------------------------------------- 팔레트
 
   var PALETTE = [
-    ['x^', 'x^'], ['√', 'sqrt('], ['ln', 'ln('], ['eˣ', 'e^('],
+    ['x\u00b2', '\u00b2'], ['x\u00b3', '\u00b3'], ['x\u207f', '^'],
+    ['\u221a', '\u221a('], ['ln', 'ln('], ['e\u02e3', 'e^('],
     ['sin', 'sin('], ['cos', 'cos('], ['tan', 'tan('],
-    ['arctan', 'atan('], ['arcsin', 'asin('],
-    ['|·|', '|'], ['( )', '('], ['/', '/'], ['π', 'pi'], ['+C', '+C']
+    ['arctan', 'atan('], ['arcsin', 'asin('], ['sinh', 'sinh('], ['cosh', 'cosh('],
+    ['|\u00b7|', '|'], ['( )', '('], ['\u00b7', '\u00b7'], ['/', '/'],
+    ['\u03c0', '\u03c0'], ['+C', '+C']
   ];
 
   function buildPalette() {
@@ -578,7 +646,7 @@
     });
 
     $('submitBtn').onclick = check;
-    $('answerInput').addEventListener('input', updatePreview);
+    $('answerInput').addEventListener('input', onAnswerInput);
     $('answerInput').addEventListener('keydown', function (e) {
       if (e.key === 'Enter') { e.preventDefault(); check(); }
     });

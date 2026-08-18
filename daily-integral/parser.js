@@ -47,12 +47,33 @@
   function isDigit(ch) { return ch >= '0' && ch <= '9'; }
   function isAlpha(ch) { return /[A-Za-z]/.test(ch); }
 
+  // 예쁘게 보이는 기호들을 파서가 읽는 ASCII 로 되돌린다.
+  var SUP_TO_ASCII = {
+    '\u2070': '0', '\u00b9': '1', '\u00b2': '2', '\u00b3': '3', '\u2074': '4',
+    '\u2075': '5', '\u2076': '6', '\u2077': '7', '\u2078': '8', '\u2079': '9',
+    '\u207b': '-', '\u207a': '+', '\u207d': '(', '\u207e': ')', '\u207f': 'n'
+  };
+  var SUP_RE = /[\u2070\u00b9\u00b2\u00b3\u2074-\u2079\u207a\u207b\u207d\u207e\u207f]+/g;
+
+  var VULGAR = {
+    '\u00bd': '(1/2)', '\u2153': '(1/3)', '\u2154': '(2/3)', '\u00bc': '(1/4)',
+    '\u00be': '(3/4)', '\u2155': '(1/5)', '\u2159': '(1/6)', '\u215b': '(1/8)'
+  };
+
   function normalize(src) {
     return String(src)
+      // x² -> x^(2), x⁻³ -> x^(-3)
+      .replace(SUP_RE, function (run) {
+        var out = '';
+        for (var i = 0; i < run.length; i++) out += SUP_TO_ASCII[run[i]];
+        return '^(' + out + ')';
+      })
+      .replace(/[\u00bd\u2153\u2154\u00bc\u00be\u2155\u2159\u215b]/g, function (ch) { return VULGAR[ch]; })
       .replace(/−/g, '-')            // 유니코드 마이너스
-      .replace(/[×⋅•]/g, '*')
-      .replace(/÷/g, '/')
+      .replace(/[×⋅•·]/g, '*')       // 곱셈 점
+      .replace(/[÷⁄∕]/g, '/')
       .replace(/π/g, 'pi')
+      .replace(/∛/g, 'cbrt')
       .replace(/√/g, 'sqrt')
       .replace(/\*\*/g, '^')
       .replace(/\\left|\\right/g, '')
@@ -332,6 +353,14 @@
     return 5;
   }
 
+  // 자체적으로 구분 기호를 갖는 함수 (지수를 그냥 붙여도 안전하다)
+  var SELF_DELIMITED = { sqrt: 1, cbrt: 1, abs: 1, exp: 1 };
+  // \sin^{2}x 처럼 연산자 위에 지수를 얹는 것이 관례인 함수
+  var OPERATOR_POW = {
+    sin: 1, cos: 1, tan: 1, sec: 1, csc: 1, cot: 1,
+    sinh: 1, cosh: 1, tanh: 1, sech: 1, csch: 1, coth: 1
+  };
+
   var LATEX_OPTS = {};
 
   function wrap(child, minPrec) {
@@ -375,9 +404,18 @@
           return '\\frac{' + toLatex(n.a) + '}{' + toLatex(n.b) + '}';
         }
         if (n.op === '^') {
-          if (n.fnPow && n.a.k === 'call') {
-            var f = LATEX_FN[n.a.fn] || '\\operatorname{' + n.a.fn + '}';
-            return f + '^{' + toLatex(n.b) + '}\\left(' + toLatex(n.a.a) + '\\right)';
+          // sec(x)^2 는 \sec x^{2} (= sec(x^2)) 로 읽히면 안 된다.
+          var base = n.a;
+          while (base.k === 'paren') base = base.a;
+          if (base.k === 'call' && !SELF_DELIMITED[base.fn]) {
+            var head = LATEX_FN[base.fn] || '\\operatorname{' + base.fn + '}';
+            var arg = isSimpleArg(base.a)
+              ? ' ' + toLatex(base.a)
+              : '\\left(' + toLatex(base.a) + '\\right)';
+            // 삼각·쌍곡선은 \sin^{2}x, 나머지는 (\ln x)^{2} 가 관례다
+            return OPERATOR_POW[base.fn]
+              ? head + '^{' + toLatex(n.b) + '}' + arg
+              : '\\left(' + head + arg + '\\right)^{' + toLatex(n.b) + '}';
           }
           return wrap(n.a, 5) + '^{' + toLatex(n.b) + '}';
         }

@@ -708,7 +708,7 @@
     },
     {
       id: 'e087', topic: '삼각함수',
-      integrand: 'sec(x)^2', latex: '\\sec x^{2}',
+      integrand: 'sec(x)^2', latex: '\\sec^{2} x',
       answer: 'tan(x)', answerLatex: '\\tan x+C',
       domain: [0.25, 1.15],
       hints: ['$\\tan u$ 의 도함수가 $\\sec^{2}u$ 다.', '안쪽 계수 $1$ 로 나눈다.'],
@@ -716,7 +716,7 @@
     },
     {
       id: 'e088', topic: '삼각함수',
-      integrand: 'csc(x)^2', latex: '\\csc x^{2}',
+      integrand: 'csc(x)^2', latex: '\\csc^{2} x',
       answer: '-cot(x)', answerLatex: '-\\cot x+C',
       domain: [0.5, 2.3],
       hints: ['$\\cot u$ 의 도함수는 $-\\csc^{2}u$ 다.', '부호를 뒤집는다.'],
@@ -740,7 +740,7 @@
     },
     {
       id: 'e091', topic: '삼각함수',
-      integrand: 'sec(2x)^2', latex: '\\sec\\left(2 x\\right)^{2}',
+      integrand: 'sec(2x)^2', latex: '\\sec^{2}\\left(2 x\\right)',
       answer: '(1/2)*tan(2x)', answerLatex: '\\frac{1}{2} \\tan\\left(2 x\\right)+C',
       domain: [0.125, 0.575],
       hints: ['$\\tan u$ 의 도함수가 $\\sec^{2}u$ 다.', '안쪽 계수 $2$ 로 나눈다.'],
@@ -748,7 +748,7 @@
     },
     {
       id: 'e092', topic: '삼각함수',
-      integrand: 'csc(2x)^2', latex: '\\csc\\left(2 x\\right)^{2}',
+      integrand: 'csc(2x)^2', latex: '\\csc^{2}\\left(2 x\\right)',
       answer: '(-1/2)*cot(2x)', answerLatex: '\\frac{-1}{2} \\cot\\left(2 x\\right)+C',
       domain: [0.25, 1.15],
       hints: ['$\\cot u$ 의 도함수는 $-\\csc^{2}u$ 다.', '부호를 뒤집는다.'],
@@ -1180,7 +1180,7 @@
     },
     {
       id: 'e146', topic: '쌍곡선함수',
-      integrand: 'sech(x)^2', latex: '\\operatorname{sech} x^{2}',
+      integrand: 'sech(x)^2', latex: '\\operatorname{sech}^{2} x',
       answer: 'tanh(x)', answerLatex: '\\tanh x+C',
       domain: [0.25, 1.6],
       hints: ['$\\tanh u$ 의 도함수가 $\\operatorname{sech}^{2}u$ 다.', '삼각함수의 $\\sec^{2}$ 와 같은 자리다.'],
@@ -1188,7 +1188,7 @@
     },
     {
       id: 'e147', topic: '쌍곡선함수',
-      integrand: 'csch(x)^2', latex: '\\operatorname{csch} x^{2}',
+      integrand: 'csch(x)^2', latex: '\\operatorname{csch}^{2} x',
       answer: '-coth(x)', answerLatex: '-\\coth x+C',
       domain: [0.35, 2],
       hints: ['$\\coth u$ 의 도함수는 $-\\operatorname{csch}^{2}u$ 다.', '부호를 뒤집는다.'],
@@ -1196,7 +1196,7 @@
     },
     {
       id: 'e148', topic: '쌍곡선함수',
-      integrand: 'sech(2x)^2', latex: '\\operatorname{sech}\\left(2 x\\right)^{2}',
+      integrand: 'sech(2x)^2', latex: '\\operatorname{sech}^{2}\\left(2 x\\right)',
       answer: '(1/2)*tanh(2x)', answerLatex: '\\frac{1}{2} \\tanh\\left(2 x\\right)+C',
       domain: [0.25, 1.6],
       hints: ['$\\tanh u$ 의 도함수가 $\\operatorname{sech}^{2}u$ 다.', '삼각함수의 $\\sec^{2}$ 와 같은 자리다.'],
@@ -1204,7 +1204,7 @@
     },
     {
       id: 'e149', topic: '쌍곡선함수',
-      integrand: 'csch(2x)^2', latex: '\\operatorname{csch}\\left(2 x\\right)^{2}',
+      integrand: 'csch(2x)^2', latex: '\\operatorname{csch}^{2}\\left(2 x\\right)',
       answer: '(-1/2)*coth(2x)', answerLatex: '\\frac{-1}{2} \\coth\\left(2 x\\right)+C',
       domain: [0.35, 2],
       hints: ['$\\coth u$ 의 도함수는 $-\\operatorname{csch}^{2}u$ 다.', '부호를 뒤집는다.'],
@@ -1212,7 +1212,7 @@
     },
     {
       id: 'e150', topic: '쌍곡선함수',
-      integrand: 'sech(3x)^2', latex: '\\operatorname{sech}\\left(3 x\\right)^{2}',
+      integrand: 'sech(3x)^2', latex: '\\operatorname{sech}^{2}\\left(3 x\\right)',
       answer: '(1/3)*tanh(3x)', answerLatex: '\\frac{1}{3} \\tanh\\left(3 x\\right)+C',
       domain: [0.25, 1.6],
       hints: ['$\\tanh u$ 의 도함수가 $\\operatorname{sech}^{2}u$ 다.', '삼각함수의 $\\sec^{2}$ 와 같은 자리다.'],
@@ -1220,7 +1220,7 @@
     },
     {
       id: 'e151', topic: '쌍곡선함수',
-      integrand: 'csch(3x)^2', latex: '\\operatorname{csch}\\left(3 x\\right)^{2}',
+      integrand: 'csch(3x)^2', latex: '\\operatorname{csch}^{2}\\left(3 x\\right)',
       answer: '(-1/3)*coth(3x)', answerLatex: '\\frac{-1}{3} \\coth\\left(3 x\\right)+C',
       domain: [0.35, 2],
       hints: ['$\\coth u$ 의 도함수는 $-\\operatorname{csch}^{2}u$ 다.', '부호를 뒤집는다.'],
@@ -1228,7 +1228,7 @@
     },
     {
       id: 'e152', topic: '삼각항등식',
-      integrand: 'tan(x)^2', latex: '\\tan x^{2}',
+      integrand: 'tan(x)^2', latex: '\\tan^{2} x',
       answer: 'tan(x) - x', answerLatex: '\\tan x - x+C',
       domain: [0.25, 1.15],
       hints: ['$\\tan^{2}u=\\sec^{2}u-1$ 항등식을 쓴다.', '두 항 모두 기본 적분이다.'],
@@ -1236,7 +1236,7 @@
     },
     {
       id: 'e153', topic: '삼각항등식',
-      integrand: 'cot(x)^2', latex: '\\cot x^{2}',
+      integrand: 'cot(x)^2', latex: '\\cot^{2} x',
       answer: '-cot(x) - x', answerLatex: '-\\cot x - x+C',
       domain: [0.5, 2.3],
       hints: ['$\\cot^{2}u=\\csc^{2}u-1$ 을 쓴다.', '부호에 주의한다.'],
@@ -1244,7 +1244,7 @@
     },
     {
       id: 'e154', topic: '삼각항등식',
-      integrand: 'tan(2x)^2', latex: '\\tan\\left(2 x\\right)^{2}',
+      integrand: 'tan(2x)^2', latex: '\\tan^{2}\\left(2 x\\right)',
       answer: '(1/2)*tan(2x) - x', answerLatex: '\\frac{1}{2} \\tan\\left(2 x\\right) - x+C',
       domain: [0.125, 0.575],
       hints: ['$\\tan^{2}u=\\sec^{2}u-1$ 항등식을 쓴다.', '두 항 모두 기본 적분이다.'],
@@ -1252,7 +1252,7 @@
     },
     {
       id: 'e155', topic: '삼각항등식',
-      integrand: 'cot(2x)^2', latex: '\\cot\\left(2 x\\right)^{2}',
+      integrand: 'cot(2x)^2', latex: '\\cot^{2}\\left(2 x\\right)',
       answer: '(-1/2)*cot(2x) - x', answerLatex: '\\frac{-1}{2} \\cot\\left(2 x\\right) - x+C',
       domain: [0.25, 1.15],
       hints: ['$\\cot^{2}u=\\csc^{2}u-1$ 을 쓴다.', '부호에 주의한다.'],
@@ -1671,7 +1671,7 @@
     },
     {
       id: 'm044', topic: '반각공식',
-      integrand: 'sin(x)^2', latex: '\\sin x^{2}',
+      integrand: 'sin(x)^2', latex: '\\sin^{2} x',
       answer: 'x/2 + (-1/4)*sin(2x)', answerLatex: '\\frac{x}{2} + \\frac{-1}{4} \\sin\\left(2 x\\right)+C',
       domain: [0.25, 2.85],
       hints: ['$\\sin^{2}\\theta=\\dfrac{1-\\cos 2\\theta}{2}$ 로 차수를 낮춘다.', '안쪽 각이 $2x$ 가 된다.'],
@@ -1679,7 +1679,7 @@
     },
     {
       id: 'm045', topic: '반각공식',
-      integrand: 'cos(x)^2', latex: '\\cos x^{2}',
+      integrand: 'cos(x)^2', latex: '\\cos^{2} x',
       answer: 'x/2 + (1/4)*sin(2x)', answerLatex: '\\frac{x}{2} + \\frac{1}{4} \\sin\\left(2 x\\right)+C',
       domain: [0.25, 2.85],
       hints: ['$\\cos^{2}\\theta=\\dfrac{1+\\cos 2\\theta}{2}$ 를 쓴다.', '부호가 $\\sin^{2}$ 일 때와 반대다.'],
@@ -1687,7 +1687,7 @@
     },
     {
       id: 'm046', topic: '반각공식',
-      integrand: 'sin(2x)^2', latex: '\\sin\\left(2 x\\right)^{2}',
+      integrand: 'sin(2x)^2', latex: '\\sin^{2}\\left(2 x\\right)',
       answer: 'x/2 + (-1/8)*sin(4x)', answerLatex: '\\frac{x}{2} + \\frac{-1}{8} \\sin\\left(4 x\\right)+C',
       domain: [0.25, 2.85],
       hints: ['$\\sin^{2}\\theta=\\dfrac{1-\\cos 2\\theta}{2}$ 로 차수를 낮춘다.', '안쪽 각이 $4x$ 가 된다.'],
@@ -1695,7 +1695,7 @@
     },
     {
       id: 'm047', topic: '반각공식',
-      integrand: 'cos(2x)^2', latex: '\\cos\\left(2 x\\right)^{2}',
+      integrand: 'cos(2x)^2', latex: '\\cos^{2}\\left(2 x\\right)',
       answer: 'x/2 + (1/8)*sin(4x)', answerLatex: '\\frac{x}{2} + \\frac{1}{8} \\sin\\left(4 x\\right)+C',
       domain: [0.25, 2.85],
       hints: ['$\\cos^{2}\\theta=\\dfrac{1+\\cos 2\\theta}{2}$ 를 쓴다.', '부호가 $\\sin^{2}$ 일 때와 반대다.'],
@@ -1703,7 +1703,7 @@
     },
     {
       id: 'm048', topic: '반각공식',
-      integrand: 'sin(3x)^2', latex: '\\sin\\left(3 x\\right)^{2}',
+      integrand: 'sin(3x)^2', latex: '\\sin^{2}\\left(3 x\\right)',
       answer: 'x/2 + (-1/12)*sin(6x)', answerLatex: '\\frac{x}{2} + \\frac{-1}{12} \\sin\\left(6 x\\right)+C',
       domain: [0.25, 2.85],
       hints: ['$\\sin^{2}\\theta=\\dfrac{1-\\cos 2\\theta}{2}$ 로 차수를 낮춘다.', '안쪽 각이 $6x$ 가 된다.'],
@@ -1711,7 +1711,7 @@
     },
     {
       id: 'm049', topic: '반각공식',
-      integrand: 'cos(3x)^2', latex: '\\cos\\left(3 x\\right)^{2}',
+      integrand: 'cos(3x)^2', latex: '\\cos^{2}\\left(3 x\\right)',
       answer: 'x/2 + (1/12)*sin(6x)', answerLatex: '\\frac{x}{2} + \\frac{1}{12} \\sin\\left(6 x\\right)+C',
       domain: [0.25, 2.85],
       hints: ['$\\cos^{2}\\theta=\\dfrac{1+\\cos 2\\theta}{2}$ 를 쓴다.', '부호가 $\\sin^{2}$ 일 때와 반대다.'],
@@ -1887,35 +1887,35 @@
     },
     {
       id: 'm071', topic: '삼각함수 홀수차',
-      integrand: 'sin(x)^3', latex: '\\sin x^{3}',
-      answer: '-cos(x) + (1/3)*cos(x)^3', answerLatex: '-\\cos x + \\frac{1}{3} \\cos x^{3}+C',
+      integrand: 'sin(x)^3', latex: '\\sin^{3} x',
+      answer: '-cos(x) + (1/3)*cos(x)^3', answerLatex: '-\\cos x + \\frac{1}{3} \\cos^{3} x+C',
       domain: [0.25, 2.85],
       hints: ['$\\sin^{3}u=\\sin u(1-\\cos^{2}u)$ 로 쪼갠다.', '$u=\\cos x$ 로 치환한다.'],
-      steps: ['$\\sin^{3}x = (1-\\cos^{2}x)\\sin x$', '$= -\\cos x + \\frac{1}{3} \\cos x^{3}$']
+      steps: ['$\\sin^{3}x = (1-\\cos^{2}x)\\sin x$', '$= -\\cos x + \\frac{1}{3} \\cos^{3} x$']
     },
     {
       id: 'm072', topic: '삼각함수 홀수차',
-      integrand: 'cos(x)^3', latex: '\\cos x^{3}',
-      answer: 'sin(x) + (-1/3)*sin(x)^3', answerLatex: '\\sin x + \\frac{-1}{3} \\sin x^{3}+C',
+      integrand: 'cos(x)^3', latex: '\\cos^{3} x',
+      answer: 'sin(x) + (-1/3)*sin(x)^3', answerLatex: '\\sin x + \\frac{-1}{3} \\sin^{3} x+C',
       domain: [0.25, 2.85],
       hints: ['$\\cos^{3}u=\\cos u(1-\\sin^{2}u)$ 로 쪼갠다.', '$u=\\sin x$ 로 치환한다.'],
-      steps: ['$\\cos^{3}x = (1-\\sin^{2}x)\\cos x$', '$= \\sin x + \\frac{-1}{3} \\sin x^{3}$']
+      steps: ['$\\cos^{3}x = (1-\\sin^{2}x)\\cos x$', '$= \\sin x + \\frac{-1}{3} \\sin^{3} x$']
     },
     {
       id: 'm073', topic: '삼각함수 홀수차',
-      integrand: 'sin(2x)^3', latex: '\\sin\\left(2 x\\right)^{3}',
-      answer: '(-1/2)*cos(2x) + (1/6)*cos(2x)^3', answerLatex: '\\frac{-1}{2} \\cos\\left(2 x\\right) + \\frac{1}{6} \\cos\\left(2 x\\right)^{3}+C',
+      integrand: 'sin(2x)^3', latex: '\\sin^{3}\\left(2 x\\right)',
+      answer: '(-1/2)*cos(2x) + (1/6)*cos(2x)^3', answerLatex: '\\frac{-1}{2} \\cos\\left(2 x\\right) + \\frac{1}{6} \\cos^{3}\\left(2 x\\right)+C',
       domain: [0.25, 2.85],
       hints: ['$\\sin^{3}u=\\sin u(1-\\cos^{2}u)$ 로 쪼갠다.', '$u=\\cos 2x$ 로 치환한다.'],
-      steps: ['$\\sin^{3}2x = (1-\\cos^{2}2x)\\sin 2x$', '$= \\frac{-1}{2} \\cos\\left(2 x\\right) + \\frac{1}{6} \\cos\\left(2 x\\right)^{3}$']
+      steps: ['$\\sin^{3}2x = (1-\\cos^{2}2x)\\sin 2x$', '$= \\frac{-1}{2} \\cos\\left(2 x\\right) + \\frac{1}{6} \\cos^{3}\\left(2 x\\right)$']
     },
     {
       id: 'm074', topic: '삼각함수 홀수차',
-      integrand: 'cos(2x)^3', latex: '\\cos\\left(2 x\\right)^{3}',
-      answer: '(1/2)*sin(2x) + (-1/6)*sin(2x)^3', answerLatex: '\\frac{1}{2} \\sin\\left(2 x\\right) + \\frac{-1}{6} \\sin\\left(2 x\\right)^{3}+C',
+      integrand: 'cos(2x)^3', latex: '\\cos^{3}\\left(2 x\\right)',
+      answer: '(1/2)*sin(2x) + (-1/6)*sin(2x)^3', answerLatex: '\\frac{1}{2} \\sin\\left(2 x\\right) + \\frac{-1}{6} \\sin^{3}\\left(2 x\\right)+C',
       domain: [0.25, 2.85],
       hints: ['$\\cos^{3}u=\\cos u(1-\\sin^{2}u)$ 로 쪼갠다.', '$u=\\sin 2x$ 로 치환한다.'],
-      steps: ['$\\cos^{3}2x = (1-\\sin^{2}2x)\\cos 2x$', '$= \\frac{1}{2} \\sin\\left(2 x\\right) + \\frac{-1}{6} \\sin\\left(2 x\\right)^{3}$']
+      steps: ['$\\cos^{3}2x = (1-\\sin^{2}2x)\\cos 2x$', '$= \\frac{1}{2} \\sin\\left(2 x\\right) + \\frac{-1}{6} \\sin^{3}\\left(2 x\\right)$']
     },
     {
       id: 'm075', topic: '치환적분',
@@ -2024,26 +2024,26 @@
     {
       id: 'm088', topic: '치환적분',
       integrand: 'ln(x)/x', latex: '\\frac{\\ln x}{x}',
-      answer: '(1/2)*ln(x)^2', answerLatex: '\\frac{1}{2} \\ln x^{2}+C',
+      answer: '(1/2)*ln(x)^2', answerLatex: '\\frac{1}{2} \\left(\\ln x\\right)^{2}+C',
       domain: [0.4, 4],
       hints: ['$u=\\ln x$ 로 두면 $du=\\dfrac{dx}{x}$ 다.', '남는 것은 $\\int u^{1}du$ 다.'],
-      steps: ['$u=\\ln x$', '$\\int u^{1}du = \\frac{1}{2} \\ln x^{2}$']
+      steps: ['$u=\\ln x$', '$\\int u^{1}du = \\frac{1}{2} \\left(\\ln x\\right)^{2}$']
     },
     {
       id: 'm089', topic: '치환적분',
-      integrand: 'ln(x)^2/x', latex: '\\frac{\\ln x^{2}}{x}',
-      answer: '(1/3)*ln(x)^3', answerLatex: '\\frac{1}{3} \\ln x^{3}+C',
+      integrand: 'ln(x)^2/x', latex: '\\frac{\\left(\\ln x\\right)^{2}}{x}',
+      answer: '(1/3)*ln(x)^3', answerLatex: '\\frac{1}{3} \\left(\\ln x\\right)^{3}+C',
       domain: [0.4, 4],
       hints: ['$u=\\ln x$ 로 두면 $du=\\dfrac{dx}{x}$ 다.', '남는 것은 $\\int u^{2}du$ 다.'],
-      steps: ['$u=\\ln x$', '$\\int u^{2}du = \\frac{1}{3} \\ln x^{3}$']
+      steps: ['$u=\\ln x$', '$\\int u^{2}du = \\frac{1}{3} \\left(\\ln x\\right)^{3}$']
     },
     {
       id: 'm090', topic: '치환적분',
-      integrand: 'ln(x)^3/x', latex: '\\frac{\\ln x^{3}}{x}',
-      answer: '(1/4)*ln(x)^4', answerLatex: '\\frac{1}{4} \\ln x^{4}+C',
+      integrand: 'ln(x)^3/x', latex: '\\frac{\\left(\\ln x\\right)^{3}}{x}',
+      answer: '(1/4)*ln(x)^4', answerLatex: '\\frac{1}{4} \\left(\\ln x\\right)^{4}+C',
       domain: [0.4, 4],
       hints: ['$u=\\ln x$ 로 두면 $du=\\dfrac{dx}{x}$ 다.', '남는 것은 $\\int u^{3}du$ 다.'],
-      steps: ['$u=\\ln x$', '$\\int u^{3}du = \\frac{1}{4} \\ln x^{4}$']
+      steps: ['$u=\\ln x$', '$\\int u^{3}du = \\frac{1}{4} \\left(\\ln x\\right)^{4}$']
     },
     {
       id: 'm091', topic: '이중 치환',
@@ -2159,7 +2159,7 @@
     },
     {
       id: 'm105', topic: '치환적분',
-      integrand: 'cos(x)/(1+sin(x)^2)', latex: '\\frac{\\cos x}{1 + \\sin x^{2}}',
+      integrand: 'cos(x)/(1+sin(x)^2)', latex: '\\frac{\\cos x}{1 + \\sin^{2} x}',
       answer: 'atan(sin(x))', answerLatex: '\\arctan\\left(\\sin x\\right)+C',
       domain: [0.1, 1.4],
       hints: ['$u=\\sin x$ 로 두면 $du=\\cos x\\,dx$ 다.', '남은 적분이 $\\arctan$ 꼴이다.'],
@@ -2167,7 +2167,7 @@
     },
     {
       id: 'm106', topic: '치환적분',
-      integrand: 'sin(x)/(1+cos(x)^2)', latex: '\\frac{\\sin x}{1 + \\cos x^{2}}',
+      integrand: 'sin(x)/(1+cos(x)^2)', latex: '\\frac{\\sin x}{1 + \\cos^{2} x}',
       answer: '-atan(cos(x))', answerLatex: '-\\arctan\\left(\\cos x\\right)+C',
       domain: [0.2, 2.8],
       hints: ['$u=\\cos x$ 로 두면 $du=-\\sin x\\,dx$ 다.', '부호에 주의한다.'],
@@ -2247,7 +2247,7 @@
     },
     {
       id: 'm116', topic: '쌍곡선 항등식',
-      integrand: 'sinh(x)^2', latex: '\\sinh x^{2}',
+      integrand: 'sinh(x)^2', latex: '\\sinh^{2} x',
       answer: '(1/4)*sinh(2x) - x/2', answerLatex: '\\frac{1}{4} \\sinh\\left(2 x\\right) - \\frac{x}{2}+C',
       domain: [0.25, 1.6],
       hints: ['$\\sinh^{2}u=\\dfrac{\\cosh 2u-1}{2}$ 를 쓴다.', '삼각함수의 반각공식과 부호가 다르다.'],
@@ -2255,7 +2255,7 @@
     },
     {
       id: 'm117', topic: '쌍곡선 항등식',
-      integrand: 'cosh(x)^2', latex: '\\cosh x^{2}',
+      integrand: 'cosh(x)^2', latex: '\\cosh^{2} x',
       answer: '(1/4)*sinh(2x) + x/2', answerLatex: '\\frac{1}{4} \\sinh\\left(2 x\\right) + \\frac{x}{2}+C',
       domain: [0.25, 1.6],
       hints: ['$\\cosh^{2}u=\\dfrac{\\cosh 2u+1}{2}$ 를 쓴다.', '$\\sinh^{2}$ 일 때와 부호만 다르다.'],
@@ -2263,7 +2263,7 @@
     },
     {
       id: 'm118', topic: '쌍곡선 항등식',
-      integrand: 'tanh(x)^2', latex: '\\tanh x^{2}',
+      integrand: 'tanh(x)^2', latex: '\\tanh^{2} x',
       answer: 'x - tanh(x)', answerLatex: 'x - \\tanh x+C',
       domain: [0.25, 1.6],
       hints: ['$\\tanh^{2}u=1-\\operatorname{sech}^{2}u$ 다.', '삼각함수의 $\\tan^{2}$ 와 부호가 반대다.'],
@@ -2279,11 +2279,11 @@
     },
     {
       id: 'm120', topic: '쌍곡선함수',
-      integrand: 'sech(x)^2*tanh(x)', latex: '\\operatorname{sech} x^{2} \\tanh x',
-      answer: '(1/2)*tanh(x)^2', answerLatex: '\\frac{1}{2} \\tanh x^{2}+C',
+      integrand: 'sech(x)^2*tanh(x)', latex: '\\operatorname{sech}^{2} x \\tanh x',
+      answer: '(1/2)*tanh(x)^2', answerLatex: '\\frac{1}{2} \\tanh^{2} x+C',
       domain: [0.25, 1.6],
       hints: ['$u=\\tanh x$ 로 두면 $du=\\operatorname{sech}^{2}xdx$ 다.', '남는 것은 $\\int u\\,du$ 다.'],
-      steps: ['$u=\\tanh x$', '$= \\frac{1}{2} \\tanh x^{2}$']
+      steps: ['$u=\\tanh x$', '$= \\frac{1}{2} \\tanh^{2} x$']
     },
     {
       id: 'm121', topic: '쌍곡선함수',
@@ -2303,7 +2303,7 @@
     },
     {
       id: 'm123', topic: '쌍곡선 항등식',
-      integrand: 'sinh(2x)^2', latex: '\\sinh\\left(2 x\\right)^{2}',
+      integrand: 'sinh(2x)^2', latex: '\\sinh^{2}\\left(2 x\\right)',
       answer: '(1/8)*sinh(4x) - x/2', answerLatex: '\\frac{1}{8} \\sinh\\left(4 x\\right) - \\frac{x}{2}+C',
       domain: [0.25, 1.6],
       hints: ['$\\sinh^{2}u=\\dfrac{\\cosh 2u-1}{2}$ 를 쓴다.', '삼각함수의 반각공식과 부호가 다르다.'],
@@ -2311,7 +2311,7 @@
     },
     {
       id: 'm124', topic: '쌍곡선 항등식',
-      integrand: 'cosh(2x)^2', latex: '\\cosh\\left(2 x\\right)^{2}',
+      integrand: 'cosh(2x)^2', latex: '\\cosh^{2}\\left(2 x\\right)',
       answer: '(1/8)*sinh(4x) + x/2', answerLatex: '\\frac{1}{8} \\sinh\\left(4 x\\right) + \\frac{x}{2}+C',
       domain: [0.25, 1.6],
       hints: ['$\\cosh^{2}u=\\dfrac{\\cosh 2u+1}{2}$ 를 쓴다.', '$\\sinh^{2}$ 일 때와 부호만 다르다.'],
@@ -2319,7 +2319,7 @@
     },
     {
       id: 'm125', topic: '쌍곡선 항등식',
-      integrand: 'tanh(2x)^2', latex: '\\tanh\\left(2 x\\right)^{2}',
+      integrand: 'tanh(2x)^2', latex: '\\tanh^{2}\\left(2 x\\right)',
       answer: 'x + (-1/2)*tanh(2x)', answerLatex: 'x + \\frac{-1}{2} \\tanh\\left(2 x\\right)+C',
       domain: [0.25, 1.6],
       hints: ['$\\tanh^{2}u=1-\\operatorname{sech}^{2}u$ 다.', '삼각함수의 $\\tan^{2}$ 와 부호가 반대다.'],
@@ -2335,11 +2335,11 @@
     },
     {
       id: 'm127', topic: '쌍곡선함수',
-      integrand: 'sech(2x)^2*tanh(2x)', latex: '\\operatorname{sech}\\left(2 x\\right)^{2} \\tanh\\left(2 x\\right)',
-      answer: '(1/4)*tanh(2x)^2', answerLatex: '\\frac{1}{4} \\tanh\\left(2 x\\right)^{2}+C',
+      integrand: 'sech(2x)^2*tanh(2x)', latex: '\\operatorname{sech}^{2}\\left(2 x\\right) \\tanh\\left(2 x\\right)',
+      answer: '(1/4)*tanh(2x)^2', answerLatex: '\\frac{1}{4} \\tanh^{2}\\left(2 x\\right)+C',
       domain: [0.25, 1.6],
       hints: ['$u=\\tanh 2x$ 로 두면 $du=2\\operatorname{sech}^{2}2xdx$ 다.', '남는 것은 $\\int u\\,du$ 다.'],
-      steps: ['$u=\\tanh 2x$', '$= \\frac{1}{4} \\tanh\\left(2 x\\right)^{2}$']
+      steps: ['$u=\\tanh 2x$', '$= \\frac{1}{4} \\tanh^{2}\\left(2 x\\right)$']
     },
     {
       id: 'm128', topic: '쌍곡선함수',
@@ -2359,7 +2359,7 @@
     },
     {
       id: 'm130', topic: '쌍곡선 항등식',
-      integrand: 'sinh(3x)^2', latex: '\\sinh\\left(3 x\\right)^{2}',
+      integrand: 'sinh(3x)^2', latex: '\\sinh^{2}\\left(3 x\\right)',
       answer: '(1/12)*sinh(6x) - x/2', answerLatex: '\\frac{1}{12} \\sinh\\left(6 x\\right) - \\frac{x}{2}+C',
       domain: [0.25, 1.6],
       hints: ['$\\sinh^{2}u=\\dfrac{\\cosh 2u-1}{2}$ 를 쓴다.', '삼각함수의 반각공식과 부호가 다르다.'],
@@ -2367,7 +2367,7 @@
     },
     {
       id: 'm131', topic: '쌍곡선 항등식',
-      integrand: 'cosh(3x)^2', latex: '\\cosh\\left(3 x\\right)^{2}',
+      integrand: 'cosh(3x)^2', latex: '\\cosh^{2}\\left(3 x\\right)',
       answer: '(1/12)*sinh(6x) + x/2', answerLatex: '\\frac{1}{12} \\sinh\\left(6 x\\right) + \\frac{x}{2}+C',
       domain: [0.25, 1.6],
       hints: ['$\\cosh^{2}u=\\dfrac{\\cosh 2u+1}{2}$ 를 쓴다.', '$\\sinh^{2}$ 일 때와 부호만 다르다.'],
@@ -2375,7 +2375,7 @@
     },
     {
       id: 'm132', topic: '쌍곡선 항등식',
-      integrand: 'tanh(3x)^2', latex: '\\tanh\\left(3 x\\right)^{2}',
+      integrand: 'tanh(3x)^2', latex: '\\tanh^{2}\\left(3 x\\right)',
       answer: 'x + (-1/3)*tanh(3x)', answerLatex: 'x + \\frac{-1}{3} \\tanh\\left(3 x\\right)+C',
       domain: [0.25, 1.6],
       hints: ['$\\tanh^{2}u=1-\\operatorname{sech}^{2}u$ 다.', '삼각함수의 $\\tan^{2}$ 와 부호가 반대다.'],
@@ -2391,11 +2391,11 @@
     },
     {
       id: 'm134', topic: '쌍곡선함수',
-      integrand: 'sech(3x)^2*tanh(3x)', latex: '\\operatorname{sech}\\left(3 x\\right)^{2} \\tanh\\left(3 x\\right)',
-      answer: '(1/6)*tanh(3x)^2', answerLatex: '\\frac{1}{6} \\tanh\\left(3 x\\right)^{2}+C',
+      integrand: 'sech(3x)^2*tanh(3x)', latex: '\\operatorname{sech}^{2}\\left(3 x\\right) \\tanh\\left(3 x\\right)',
+      answer: '(1/6)*tanh(3x)^2', answerLatex: '\\frac{1}{6} \\tanh^{2}\\left(3 x\\right)+C',
       domain: [0.25, 1.6],
       hints: ['$u=\\tanh 3x$ 로 두면 $du=3\\operatorname{sech}^{2}3xdx$ 다.', '남는 것은 $\\int u\\,du$ 다.'],
-      steps: ['$u=\\tanh 3x$', '$= \\frac{1}{6} \\tanh\\left(3 x\\right)^{2}$']
+      steps: ['$u=\\tanh 3x$', '$= \\frac{1}{6} \\tanh^{2}\\left(3 x\\right)$']
     },
     {
       id: 'm135', topic: '역쌍곡선함수',
@@ -2842,7 +2842,7 @@
     },
     {
       id: 'h043', topic: '삼각함수 고급',
-      integrand: 'sec(x)^3', latex: '\\sec x^{3}',
+      integrand: 'sec(x)^3', latex: '\\sec^{3} x',
       answer: '(1/2)*sec(x)tan(x) + (1/2)*ln(sec(x)+tan(x))', answerLatex: '\\frac{1}{2} \\sec x \\tan x + \\frac{1}{2} \\ln\\left|\\sec x + \\tan x\\right|+C',
       domain: [0.25, 1.15],
       hints: ['$\\sec^{3}u=\\sec u\\cdot\\sec^{2}u$ 로 나눠 부분적분한다.', '$\\int\\sec u\\,du$ 결과가 다시 필요하다.'],
@@ -2850,7 +2850,7 @@
     },
     {
       id: 'h044', topic: '삼각함수 고급',
-      integrand: 'csc(x)^3', latex: '\\csc x^{3}',
+      integrand: 'csc(x)^3', latex: '\\csc^{3} x',
       answer: '(-1/2)*csc(x)cot(x) + (1/2)*ln(csc(x)-cot(x))', answerLatex: '\\frac{-1}{2} \\csc x \\cot x + \\frac{1}{2} \\ln\\left|\\csc x - \\cot x\\right|+C',
       domain: [0.5, 2.3],
       hints: ['$\\sec^{3}$ 와 같은 방식으로 부분적분한다.', '$\\int\\csc u\\,du$ 가 다시 나온다.'],
@@ -2858,23 +2858,23 @@
     },
     {
       id: 'h045', topic: '삼각함수 홀수차',
-      integrand: 'tan(x)^3', latex: '\\tan x^{3}',
-      answer: '(1/2)*tan(x)^2 + ln(cos(x))', answerLatex: '\\frac{1}{2} \\tan x^{2} + \\ln\\left|\\cos x\\right|+C',
+      integrand: 'tan(x)^3', latex: '\\tan^{3} x',
+      answer: '(1/2)*tan(x)^2 + ln(cos(x))', answerLatex: '\\frac{1}{2} \\tan^{2} x + \\ln\\left|\\cos x\\right|+C',
       domain: [0.25, 1.15],
       hints: ['$\\tan^{3}u=\\tan u(\\sec^{2}u-1)$ 로 쪼갠다.', '첫 항은 $u=\\tan$ 치환이다.'],
-      steps: ['$\\tan^{3}x = \\tan\\sec^{2}-\\tan$', '$= \\frac{1}{2} \\tan x^{2} + \\ln\\left|\\cos x\\right|$']
+      steps: ['$\\tan^{3}x = \\tan\\sec^{2}-\\tan$', '$= \\frac{1}{2} \\tan^{2} x + \\ln\\left|\\cos x\\right|$']
     },
     {
       id: 'h046', topic: '삼각함수 홀수차',
-      integrand: 'cot(x)^3', latex: '\\cot x^{3}',
-      answer: '(-1/2)*cot(x)^2 - ln(sin(x))', answerLatex: '\\frac{-1}{2} \\cot x^{2} - \\ln\\left|\\sin x\\right|+C',
+      integrand: 'cot(x)^3', latex: '\\cot^{3} x',
+      answer: '(-1/2)*cot(x)^2 - ln(sin(x))', answerLatex: '\\frac{-1}{2} \\cot^{2} x - \\ln\\left|\\sin x\\right|+C',
       domain: [0.5, 2.3],
       hints: ['$\\cot^{3}u=\\cot u(\\csc^{2}u-1)$ 로 쪼갠다.', '부호에 특히 주의한다.'],
-      steps: ['$\\cot^{3}x = \\cot\\csc^{2}-\\cot$', '$= \\frac{-1}{2} \\cot x^{2} - \\ln\\left|\\sin x\\right|$']
+      steps: ['$\\cot^{3}x = \\cot\\csc^{2}-\\cot$', '$= \\frac{-1}{2} \\cot^{2} x - \\ln\\left|\\sin x\\right|$']
     },
     {
       id: 'h047', topic: '삼각함수 고급',
-      integrand: 'sec(2x)^3', latex: '\\sec\\left(2 x\\right)^{3}',
+      integrand: 'sec(2x)^3', latex: '\\sec^{3}\\left(2 x\\right)',
       answer: '(1/4)*sec(2x)tan(2x) + (1/4)*ln(sec(2x)+tan(2x))', answerLatex: '\\frac{1}{4} \\sec\\left(2 x\\right) \\tan\\left(2 x\\right) + \\frac{1}{4} \\ln\\left|\\sec\\left(2 x\\right) + \\tan\\left(2 x\\right)\\right|+C',
       domain: [0.125, 0.575],
       hints: ['$\\sec^{3}u=\\sec u\\cdot\\sec^{2}u$ 로 나눠 부분적분한다.', '$\\int\\sec u\\,du$ 결과가 다시 필요하다.'],
@@ -2882,7 +2882,7 @@
     },
     {
       id: 'h048', topic: '삼각함수 고급',
-      integrand: 'csc(2x)^3', latex: '\\csc\\left(2 x\\right)^{3}',
+      integrand: 'csc(2x)^3', latex: '\\csc^{3}\\left(2 x\\right)',
       answer: '(-1/4)*csc(2x)cot(2x) + (1/4)*ln(csc(2x)-cot(2x))', answerLatex: '\\frac{-1}{4} \\csc\\left(2 x\\right) \\cot\\left(2 x\\right) + \\frac{1}{4} \\ln\\left|\\csc\\left(2 x\\right) - \\cot\\left(2 x\\right)\\right|+C',
       domain: [0.25, 1.15],
       hints: ['$\\sec^{3}$ 와 같은 방식으로 부분적분한다.', '$\\int\\csc u\\,du$ 가 다시 나온다.'],
@@ -2890,48 +2890,48 @@
     },
     {
       id: 'h049', topic: '삼각함수 홀수차',
-      integrand: 'tan(2x)^3', latex: '\\tan\\left(2 x\\right)^{3}',
-      answer: '(1/4)*tan(2x)^2 + (1/2)*ln(cos(2x))', answerLatex: '\\frac{1}{4} \\tan\\left(2 x\\right)^{2} + \\frac{1}{2} \\ln\\left|\\cos\\left(2 x\\right)\\right|+C',
+      integrand: 'tan(2x)^3', latex: '\\tan^{3}\\left(2 x\\right)',
+      answer: '(1/4)*tan(2x)^2 + (1/2)*ln(cos(2x))', answerLatex: '\\frac{1}{4} \\tan^{2}\\left(2 x\\right) + \\frac{1}{2} \\ln\\left|\\cos\\left(2 x\\right)\\right|+C',
       domain: [0.125, 0.575],
       hints: ['$\\tan^{3}u=\\tan u(\\sec^{2}u-1)$ 로 쪼갠다.', '첫 항은 $u=\\tan$ 치환이다.'],
-      steps: ['$\\tan^{3}2x = \\tan\\sec^{2}-\\tan$', '$= \\frac{1}{4} \\tan\\left(2 x\\right)^{2} + \\frac{1}{2} \\ln\\left|\\cos\\left(2 x\\right)\\right|$']
+      steps: ['$\\tan^{3}2x = \\tan\\sec^{2}-\\tan$', '$= \\frac{1}{4} \\tan^{2}\\left(2 x\\right) + \\frac{1}{2} \\ln\\left|\\cos\\left(2 x\\right)\\right|$']
     },
     {
       id: 'h050', topic: '삼각함수 홀수차',
-      integrand: 'cot(2x)^3', latex: '\\cot\\left(2 x\\right)^{3}',
-      answer: '(-1/4)*cot(2x)^2 + (-1/2)*ln(sin(2x))', answerLatex: '\\frac{-1}{4} \\cot\\left(2 x\\right)^{2} + \\frac{-1}{2} \\ln\\left|\\sin\\left(2 x\\right)\\right|+C',
+      integrand: 'cot(2x)^3', latex: '\\cot^{3}\\left(2 x\\right)',
+      answer: '(-1/4)*cot(2x)^2 + (-1/2)*ln(sin(2x))', answerLatex: '\\frac{-1}{4} \\cot^{2}\\left(2 x\\right) + \\frac{-1}{2} \\ln\\left|\\sin\\left(2 x\\right)\\right|+C',
       domain: [0.25, 1.15],
       hints: ['$\\cot^{3}u=\\cot u(\\csc^{2}u-1)$ 로 쪼갠다.', '부호에 특히 주의한다.'],
-      steps: ['$\\cot^{3}2x = \\cot\\csc^{2}-\\cot$', '$= \\frac{-1}{4} \\cot\\left(2 x\\right)^{2} + \\frac{-1}{2} \\ln\\left|\\sin\\left(2 x\\right)\\right|$']
+      steps: ['$\\cot^{3}2x = \\cot\\csc^{2}-\\cot$', '$= \\frac{-1}{4} \\cot^{2}\\left(2 x\\right) + \\frac{-1}{2} \\ln\\left|\\sin\\left(2 x\\right)\\right|$']
     },
     {
       id: 'h051', topic: '삼각함수 고차',
-      integrand: 'tan(x)^4', latex: '\\tan x^{4}',
-      answer: 'tan(x)^3/3-tan(x)+x', answerLatex: '\\frac{\\tan x^{3}}{3} - \\tan x + x+C',
+      integrand: 'tan(x)^4', latex: '\\tan^{4} x',
+      answer: 'tan(x)^3/3-tan(x)+x', answerLatex: '\\frac{\\tan^{3} x}{3} - \\tan x + x+C',
       domain: [0.25, 1.15],
       hints: ['$\\tan^{4}=\\tan^{2}(\\sec^{2}-1)$ 로 한 단계씩 내린다.', '마지막에 $\\int\\tan^{2}=\\tan x-x$ 를 쓴다.'],
       steps: ['$\\tan^{4}x=\\tan^{2}x\\sec^{2}x-\\tan^{2}x$', '$= \\dfrac{\\tan^{3}x}{3}-\\tan x+x$']
     },
     {
       id: 'h052', topic: '삼각함수 고차',
-      integrand: 'sec(x)^4', latex: '\\sec x^{4}',
-      answer: 'tan(x)+tan(x)^3/3', answerLatex: '\\tan x + \\frac{\\tan x^{3}}{3}+C',
+      integrand: 'sec(x)^4', latex: '\\sec^{4} x',
+      answer: 'tan(x)+tan(x)^3/3', answerLatex: '\\tan x + \\frac{\\tan^{3} x}{3}+C',
       domain: [0.25, 1.15],
       hints: ['$\\sec^{4}=\\sec^{2}\\cdot\\sec^{2}=(1+\\tan^{2})\\sec^{2}$', '$u=\\tan x$ 치환이면 끝난다.'],
       steps: ['$\\sec^{4}x=(1+\\tan^{2}x)\\sec^{2}x$', '$u=\\tan x:\\;\\int(1+u^{2})du$']
     },
     {
       id: 'h053', topic: '삼각함수 고차',
-      integrand: 'cot(x)^4', latex: '\\cot x^{4}',
-      answer: '-cot(x)^3/3+cot(x)+x', answerLatex: '\\frac{-\\cot x^{3}}{3} + \\cot x + x+C',
+      integrand: 'cot(x)^4', latex: '\\cot^{4} x',
+      answer: '-cot(x)^3/3+cot(x)+x', answerLatex: '\\frac{-\\cot^{3} x}{3} + \\cot x + x+C',
       domain: [0.45, 1.4],
       hints: ['$\\cot^{4}=\\cot^{2}(\\csc^{2}-1)$ 로 내린다.', '$\\int\\cot^{2}=-\\cot x-x$ 를 쓴다.'],
       steps: ['$\\cot^{4}x=\\cot^{2}x\\csc^{2}x-\\cot^{2}x$', '$= -\\dfrac{\\cot^{3}x}{3}+\\cot x+x$']
     },
     {
       id: 'h054', topic: '삼각함수 고차',
-      integrand: 'csc(x)^4', latex: '\\csc x^{4}',
-      answer: '-cot(x)-cot(x)^3/3', answerLatex: '-\\cot x - \\frac{\\cot x^{3}}{3}+C',
+      integrand: 'csc(x)^4', latex: '\\csc^{4} x',
+      answer: '-cot(x)-cot(x)^3/3', answerLatex: '-\\cot x - \\frac{\\cot^{3} x}{3}+C',
       domain: [0.5, 1.4],
       hints: ['$\\csc^{4}=(1+\\cot^{2})\\csc^{2}$', '$u=\\cot x$ 로 치환한다.'],
       steps: ['$\\csc^{4}x=(1+\\cot^{2}x)\\csc^{2}x$', '$u=\\cot x:\\;-\\int(1+u^{2})du$']
@@ -3106,8 +3106,8 @@
     },
     {
       id: 'h076', topic: '반복 부분적분',
-      integrand: 'ln(x)^2', latex: '\\ln x^{2}',
-      answer: 'x*ln(x)^2-2x*ln(x)+2x', answerLatex: 'x \\ln x^{2} - 2 x \\ln x + 2 x+C',
+      integrand: 'ln(x)^2', latex: '\\left(\\ln x\\right)^{2}',
+      answer: 'x*ln(x)^2-2x*ln(x)+2x', answerLatex: 'x \\left(\\ln x\\right)^{2} - 2 x \\ln x + 2 x+C',
       domain: [0.35, 2.6],
       hints: ['$dv=dx$ 로 두고 부분적분한다.', '남는 적분이 $2\\int\\ln x\\,dx$ 다.'],
       steps: ['$u=(\\ln x)^{2},\\;dv=dx$', '$x(\\ln x)^{2}-2\\int\\ln x\\,dx$', '$=x(\\ln x)^{2}-2x\\ln x+2x$']
@@ -3386,27 +3386,27 @@
     },
     {
       id: 'h111', topic: '쌍곡선 홀수차',
-      integrand: 'sinh(x)^3', latex: '\\sinh x^{3}',
-      answer: '(1/3)*cosh(x)^3 - cosh(x)', answerLatex: '\\frac{1}{3} \\cosh x^{3} - \\cosh x+C',
+      integrand: 'sinh(x)^3', latex: '\\sinh^{3} x',
+      answer: '(1/3)*cosh(x)^3 - cosh(x)', answerLatex: '\\frac{1}{3} \\cosh^{3} x - \\cosh x+C',
       domain: [0.25, 1.6],
       hints: ['$\\sinh^{3}u=\\sinh u(\\cosh^{2}u-1)$', '삼각함수와 달리 $\\cosh^{2}-\\sinh^{2}=1$ 이다.'],
-      steps: ['$\\sinh^{3}x = (\\cosh^{2}-1)\\sinh$', '$= \\frac{1}{3} \\cosh x^{3} - \\cosh x$']
+      steps: ['$\\sinh^{3}x = (\\cosh^{2}-1)\\sinh$', '$= \\frac{1}{3} \\cosh^{3} x - \\cosh x$']
     },
     {
       id: 'h112', topic: '쌍곡선 홀수차',
-      integrand: 'cosh(x)^3', latex: '\\cosh x^{3}',
-      answer: 'sinh(x) + (1/3)*sinh(x)^3', answerLatex: '\\sinh x + \\frac{1}{3} \\sinh x^{3}+C',
+      integrand: 'cosh(x)^3', latex: '\\cosh^{3} x',
+      answer: 'sinh(x) + (1/3)*sinh(x)^3', answerLatex: '\\sinh x + \\frac{1}{3} \\sinh^{3} x+C',
       domain: [0.25, 1.6],
       hints: ['$\\cosh^{3}u=\\cosh u(1+\\sinh^{2}u)$', '$t=\\sinh x$ 로 치환한다.'],
-      steps: ['$\\cosh^{3}x = (1+\\sinh^{2})\\cosh$', '$= \\sinh x + \\frac{1}{3} \\sinh x^{3}$']
+      steps: ['$\\cosh^{3}x = (1+\\sinh^{2})\\cosh$', '$= \\sinh x + \\frac{1}{3} \\sinh^{3} x$']
     },
     {
       id: 'h113', topic: '쌍곡선 홀수차',
-      integrand: 'tanh(x)^3', latex: '\\tanh x^{3}',
-      answer: 'ln(cosh(x)) + (-1/2)*tanh(x)^2', answerLatex: '\\ln\\left(\\cosh x\\right) + \\frac{-1}{2} \\tanh x^{2}+C',
+      integrand: 'tanh(x)^3', latex: '\\tanh^{3} x',
+      answer: 'ln(cosh(x)) + (-1/2)*tanh(x)^2', answerLatex: '\\ln\\left(\\cosh x\\right) + \\frac{-1}{2} \\tanh^{2} x+C',
       domain: [0.25, 1.6],
       hints: ['$\\tanh^{3}u=\\tanh u(1-\\operatorname{sech}^{2}u)$', '$\\tan^{3}$ 문제와 부호가 반대다.'],
-      steps: ['$\\tanh^{3}x = \\tanh-\\tanh\\operatorname{sech}^{2}$', '$= \\ln\\left(\\cosh x\\right) + \\frac{-1}{2} \\tanh x^{2}$']
+      steps: ['$\\tanh^{3}x = \\tanh-\\tanh\\operatorname{sech}^{2}$', '$= \\ln\\left(\\cosh x\\right) + \\frac{-1}{2} \\tanh^{2} x$']
     },
     {
       id: 'h114', topic: '쌍곡선함수',
@@ -3418,31 +3418,31 @@
     },
     {
       id: 'h115', topic: '쌍곡선 홀수차',
-      integrand: 'sinh(2x)^3', latex: '\\sinh\\left(2 x\\right)^{3}',
-      answer: '(1/6)*cosh(2x)^3 + (-1/2)*cosh(2x)', answerLatex: '\\frac{1}{6} \\cosh\\left(2 x\\right)^{3} + \\frac{-1}{2} \\cosh\\left(2 x\\right)+C',
+      integrand: 'sinh(2x)^3', latex: '\\sinh^{3}\\left(2 x\\right)',
+      answer: '(1/6)*cosh(2x)^3 + (-1/2)*cosh(2x)', answerLatex: '\\frac{1}{6} \\cosh^{3}\\left(2 x\\right) + \\frac{-1}{2} \\cosh\\left(2 x\\right)+C',
       domain: [0.25, 1.6],
       hints: ['$\\sinh^{3}u=\\sinh u(\\cosh^{2}u-1)$', '삼각함수와 달리 $\\cosh^{2}-\\sinh^{2}=1$ 이다.'],
-      steps: ['$\\sinh^{3}2x = (\\cosh^{2}-1)\\sinh$', '$= \\frac{1}{6} \\cosh\\left(2 x\\right)^{3} + \\frac{-1}{2} \\cosh\\left(2 x\\right)$']
+      steps: ['$\\sinh^{3}2x = (\\cosh^{2}-1)\\sinh$', '$= \\frac{1}{6} \\cosh^{3}\\left(2 x\\right) + \\frac{-1}{2} \\cosh\\left(2 x\\right)$']
     },
     {
       id: 'h116', topic: '쌍곡선 홀수차',
-      integrand: 'cosh(2x)^3', latex: '\\cosh\\left(2 x\\right)^{3}',
-      answer: '(1/2)*sinh(2x) + (1/6)*sinh(2x)^3', answerLatex: '\\frac{1}{2} \\sinh\\left(2 x\\right) + \\frac{1}{6} \\sinh\\left(2 x\\right)^{3}+C',
+      integrand: 'cosh(2x)^3', latex: '\\cosh^{3}\\left(2 x\\right)',
+      answer: '(1/2)*sinh(2x) + (1/6)*sinh(2x)^3', answerLatex: '\\frac{1}{2} \\sinh\\left(2 x\\right) + \\frac{1}{6} \\sinh^{3}\\left(2 x\\right)+C',
       domain: [0.25, 1.6],
       hints: ['$\\cosh^{3}u=\\cosh u(1+\\sinh^{2}u)$', '$t=\\sinh 2x$ 로 치환한다.'],
-      steps: ['$\\cosh^{3}2x = (1+\\sinh^{2})\\cosh$', '$= \\frac{1}{2} \\sinh\\left(2 x\\right) + \\frac{1}{6} \\sinh\\left(2 x\\right)^{3}$']
+      steps: ['$\\cosh^{3}2x = (1+\\sinh^{2})\\cosh$', '$= \\frac{1}{2} \\sinh\\left(2 x\\right) + \\frac{1}{6} \\sinh^{3}\\left(2 x\\right)$']
     },
     {
       id: 'h117', topic: '쌍곡선 홀수차',
-      integrand: 'tanh(2x)^3', latex: '\\tanh\\left(2 x\\right)^{3}',
-      answer: '(1/2)*ln(cosh(2x)) + (-1/4)*tanh(2x)^2', answerLatex: '\\frac{1}{2} \\ln\\left(\\cosh\\left(2 x\\right)\\right) + \\frac{-1}{4} \\tanh\\left(2 x\\right)^{2}+C',
+      integrand: 'tanh(2x)^3', latex: '\\tanh^{3}\\left(2 x\\right)',
+      answer: '(1/2)*ln(cosh(2x)) + (-1/4)*tanh(2x)^2', answerLatex: '\\frac{1}{2} \\ln\\left(\\cosh\\left(2 x\\right)\\right) + \\frac{-1}{4} \\tanh^{2}\\left(2 x\\right)+C',
       domain: [0.25, 1.6],
       hints: ['$\\tanh^{3}u=\\tanh u(1-\\operatorname{sech}^{2}u)$', '$\\tan^{3}$ 문제와 부호가 반대다.'],
-      steps: ['$\\tanh^{3}2x = \\tanh-\\tanh\\operatorname{sech}^{2}$', '$= \\frac{1}{2} \\ln\\left(\\cosh\\left(2 x\\right)\\right) + \\frac{-1}{4} \\tanh\\left(2 x\\right)^{2}$']
+      steps: ['$\\tanh^{3}2x = \\tanh-\\tanh\\operatorname{sech}^{2}$', '$= \\frac{1}{2} \\ln\\left(\\cosh\\left(2 x\\right)\\right) + \\frac{-1}{4} \\tanh^{2}\\left(2 x\\right)$']
     },
     {
       id: 'h118', topic: '쌍곡선함수',
-      integrand: 'sech(x)^3', latex: '\\operatorname{sech} x^{3}',
+      integrand: 'sech(x)^3', latex: '\\operatorname{sech}^{3} x',
       answer: '(sech(x)tanh(x)+atan(sinh(x)))/2', answerLatex: '\\frac{\\operatorname{sech} x \\tanh x + \\arctan\\left(\\sinh x\\right)}{2}+C',
       domain: [0.25, 1.6],
       hints: ['$\\sec^{3}$ 와 같은 구조로 부분적분한다.', '$\\int\\operatorname{sech}x\\,dx=\\arctan(\\sinh x)$ 가 다시 나온다.'],
@@ -3714,24 +3714,24 @@
     },
     {
       id: 'h152', topic: '삼각함수 홀수차',
-      integrand: 'sin(x)^5', latex: '\\sin x^{5}',
-      answer: '-cos(x)+2cos(x)^3/3-cos(x)^5/5', answerLatex: '-\\cos x + \\frac{2 \\cos x^{3}}{3} - \\frac{\\cos x^{5}}{5}+C',
+      integrand: 'sin(x)^5', latex: '\\sin^{5} x',
+      answer: '-cos(x)+2cos(x)^3/3-cos(x)^5/5', answerLatex: '-\\cos x + \\frac{2 \\cos^{3} x}{3} - \\frac{\\cos^{5} x}{5}+C',
       domain: [0.25, 2.85],
       hints: ['$\\sin^{5}=\\sin x(1-\\cos^{2}x)^{2}$ 로 쓴다.', '$u=\\cos x$ 치환 후 전개한다.'],
       steps: ['$\\sin^{5}x=(1-\\cos^{2}x)^{2}\\sin x$', '$u=\\cos x:\\;-\\int(1-u^{2})^{2}du$']
     },
     {
       id: 'h153', topic: '삼각함수 홀수차',
-      integrand: 'cos(x)^5', latex: '\\cos x^{5}',
-      answer: 'sin(x)-2sin(x)^3/3+sin(x)^5/5', answerLatex: '\\sin x - \\frac{2 \\sin x^{3}}{3} + \\frac{\\sin x^{5}}{5}+C',
+      integrand: 'cos(x)^5', latex: '\\cos^{5} x',
+      answer: 'sin(x)-2sin(x)^3/3+sin(x)^5/5', answerLatex: '\\sin x - \\frac{2 \\sin^{3} x}{3} + \\frac{\\sin^{5} x}{5}+C',
       domain: [0.25, 2.85],
       hints: ['$\\cos^{5}=\\cos x(1-\\sin^{2}x)^{2}$ 로 쓴다.', '$u=\\sin x$ 로 치환한다.'],
       steps: ['$\\cos^{5}x=(1-\\sin^{2}x)^{2}\\cos x$', '$u=\\sin x:\\;\\int(1-u^{2})^{2}du$']
     },
     {
       id: 'h154', topic: '부분적분',
-      integrand: 'x*ln(x)^2', latex: 'x \\ln x^{2}',
-      answer: 'x^2*(ln(x)^2/2 - ln(x)/2 + 1/4)', answerLatex: 'x^{2} \\left(\\frac{\\ln x^{2}}{2} - \\frac{\\ln x}{2} + \\frac{1}{4}\\right)+C',
+      integrand: 'x*ln(x)^2', latex: 'x \\left(\\ln x\\right)^{2}',
+      answer: 'x^2*(ln(x)^2/2 - ln(x)/2 + 1/4)', answerLatex: 'x^{2} \\left(\\frac{\\left(\\ln x\\right)^{2}}{2} - \\frac{\\ln x}{2} + \\frac{1}{4}\\right)+C',
       domain: [0.35, 2.6],
       hints: ['$u=(\\ln x)^{2},\\;dv=x\\,dx$ 로 둔다.', '남는 적분이 $\\int x\\ln x\\,dx$ 다.'],
       steps: ['$\\dfrac{x^{2}(\\ln x)^{2}}{2}-\\int x\\ln x\\,dx$', '$\\int x\\ln x\\,dx=\\dfrac{x^{2}\\ln x}{2}-\\dfrac{x^{2}}{4}$']
@@ -3762,16 +3762,16 @@
     },
     {
       id: 'h158', topic: '쌍곡선 짝수차',
-      integrand: 'sech(x)^4', latex: '\\operatorname{sech} x^{4}',
-      answer: 'tanh(x)-tanh(x)^3/3', answerLatex: '\\tanh x - \\frac{\\tanh x^{3}}{3}+C',
+      integrand: 'sech(x)^4', latex: '\\operatorname{sech}^{4} x',
+      answer: 'tanh(x)-tanh(x)^3/3', answerLatex: '\\tanh x - \\frac{\\tanh^{3} x}{3}+C',
       domain: [0.25, 1.6],
       hints: ['$\\operatorname{sech}^{4}=(1-\\tanh^{2})\\operatorname{sech}^{2}$', '$u=\\tanh x$ 로 치환한다.'],
       steps: ['$\\operatorname{sech}^{4}x=(1-\\tanh^{2}x)\\operatorname{sech}^{2}x$', '$u=\\tanh x:\\;\\int(1-u^{2})du$']
     },
     {
       id: 'h159', topic: '쌍곡선 짝수차',
-      integrand: 'tanh(x)^4', latex: '\\tanh x^{4}',
-      answer: 'x-tanh(x)-tanh(x)^3/3', answerLatex: 'x - \\tanh x - \\frac{\\tanh x^{3}}{3}+C',
+      integrand: 'tanh(x)^4', latex: '\\tanh^{4} x',
+      answer: 'x-tanh(x)-tanh(x)^3/3', answerLatex: 'x - \\tanh x - \\frac{\\tanh^{3} x}{3}+C',
       domain: [0.25, 1.6],
       hints: ['$\\tanh^{4}=\\tanh^{2}(1-\\operatorname{sech}^{2})$ 로 내린다.', '$\\int\\tanh^{2}=x-\\tanh x$ 를 쓴다.'],
       steps: ['$\\int\\tanh^{4}=\\int\\tanh^{2}-\\int\\tanh^{2}\\operatorname{sech}^{2}$', '$=x-\\tanh x-\\dfrac{\\tanh^{3}x}{3}$']
@@ -3786,7 +3786,7 @@
     },
     {
       id: 'h161', topic: '부분적분',
-      integrand: 'x*sec(x)^2', latex: 'x \\sec x^{2}',
+      integrand: 'x*sec(x)^2', latex: 'x \\sec^{2} x',
       answer: 'x*tan(x)+ln(cos(x))', answerLatex: 'x \\tan x + \\ln\\left|\\cos x\\right|+C',
       domain: [0.25, 1.15],
       hints: ['$u=x,\\;dv=\\sec^{2}x\\,dx$ 로 둔다.', '남는 $\\int\\tan x\\,dx$ 를 처리한다.'],
@@ -3837,23 +3837,23 @@
     },
     {
       id: 'x006', topic: '삼각함수 고차',
-      integrand: 'sec(x)^5', latex: '\\sec x^{5}',
-      answer: 'sec(x)^3*tan(x)/4 + 3*sec(x)tan(x)/8 + 3*ln(sec(x)+tan(x))/8', answerLatex: '\\frac{\\sec x^{3} \\tan x}{4} + \\frac{3 \\sec x \\tan x}{8} + \\frac{3 \\ln\\left|\\sec x + \\tan x\\right|}{8}+C',
+      integrand: 'sec(x)^5', latex: '\\sec^{5} x',
+      answer: 'sec(x)^3*tan(x)/4 + 3*sec(x)tan(x)/8 + 3*ln(sec(x)+tan(x))/8', answerLatex: '\\frac{\\sec^{3} x \\tan x}{4} + \\frac{3 \\sec x \\tan x}{8} + \\frac{3 \\ln\\left|\\sec x + \\tan x\\right|}{8}+C',
       domain: [0.25, 1.15],
       hints: ['점화식 $\\int\\sec^{n}=\\dfrac{\\sec^{n-2}\\tan}{n-1}+\\dfrac{n-2}{n-1}\\int\\sec^{n-2}$ 를 쓴다.', '$\\int\\sec^{3}$ 를 거쳐 $\\int\\sec$ 까지 내려간다.'],
       steps: ['$\\int\\sec^{5}=\\dfrac{\\sec^{3}\\tan}{4}+\\dfrac{3}{4}\\int\\sec^{3}$', '$\\int\\sec^{3}=\\dfrac{\\sec\\tan+\\ln|\\sec+\\tan|}{2}$', '두 결과를 합친다']
     },
     {
       id: 'x007', topic: '삼각함수 고차',
-      integrand: 'tan(x)^5', latex: '\\tan x^{5}',
-      answer: 'tan(x)^4/4 - tan(x)^2/2 - ln(cos(x))', answerLatex: '\\frac{\\tan x^{4}}{4} - \\frac{\\tan x^{2}}{2} - \\ln\\left|\\cos x\\right|+C',
+      integrand: 'tan(x)^5', latex: '\\tan^{5} x',
+      answer: 'tan(x)^4/4 - tan(x)^2/2 - ln(cos(x))', answerLatex: '\\frac{\\tan^{4} x}{4} - \\frac{\\tan^{2} x}{2} - \\ln\\left|\\cos x\\right|+C',
       domain: [0.25, 1.15],
       hints: ['$\\tan^{5}=\\tan^{3}(\\sec^{2}-1)$ 로 두 단계 내린다.', '마지막에 $\\int\\tan x\\,dx$ 가 남는다.'],
       steps: ['$\\int\\tan^{5}=\\dfrac{\\tan^{4}}{4}-\\int\\tan^{3}$', '$\\int\\tan^{3}=\\dfrac{\\tan^{2}}{2}+\\ln|\\cos x|$']
     },
     {
       id: 'x008', topic: '삼각함수 짝수차',
-      integrand: 'sin(x)^4', latex: '\\sin x^{4}',
+      integrand: 'sin(x)^4', latex: '\\sin^{4} x',
       answer: '3x/8 - sin(2x)/4 + sin(4x)/32', answerLatex: '\\frac{3 x}{8} - \\frac{\\sin\\left(2 x\\right)}{4} + \\frac{\\sin\\left(4 x\\right)}{32}+C',
       domain: [0.25, 2.85],
       hints: ['반각공식을 두 번 적용한다.', '$\\sin^{4}=\\left(\\dfrac{1-\\cos 2x}{2}\\right)^{2}$ 에서 $\\cos^{2}2x$ 를 또 내린다.'],
@@ -3861,7 +3861,7 @@
     },
     {
       id: 'x009', topic: '삼각함수 짝수차',
-      integrand: 'cos(x)^4', latex: '\\cos x^{4}',
+      integrand: 'cos(x)^4', latex: '\\cos^{4} x',
       answer: '3x/8 + sin(2x)/4 + sin(4x)/32', answerLatex: '\\frac{3 x}{8} + \\frac{\\sin\\left(2 x\\right)}{4} + \\frac{\\sin\\left(4 x\\right)}{32}+C',
       domain: [0.25, 2.85],
       hints: ['$\\cos^{4}=\\left(\\dfrac{1+\\cos 2x}{2}\\right)^{2}$ 로 시작한다.', '$\\sin^{4}$ 와 가운데 항의 부호만 다르다.'],
@@ -3869,7 +3869,7 @@
     },
     {
       id: 'x010', topic: '삼각 유리식',
-      integrand: '1/(sin(x)^4+cos(x)^4)', latex: '\\frac{1}{\\sin x^{4} + \\cos x^{4}}',
+      integrand: '1/(sin(x)^4+cos(x)^4)', latex: '\\frac{1}{\\sin^{4} x + \\cos^{4} x}',
       answer: 'atan((tan(x)-cot(x))/sqrt(2))/sqrt(2)', answerLatex: '\\frac{\\arctan\\left(\\frac{\\tan x - \\cot x}{\\sqrt{2}}\\right)}{\\sqrt{2}}+C',
       domain: [0.25, 1.3],
       hints: ['분자·분모를 $\\cos^{4}x$ 로 나눠 $\\tan$ 만 남긴다.', '$t=\\tan x-\\cot x$ 로 두면 분모가 $t^{2}+2$ 가 된다.'],
@@ -3957,24 +3957,24 @@
     },
     {
       id: 'x021', topic: '반복 부분적분',
-      integrand: 'ln(x)^3', latex: '\\ln x^{3}',
-      answer: 'x*(ln(x)^3-3ln(x)^2+6ln(x)-6)', answerLatex: 'x \\left(\\ln x^{3} - 3 \\ln x^{2} + 6 \\ln x - 6\\right)+C',
+      integrand: 'ln(x)^3', latex: '\\left(\\ln x\\right)^{3}',
+      answer: 'x*(ln(x)^3-3ln(x)^2+6ln(x)-6)', answerLatex: 'x \\left(\\left(\\ln x\\right)^{3} - 3 \\left(\\ln x\\right)^{2} + 6 \\ln x - 6\\right)+C',
       domain: [0.35, 2.6],
       hints: ['$dv=dx$ 로 두고 세 번 부분적분한다.', '$\\int(\\ln x)^{2}dx$ 결과가 중간에 필요하다.'],
       steps: ['$x(\\ln x)^{3}-3\\int(\\ln x)^{2}dx$', '$\\int(\\ln x)^{2}=x(\\ln x)^{2}-2x\\ln x+2x$']
     },
     {
       id: 'x022', topic: '반복 부분적분',
-      integrand: 'ln(x)^4', latex: '\\ln x^{4}',
-      answer: 'x*(ln(x)^4-4ln(x)^3+12ln(x)^2-24ln(x)+24)', answerLatex: 'x \\left(\\ln x^{4} - 4 \\ln x^{3} + 12 \\ln x^{2} - 24 \\ln x + 24\\right)+C',
+      integrand: 'ln(x)^4', latex: '\\left(\\ln x\\right)^{4}',
+      answer: 'x*(ln(x)^4-4ln(x)^3+12ln(x)^2-24ln(x)+24)', answerLatex: 'x \\left(\\left(\\ln x\\right)^{4} - 4 \\left(\\ln x\\right)^{3} + 12 \\left(\\ln x\\right)^{2} - 24 \\ln x + 24\\right)+C',
       domain: [0.35, 2.6],
       hints: ['$t=\\ln x$ 로 치환하면 $\\int t^{4}e^{t}dt$ 가 된다.', '$x^{4}e^{x}$ 문제와 같은 계수가 나온다.'],
       steps: ['$t=\\ln x,\\;dx=e^{t}dt$', '$\\int t^{4}e^{t}dt=(t^{4}-4t^{3}+12t^{2}-24t+24)e^{t}$']
     },
     {
       id: 'x023', topic: '부분적분',
-      integrand: 'x^2*ln(x)^2', latex: 'x^{2} \\ln x^{2}',
-      answer: 'x^3*(ln(x)^2/3 - 2ln(x)/9 + 2/27)', answerLatex: 'x^{3} \\left(\\frac{\\ln x^{2}}{3} - \\frac{2 \\ln x}{9} + \\frac{2}{27}\\right)+C',
+      integrand: 'x^2*ln(x)^2', latex: 'x^{2} \\left(\\ln x\\right)^{2}',
+      answer: 'x^3*(ln(x)^2/3 - 2ln(x)/9 + 2/27)', answerLatex: 'x^{3} \\left(\\frac{\\left(\\ln x\\right)^{2}}{3} - \\frac{2 \\ln x}{9} + \\frac{2}{27}\\right)+C',
       domain: [0.35, 2.6],
       hints: ['$u=(\\ln x)^{2},\\;dv=x^{2}dx$ 로 둔다.', '두 번 부분적분해야 로그가 사라진다.'],
       steps: ['$\\dfrac{x^{3}(\\ln x)^{2}}{3}-\\dfrac{2}{3}\\int x^{2}\\ln x\\,dx$', '$\\int x^{2}\\ln x\\,dx=\\dfrac{x^{3}\\ln x}{3}-\\dfrac{x^{3}}{9}$']
@@ -4013,8 +4013,8 @@
     },
     {
       id: 'x028', topic: '역삼각 고급',
-      integrand: 'asin(x)^2', latex: '\\arcsin x^{2}',
-      answer: 'x*asin(x)^2+2*sqrt(1-x^2)*asin(x)-2x', answerLatex: 'x \\arcsin x^{2} + 2 \\sqrt{1 - x^{2}} \\arcsin x - 2 x+C',
+      integrand: 'asin(x)^2', latex: '\\left(\\arcsin x\\right)^{2}',
+      answer: 'x*asin(x)^2+2*sqrt(1-x^2)*asin(x)-2x', answerLatex: 'x \\left(\\arcsin x\\right)^{2} + 2 \\sqrt{1 - x^{2}} \\arcsin x - 2 x+C',
       domain: [-0.72, 0.72],
       hints: ['$dv=dx$ 로 부분적분하면 $\\int\\dfrac{x\\arcsin x}{\\sqrt{1-x^{2}}}dx$ 가 남는다.', '그 적분을 다시 부분적분한다.'],
       steps: ['$x(\\arcsin x)^{2}-2\\int\\dfrac{x\\arcsin x}{\\sqrt{1-x^{2}}}dx$', '$\\int\\dfrac{x\\arcsin x}{\\sqrt{1-x^{2}}}dx=-\\sqrt{1-x^{2}}\\arcsin x+x$']
@@ -4141,8 +4141,8 @@
     },
     {
       id: 'x044', topic: '반복 부분적분',
-      integrand: 'ln(x)^2/x^2', latex: '\\frac{\\ln x^{2}}{x^{2}}',
-      answer: '-(ln(x)^2+2ln(x)+2)/x', answerLatex: '\\frac{-\\left(\\ln x^{2} + 2 \\ln x + 2\\right)}{x}+C',
+      integrand: 'ln(x)^2/x^2', latex: '\\frac{\\left(\\ln x\\right)^{2}}{x^{2}}',
+      answer: '-(ln(x)^2+2ln(x)+2)/x', answerLatex: '\\frac{-\\left(\\left(\\ln x\\right)^{2} + 2 \\ln x + 2\\right)}{x}+C',
       domain: [0.4, 3],
       hints: ['$u=(\\ln x)^{2},\\;dv=x^{-2}dx$ 로 두고 두 번 부분적분한다.', '$\\int\\dfrac{\\ln x}{x^{2}}dx=-\\dfrac{\\ln x+1}{x}$ 를 중간에 쓴다.'],
       steps: ['$-\\dfrac{(\\ln x)^{2}}{x}+2\\int\\dfrac{\\ln x}{x^{2}}dx$', '$\\int\\dfrac{\\ln x}{x^{2}}dx=-\\dfrac{\\ln x+1}{x}$', '$= -\\dfrac{(\\ln x)^{2}+2\\ln x+2}{x}$']
@@ -4261,7 +4261,7 @@
     },
     {
       id: 'x059', topic: '부분적분',
-      integrand: 'x*csc(x)^2', latex: 'x \\csc x^{2}',
+      integrand: 'x*csc(x)^2', latex: 'x \\csc^{2} x',
       answer: '-x*cot(x)+ln(sin(x))', answerLatex: '-x \\cot x + \\ln\\left|\\sin x\\right|+C',
       domain: [0.45, 2.3],
       hints: ['$u=x,\\;dv=\\csc^{2}x\\,dx$ 로 둔다.', '남는 $\\int\\cot x\\,dx$ 를 처리한다.'],
@@ -4269,7 +4269,7 @@
     },
     {
       id: 'x060', topic: '쌍곡선 짝수차',
-      integrand: 'sinh(x)^4', latex: '\\sinh x^{4}',
+      integrand: 'sinh(x)^4', latex: '\\sinh^{4} x',
       answer: '3x/8 - sinh(2x)/4 + sinh(4x)/32', answerLatex: '\\frac{3 x}{8} - \\frac{\\sinh\\left(2 x\\right)}{4} + \\frac{\\sinh\\left(4 x\\right)}{32}+C',
       domain: [0.2, 1.4],
       hints: ['$\\sinh^{2}u=\\dfrac{\\cosh 2u-1}{2}$ 를 두 번 적용한다.', '$\\sin^{4}$ 과 형태가 비슷하지만 부호가 다르다.'],
@@ -4277,7 +4277,7 @@
     },
     {
       id: 'x061', topic: '쌍곡선 짝수차',
-      integrand: 'cosh(x)^4', latex: '\\cosh x^{4}',
+      integrand: 'cosh(x)^4', latex: '\\cosh^{4} x',
       answer: '3x/8 + sinh(2x)/4 + sinh(4x)/32', answerLatex: '\\frac{3 x}{8} + \\frac{\\sinh\\left(2 x\\right)}{4} + \\frac{\\sinh\\left(4 x\\right)}{32}+C',
       domain: [0.2, 1.4],
       hints: ['$\\cosh^{2}u=\\dfrac{\\cosh 2u+1}{2}$ 를 두 번 적용한다.', '$\\sinh^{4}$ 과 가운데 항의 부호만 다르다.'],
