@@ -1,8 +1,8 @@
 {
   "pack": {
     "description": [
-      { "text": "Metal Scar Radio", "color": "red", "bold": true },
-      { "text": "\n15 hybrid/metal tracks replacing all vanilla music", "color": "gray" }
+      { "text": "Zeroth Directive", "color": "yellow", "bold": true },
+      { "text": "\nRadio Metal Soar - 15 tracks replace all vanilla music", "color": "gray" }
     ],
     "min_format": 75,
     "max_format": 200

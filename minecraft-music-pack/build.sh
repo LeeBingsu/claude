@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 NAME="MetalScarRadio-Music-v1.0.zip"
 
-python3 tools/make_icon.py pack/pack.png
+./tools/make_icon.sh
 python3 tools/generate_sounds.py
 python3 tools/validate.py
 

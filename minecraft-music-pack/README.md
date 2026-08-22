@@ -71,8 +71,9 @@ pack/                     리소스팩 본체 (폴더째 resourcepacks/에 넣�
   pack.png
   assets/minecraft/sounds.json
   assets/minecraft/sounds/music/metal_scar_radio/*.ogg
+assets-src/pack_icon.jpg  팩 아이콘 원본 이미지
 tools/generate_sounds.py  이벤트 ↔ 곡 매핑 및 volume 계산 → sounds.json 생성
-tools/make_icon.py        pack.png 생성
+tools/make_icon.sh        assets-src/pack_icon.jpg → pack.png 변환
 tools/validate.py         JSON·파일 존재·Ogg 디코딩 검증
 build.sh                  위 세 개 실행 후 dist/*.zip 생성
 ```
