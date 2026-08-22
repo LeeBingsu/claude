@@ -1,4 +1,4 @@
-"""Generate assets/minecraft/sounds.json for the Metal Scar Radio music pack.
+"""Generate assets/minecraft/sounds.json for the Endfield BGM music pack.
 
 Every vanilla background-music event (as shipped in 1.21.11 and 26.2) is replaced
 with a hand-picked subset of the 15 tracks. Per-track volume is derived from the

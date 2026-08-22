@@ -1,4 +1,4 @@
-# Metal Scar Radio — Minecraft 배경음악 리소스팩
+# Endfield BGM — Minecraft 배경음악 리소스팩
 
 바닐라 마인크래프트의 배경음악(BGM) 32개 사운드 이벤트를 전부 제공된 15곡으로 교체하는
 Java Edition 리소스팩입니다. 음반(뮤직 디스크)과 효과음은 건드리지 않습니다.
@@ -22,7 +22,7 @@ Java Edition 리소스팩입니다. 음반(뮤직 디스크)과 효과음은 건
 
 ## 설치
 
-1. `dist/MetalScarRadio-Music-v1.0.zip`을 내려받습니다. (저장소에 포함되어 있고,
+1. `dist/Endfield BGM.zip`을 내려받습니다. (저장소에 포함되어 있고,
    `./build.sh`로 언제든 다시 빌드할 수 있습니다)
 2. 마인크래프트 실행 → 설정 → 리소스 팩 → **팩 폴더 열기**.
 3. 열린 `resourcepacks` 폴더에 zip 파일을 그대로 넣습니다. (압축을 풀 필요 없음)
@@ -78,7 +78,7 @@ tools/validate.py         JSON·파일 존재·Ogg 디코딩 검증
 build.sh                  위 세 개 실행 후 dist/*.zip 생성
 ```
 
-`dist/MetalScarRadio-Music-v1.0.zip`은 바로 받아 쓸 수 있도록 저장소에 커밋되어 있으며,
+`dist/Endfield BGM.zip`은 바로 받아 쓸 수 있도록 저장소에 커밋되어 있으며,
 `./build.sh`를 실행하면 동일한 zip이 다시 만들어집니다.
 
 ## 라이선스 / 저작권

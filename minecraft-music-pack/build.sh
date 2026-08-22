@@ -2,7 +2,7 @@
 # Rebuild pack.png + sounds.json, validate, and zip the pack into dist/.
 set -euo pipefail
 cd "$(dirname "$0")"
-NAME="MetalScarRadio-Music-v1.0.zip"
+NAME="Endfield BGM.zip"
 
 ./tools/make_icon.sh
 python3 tools/generate_sounds.py
