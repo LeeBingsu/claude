@@ -22,7 +22,8 @@ Java Edition 리소스팩입니다. 음반(뮤직 디스크)과 효과음은 건
 
 ## 설치
 
-1. `dist/MetalScarRadio-Music-v1.0.zip`(또는 `./build.sh`로 새로 빌드한 zip)을 받습니다.
+1. `dist/MetalScarRadio-Music-v1.0.zip`을 내려받습니다. (저장소에 포함되어 있고,
+   `./build.sh`로 언제든 다시 빌드할 수 있습니다)
 2. 마인크래프트 실행 → 설정 → 리소스 팩 → **팩 폴더 열기**.
 3. 열린 `resourcepacks` 폴더에 zip 파일을 그대로 넣습니다. (압축을 풀 필요 없음)
 4. 게임 안에서 팩을 오른쪽(사용 중)으로 옮기고 완료를 누릅니다.
@@ -76,7 +77,8 @@ tools/validate.py         JSON·파일 존재·Ogg 디코딩 검증
 build.sh                  위 세 개 실행 후 dist/*.zip 생성
 ```
 
-`dist/`는 `.gitignore` 대상입니다. `./build.sh`로 언제든 다시 만들 수 있습니다.
+`dist/MetalScarRadio-Music-v1.0.zip`은 바로 받아 쓸 수 있도록 저장소에 커밋되어 있으며,
+`./build.sh`를 실행하면 동일한 zip이 다시 만들어집니다.
 
 ## 라이선스 / 저작권
 
