@@ -1,0 +1,10 @@
+{
+  "pack": {
+    "description": [
+      { "text": "Endfield BGM", "color": "yellow", "bold": true },
+      { "text": "\nZeroth Directive - 15 tracks replace all vanilla music", "color": "gray" }
+    ],
+    "min_format": 75,
+    "max_format": 200
+  }
+}
