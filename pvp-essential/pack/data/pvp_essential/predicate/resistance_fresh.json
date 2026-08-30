@@ -3,7 +3,10 @@
   "entity": "this",
   "predicate": {
     "effects": {
-      "minecraft:resistance": { "amplifier": { "min": 4 } }
+      "minecraft:resistance": {
+        "amplifier": { "min": 4 },
+        "duration": { "min": 30 }
+      }
     }
   }
 }

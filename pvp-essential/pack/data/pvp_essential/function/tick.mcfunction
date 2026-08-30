@@ -17,6 +17,9 @@ execute as @a[scores={pvpe.combat=1..}] run function pvp_essential:hud
 execute as @a[scores={pvpe.combat=..0,pvpe.mace=1..}] run function pvp_essential:hud
 execute as @a[scores={pvpe.combat=..0,pvpe.mace=..0,pvpe.spear=1..}] run function pvp_essential:hud
 
+# 엔더 크리스탈 / 리스폰 정박기 주변 폭발 피해 무효화
+function pvp_essential:blast/tick
+
 # 5틱마다 실행되는 처리
 scoreboard players add #tick pvpe.timer 1
 execute if score #tick pvpe.timer matches 5.. run function pvp_essential:slow_tick

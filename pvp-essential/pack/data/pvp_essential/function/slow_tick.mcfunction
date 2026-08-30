@@ -8,9 +8,9 @@ scoreboard players add @a pvpe.spear 0
 scoreboard players add @a pvpe.pun 0
 scoreboard players add @a pvpe.ack 0
 
-# 엔더 크리스탈 / 리스폰 정박기 폭발 데미지 0 처리의 핵심.
-# bypasses_resistance 태그 덕분에 이 저항 효과는 폭발 계열 데미지에만 적용된다.
-execute as @a unless predicate pvp_essential:has_resistance run effect give @s minecraft:resistance infinite 4 true
+# 예전 버전이 걸어 둔 무한 저항이 남아 있으면 제거한다.
+# (지금은 폭발원 근처에서만 짧게 저항을 부여한다 - function/blast/tick)
+execute as @a if predicate pvp_essential:infinite_resistance run effect clear @s minecraft:resistance
 
 # 최초 1회 설정
 execute as @a[tag=!pvpe.init] run function pvp_essential:player/init
