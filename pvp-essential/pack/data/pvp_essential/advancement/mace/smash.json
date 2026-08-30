@@ -1,0 +1,13 @@
+{
+  "criteria": {
+    "smash": {
+      "trigger": "minecraft:player_hurt_entity",
+      "conditions": {
+        "damage": {
+          "type": { "tags": [ { "id": "pvp_essential:mace_smash", "expected": true } ] }
+        }
+      }
+    }
+  },
+  "rewards": { "function": "pvp_essential:mace/smash" }
+}

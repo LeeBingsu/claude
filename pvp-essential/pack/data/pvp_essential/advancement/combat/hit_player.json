@@ -1,0 +1,14 @@
+{
+  "criteria": {
+    "hit": {
+      "trigger": "minecraft:player_hurt_entity",
+      "conditions": {
+        "entity": { "type": "minecraft:player" },
+        "damage": {
+          "type": { "tags": [ { "id": "pvp_essential:pvp", "expected": true } ] }
+        }
+      }
+    }
+  },
+  "rewards": { "function": "pvp_essential:combat/tag_attacker" }
+}

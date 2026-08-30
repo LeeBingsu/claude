@@ -1,0 +1,168 @@
+[
+  {
+    "function": "minecraft:filtered",
+    "item_filter": {
+      "items": "minecraft:wooden_shovel",
+      "predicates": {
+        "minecraft:custom_data": "{pvpe_mace:1b}"
+      }
+    },
+    "on_pass": {
+      "function": "minecraft:sequence",
+      "functions": [
+        {
+          "function": "minecraft:set_item",
+          "item": "minecraft:mace"
+        },
+        {
+          "function": "minecraft:set_components",
+          "components": {
+            "minecraft:item_model": "minecraft:mace",
+            "minecraft:max_damage": 500,
+            "minecraft:max_stack_size": 1,
+            "minecraft:weapon": {},
+            "minecraft:tool": {
+              "can_destroy_blocks_in_creative": false,
+              "damage_per_block": 2,
+              "rules": []
+            },
+            "minecraft:item_name": {
+              "translate": "item.minecraft.mace"
+            },
+            "!minecraft:custom_data": {},
+            "minecraft:attribute_modifiers": [
+              {
+                "type": "minecraft:attack_damage",
+                "id": "minecraft:base_attack_damage",
+                "amount": 5,
+                "operation": "add_value",
+                "slot": "mainhand"
+              },
+              {
+                "type": "minecraft:attack_speed",
+                "id": "minecraft:base_attack_speed",
+                "amount": -3.4,
+                "operation": "add_value",
+                "slot": "mainhand"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  {
+    "function": "minecraft:filtered",
+    "item_filter": {
+      "items": "minecraft:elytra",
+      "predicates": {
+        "minecraft:custom_data": "{pvpe_elytra:1b}"
+      }
+    },
+    "on_pass": {
+      "function": "minecraft:sequence",
+      "functions": [
+        {
+          "function": "minecraft:set_components",
+          "components": {
+            "minecraft:glider": {},
+            "minecraft:item_name": {
+              "translate": "item.minecraft.elytra"
+            },
+            "!minecraft:custom_data": {}
+          }
+        }
+      ]
+    }
+  },
+  {
+    "function": "minecraft:filtered",
+    "item_filter": {
+      "items": "minecraft:trident",
+      "predicates": {
+        "minecraft:custom_data": "{pvpe_riptide:1}"
+      }
+    },
+    "on_pass": {
+      "function": "minecraft:sequence",
+      "functions": [
+        {
+          "function": "minecraft:set_enchantments",
+          "enchantments": {
+            "minecraft:riptide": 1
+          },
+          "add": false
+        },
+        {
+          "function": "minecraft:set_components",
+          "components": {
+            "minecraft:item_name": {
+              "translate": "item.minecraft.trident"
+            },
+            "!minecraft:custom_data": {}
+          }
+        }
+      ]
+    }
+  },
+  {
+    "function": "minecraft:filtered",
+    "item_filter": {
+      "items": "minecraft:trident",
+      "predicates": {
+        "minecraft:custom_data": "{pvpe_riptide:2}"
+      }
+    },
+    "on_pass": {
+      "function": "minecraft:sequence",
+      "functions": [
+        {
+          "function": "minecraft:set_enchantments",
+          "enchantments": {
+            "minecraft:riptide": 2
+          },
+          "add": false
+        },
+        {
+          "function": "minecraft:set_components",
+          "components": {
+            "minecraft:item_name": {
+              "translate": "item.minecraft.trident"
+            },
+            "!minecraft:custom_data": {}
+          }
+        }
+      ]
+    }
+  },
+  {
+    "function": "minecraft:filtered",
+    "item_filter": {
+      "items": "minecraft:trident",
+      "predicates": {
+        "minecraft:custom_data": "{pvpe_riptide:3}"
+      }
+    },
+    "on_pass": {
+      "function": "minecraft:sequence",
+      "functions": [
+        {
+          "function": "minecraft:set_enchantments",
+          "enchantments": {
+            "minecraft:riptide": 3
+          },
+          "add": false
+        },
+        {
+          "function": "minecraft:set_components",
+          "components": {
+            "minecraft:item_name": {
+              "translate": "item.minecraft.trident"
+            },
+            "!minecraft:custom_data": {}
+          }
+        }
+      ]
+    }
+  }
+]

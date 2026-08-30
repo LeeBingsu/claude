@@ -1,0 +1,137 @@
+[
+  {
+    "function": "minecraft:filtered",
+    "item_filter": {
+      "items": "#pvp_essential:spears",
+      "predicates": {
+        "minecraft:custom_data": "{pvpe_lunge:1}"
+      }
+    },
+    "on_pass": {
+      "function": "minecraft:sequence",
+      "functions": [
+        {
+          "function": "minecraft:set_enchantments",
+          "enchantments": {
+            "minecraft:lunge": 1
+          },
+          "add": false
+        },
+        {
+          "function": "minecraft:set_components",
+          "components": {
+            "!minecraft:custom_data": {}
+          }
+        }
+      ]
+    }
+  },
+  {
+    "function": "minecraft:filtered",
+    "item_filter": {
+      "items": "#pvp_essential:spears",
+      "predicates": {
+        "minecraft:custom_data": "{pvpe_lunge:2}"
+      }
+    },
+    "on_pass": {
+      "function": "minecraft:sequence",
+      "functions": [
+        {
+          "function": "minecraft:set_enchantments",
+          "enchantments": {
+            "minecraft:lunge": 2
+          },
+          "add": false
+        },
+        {
+          "function": "minecraft:set_components",
+          "components": {
+            "!minecraft:custom_data": {}
+          }
+        }
+      ]
+    }
+  },
+  {
+    "function": "minecraft:filtered",
+    "item_filter": {
+      "items": "#pvp_essential:spears",
+      "predicates": {
+        "minecraft:custom_data": "{pvpe_lunge:3}"
+      }
+    },
+    "on_pass": {
+      "function": "minecraft:sequence",
+      "functions": [
+        {
+          "function": "minecraft:set_enchantments",
+          "enchantments": {
+            "minecraft:lunge": 3
+          },
+          "add": false
+        },
+        {
+          "function": "minecraft:set_components",
+          "components": {
+            "!minecraft:custom_data": {}
+          }
+        }
+      ]
+    }
+  },
+  {
+    "function": "minecraft:filtered",
+    "item_filter": {
+      "items": "#pvp_essential:spears",
+      "predicates": {
+        "minecraft:custom_data": "{pvpe_lunge:4}"
+      }
+    },
+    "on_pass": {
+      "function": "minecraft:sequence",
+      "functions": [
+        {
+          "function": "minecraft:set_enchantments",
+          "enchantments": {
+            "minecraft:lunge": 4
+          },
+          "add": false
+        },
+        {
+          "function": "minecraft:set_components",
+          "components": {
+            "!minecraft:custom_data": {}
+          }
+        }
+      ]
+    }
+  },
+  {
+    "function": "minecraft:filtered",
+    "item_filter": {
+      "items": "#pvp_essential:spears",
+      "predicates": {
+        "minecraft:custom_data": "{pvpe_lunge:5}"
+      }
+    },
+    "on_pass": {
+      "function": "minecraft:sequence",
+      "functions": [
+        {
+          "function": "minecraft:set_enchantments",
+          "enchantments": {
+            "minecraft:lunge": 5
+          },
+          "add": false
+        },
+        {
+          "function": "minecraft:set_components",
+          "components": {
+            "!minecraft:custom_data": {}
+          }
+        }
+      ]
+    }
+  }
+]

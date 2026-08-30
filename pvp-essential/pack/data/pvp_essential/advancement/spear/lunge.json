@@ -1,0 +1,22 @@
+{
+  "criteria": {
+    "lunge": {
+      "trigger": "minecraft:player_hurt_entity",
+      "conditions": {
+        "player": {
+          "equipment": {
+            "mainhand": {
+              "items": "#pvp_essential:spears",
+              "predicates": {
+                "minecraft:enchantments": [
+                  { "enchantments": "#pvp_essential:lunge", "levels": { "min": 1 } }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "rewards": { "function": "pvp_essential:spear/lunge" }
+}
