@@ -1,0 +1,131 @@
+[
+  {
+    "function": "minecraft:filtered",
+    "item_filter": {
+      "items": "minecraft:trident",
+      "predicates": {
+        "minecraft:enchantments": [
+          {
+            "enchantments": "minecraft:riptide",
+            "levels": {
+              "min": 1,
+              "max": 1
+            }
+          }
+        ]
+      }
+    },
+    "on_pass": {
+      "function": "minecraft:sequence",
+      "functions": [
+        {
+          "function": "minecraft:set_custom_data",
+          "tag": "{pvpe_riptide:1}"
+        },
+        {
+          "function": "minecraft:set_components",
+          "components": {
+            "minecraft:item_name": {
+              "text": "삼지창 (전투 중 급류 사용 불가)",
+              "color": "gray",
+              "italic": false
+            }
+          }
+        },
+        {
+          "function": "minecraft:set_enchantments",
+          "enchantments": {
+            "minecraft:riptide": 0
+          },
+          "add": false
+        }
+      ]
+    }
+  },
+  {
+    "function": "minecraft:filtered",
+    "item_filter": {
+      "items": "minecraft:trident",
+      "predicates": {
+        "minecraft:enchantments": [
+          {
+            "enchantments": "minecraft:riptide",
+            "levels": {
+              "min": 2,
+              "max": 2
+            }
+          }
+        ]
+      }
+    },
+    "on_pass": {
+      "function": "minecraft:sequence",
+      "functions": [
+        {
+          "function": "minecraft:set_custom_data",
+          "tag": "{pvpe_riptide:2}"
+        },
+        {
+          "function": "minecraft:set_components",
+          "components": {
+            "minecraft:item_name": {
+              "text": "삼지창 (전투 중 급류 사용 불가)",
+              "color": "gray",
+              "italic": false
+            }
+          }
+        },
+        {
+          "function": "minecraft:set_enchantments",
+          "enchantments": {
+            "minecraft:riptide": 0
+          },
+          "add": false
+        }
+      ]
+    }
+  },
+  {
+    "function": "minecraft:filtered",
+    "item_filter": {
+      "items": "minecraft:trident",
+      "predicates": {
+        "minecraft:enchantments": [
+          {
+            "enchantments": "minecraft:riptide",
+            "levels": {
+              "min": 3,
+              "max": 3
+            }
+          }
+        ]
+      }
+    },
+    "on_pass": {
+      "function": "minecraft:sequence",
+      "functions": [
+        {
+          "function": "minecraft:set_custom_data",
+          "tag": "{pvpe_riptide:3}"
+        },
+        {
+          "function": "minecraft:set_components",
+          "components": {
+            "minecraft:item_name": {
+              "text": "삼지창 (전투 중 급류 사용 불가)",
+              "color": "gray",
+              "italic": false
+            }
+          }
+        },
+        {
+          "function": "minecraft:set_enchantments",
+          "enchantments": {
+            "minecraft:riptide": 0
+          },
+          "add": false
+        }
+      ]
+    }
+  }
+]
