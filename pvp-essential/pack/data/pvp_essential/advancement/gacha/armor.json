@@ -1,0 +1,9 @@
+{
+  "criteria": {
+    "crafted": {
+      "trigger": "minecraft:recipe_crafted",
+      "conditions": { "recipe_id": "pvp_essential:gacha_armor" }
+    }
+  },
+  "rewards": { "function": "pvp_essential:gacha/roll" }
+}

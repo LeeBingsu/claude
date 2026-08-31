@@ -7,4 +7,5 @@ scoreboard players set @s pvpe.pun 0
 scoreboard players operation @s pvpe.ack = @s pvpe.leave
 recipe give @s pvp_essential:golden_apple_bulk
 recipe give @s pvp_essential:kit_chest
+recipe give @s pvp_essential:gacha_armor
 tellraw @s [{"text":"[PvP Essential] ","color":"red","bold":true},{"text":"전투 중 로그아웃 시 사망합니다. /trigger 없이 자동 적용됩니다.","color":"gray","bold":false}]
