@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "group": "pvp_essential_gacha_armor",
+  "pattern": [
+    "DDD",
+    "DBD",
+    "DDD"
+  ],
+  "key": {
+    "D": "minecraft:diamond",
+    "B": "minecraft:diamond_block"
+  },
+  "result": {
+    "id": "minecraft:chest",
+    "count": 1,
+    "components": {
+      "minecraft:custom_data": { "pvpe_gacha": true },
+      "minecraft:item_name": { "text": "❓ 랜덤 다이아 갑옷 상자", "color": "aqua", "italic": false },
+      "minecraft:lore": [ { "text": "꺼내면 랜덤 인챈트 4부위로 채워집니다", "color": "gray", "italic": false } ]
+    }
+  }
+}

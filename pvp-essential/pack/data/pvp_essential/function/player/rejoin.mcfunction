@@ -2,6 +2,7 @@
 scoreboard players operation @s pvpe.ack = @s pvpe.leave
 recipe give @s pvp_essential:golden_apple_bulk
 recipe give @s pvp_essential:kit_chest
+recipe give @s pvp_essential:gacha_armor
 function pvp_essential:player/restore_all
 
 # 서버 재시작 직후(유예 시간)에는 처벌하지 않는다.
