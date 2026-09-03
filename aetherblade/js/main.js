@@ -56,6 +56,12 @@
       this.signatureWeapon = false;
       this.outfits = [];
       this.activeOutfit = -1;
+      // 콘텐츠 설정 — gore: 0 없음 · 1 기본 · 2 강함 (17+ 액션 폭력 연출 강도)
+      this.settings = { gore: 1 };
+      try {
+        const saved = JSON.parse(localStorage.getItem('aetherblade.settings') || '{}');
+        Object.assign(this.settings, saved);
+      } catch (e) { /* 무시 */ }
       this.unlocked = ['rien'];
       this.spawnPlan = [];
     }
@@ -247,6 +253,9 @@
 
     onEnemyKilled(e) {
       this.kills++;
+      // 처치 순간 타격감 — 짧은 슬로우 + 흔들림
+      this.hitstop(e.type.boss ? 0.22 : e.type.elite ? 0.14 : 0.09);
+      this.shake(e.type.boss ? 1.0 : e.type.elite ? 0.5 : 0.28, 0.32);
       this.player.gainXP(Math.round(e.type.xp * (1 + (e.level - 1) * 0.1)));
       this.player.gainEnergy(e.type.boss ? 0 : e.type.elite ? 18 : 8);
       this.quests.onKill(e.typeKey);
@@ -739,6 +748,7 @@
         this.ui.dialogueNext();
       }
       if (this.cine.active && (inp.pressed('jump') || inp.pressed('interact'))) this.cine.skip();
+      if (inp.pressed('outfit')) this.cycleOutfit();
       if (inp.pressed('char1')) this.swapCharacter(0);
       if (inp.pressed('char2')) this.swapCharacter(1);
       if (inp.pressed('char3')) this.swapCharacter(2);
@@ -857,6 +867,21 @@
         this.scene.traverse(o => { if (o.isMesh && o.material) o.material.needsUpdate = true; });
       });
 
+      // 유혈 표현 강도 (17+ 연출)
+      const gore = $('set-gore');
+      if (gore) {
+        gore.value = String(this.settings.gore);
+        const applyGore = () => {
+          this.settings.gore = parseInt(gore.value);
+          try { localStorage.setItem('aetherblade.settings', JSON.stringify(this.settings)); } catch (e) { }
+          const label = ['없음', '기본', '강함'][this.settings.gore] || '기본';
+          const out = $('set-gore-val');
+          if (out) out.textContent = label;
+        };
+        gore.addEventListener('input', applyGore);
+        applyGore();
+      }
+
       // 모바일 컨트롤 표시
       if (this.input.isTouch) document.body.classList.add('touch');
       $('set-touch').addEventListener('change', (e) => {
@@ -912,7 +937,7 @@
             physics: $('model-physics').checked,
             onStatus: say,
           });
-          const name = shortName(res, files);
+          const name = opts.name || shortName(res, files);
           this.outfits.push({ name, rig });
           this.switchOutfit(this.outfits.length - 1);
           renderOutfits();
@@ -956,8 +981,10 @@
         $('model-clear').style.display = 'none';
       });
 
-      // 캐시된 의상 자동 로드 (구버전 'main' 키도 지원)
+      // 1) 로컬 models/manifest.json  2) IndexedDB 캐시  순으로 자동 로드
       (async () => {
+        if (await this.loadLocalManifest(addFiles, say)) return;
+
         const nFile = await AB.ModelCache.get('outfit-count');
         let count = 0;
         if (nFile && nFile[0]) count = parseInt(await nFile[0].text()) || 0;
@@ -977,6 +1004,71 @@
           if (files && files.length) await addFiles(files, { fromCache: true });
         }
       })();
+    }
+
+    /**
+     * models/manifest.json 이 있으면 거기 적힌 의상들을 자동으로 읽는다.
+     * 모델 파일은 저장소에 없고, 사용자가 로컬 models/ 폴더에 직접 둔다.
+     */
+    async loadLocalManifest(addFiles, say) {
+      let manifest;
+      try {
+        const res = await fetch('models/manifest.json', { cache: 'no-cache' });
+        if (!res.ok) return false;
+        manifest = await res.json();
+      } catch (e) {
+        return false;   // 파일 없음 / file:// 로 열림 — 조용히 통과
+      }
+      const outfits = (manifest && manifest.outfits) || [];
+      if (!outfits.length) return false;
+
+      // manifest 값으로 옵션 칸을 미리 채워 둔다
+      if (manifest.targetHeight) $('model-height').value = manifest.targetHeight;
+      if (manifest.physics !== undefined) $('model-physics').checked = !!manifest.physics;
+      if (manifest.faceFlip !== undefined) $('model-flip').checked = !!manifest.faceFlip;
+
+      say(`models/ 폴더에서 의상 ${outfits.length}벌 발견 — 불러오는 중…`);
+      let loaded = 0;
+      for (const o of outfits) {
+        try {
+          const files = [];
+          for (const fname of (o.files || [])) {
+            const r = await fetch('models/' + fname, { cache: 'force-cache' });
+            if (!r.ok) throw new Error(fname + ' 없음');
+            files.push(new File([await r.blob()], fname));
+          }
+          if (!files.length) continue;
+          await addFiles(files, { fromCache: true, name: o.name });
+          loaded++;
+        } catch (e) {
+          console.warn('[models] 의상 로드 실패:', o.name, e);
+          say(`'${o.name}' 불러오기 실패: ${e.message || e}`);
+        }
+      }
+      if (loaded) {
+        $('model-clear').style.display = 'none';   // 로컬 폴더 기반이라 캐시 삭제 대상 아님
+        say(`models/ 폴더에서 의상 ${loaded}벌 로드 완료 — 게임 중 C 키로 전환`);
+      }
+      return loaded > 0;
+    }
+
+    /** 다음 의상으로 순환 (C 키) */
+    cycleOutfit() {
+      if (!this.outfits || this.outfits.length < 2) {
+        if (this.outfits && this.outfits.length === 1) this.ui.toast('등록된 의상이 하나뿐입니다');
+        return;
+      }
+      if (this.player.anim.locked) return;
+      const next = (this.activeOutfit + 1) % this.outfits.length;
+      this.switchOutfit(next);
+      // 갈아입기 연출
+      const el = AB.ELEMENTS[this.player.def.element];
+      this.vfx.shockwave(this.player.position, 3.0, el.color);
+      this.vfx.particles.burst(this.player.centerPoint(), {
+        color: el.color, count: 30, speedMin: 2, speedMax: 7,
+        sizeMin: 0.2, sizeMax: 0.55, lifeMin: 0.35, lifeMax: 0.9, up: 2,
+      });
+      Assets.sfx.cast(this.player.def.element);
     }
 
     /** 등록된 의상으로 갈아입기 */

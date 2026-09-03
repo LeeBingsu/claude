@@ -170,6 +170,44 @@
     return new THREE.CanvasTexture(c);
   }
 
+  /** 혈흔 스플랫 (성인 등급 액션 연출용) */
+  function bloodTexture() {
+    const S = 128, c = canvas(S, S), ctx = c.getContext('2d');
+    const rng = U.makeRNG(6613);
+    ctx.translate(S / 2, S / 2);
+    // 중심 얼룩 — 불규칙한 다각형
+    ctx.beginPath();
+    const N = 18;
+    for (let i = 0; i <= N; i++) {
+      const a = (i / N) * U.TAU;
+      const r = S * (0.20 + rng() * 0.16);
+      const x = Math.cos(a) * r, y = Math.sin(a) * r;
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.fill();
+    // 튄 방울
+    for (let i = 0; i < 30; i++) {
+      const a = rng() * U.TAU;
+      const d = S * (0.24 + rng() * 0.24);
+      const r = 1.5 + rng() * 5;
+      ctx.beginPath();
+      ctx.ellipse(Math.cos(a) * d, Math.sin(a) * d, r, r * (0.5 + rng()), a, 0, U.TAU);
+      ctx.fillStyle = `rgba(255,255,255,${0.35 + rng() * 0.5})`;
+      ctx.fill();
+    }
+    // 가장자리 페이드
+    const g = ctx.createRadialGradient(0, 0, S * 0.30, 0, 0, S * 0.5);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(1, 'rgba(0,0,0,1)');
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.fillStyle = g;
+    ctx.fillRect(-S / 2, -S / 2, S, S);
+    ctx.globalCompositeOperation = 'source-over';
+    return new THREE.CanvasTexture(c);
+  }
+
   /** 부드러운 원형 그림자 */
   function shadowTexture() {
     const S = 128, c = canvas(S, S), ctx = c.getContext('2d');
@@ -578,6 +616,7 @@
     T.sky = skyTexture();
     T.spark = sparkTexture();
     T.shadow = shadowTexture();
+    T.blood = bloodTexture();
     T.trail = trailTexture();
     T.rune = runeTexture();
 

@@ -387,6 +387,7 @@
       this.game.ui.hurtFlash();
       this.game.shake(0.4, 0.3);
       this.game.vfx.damageNumber(this.centerPoint(), dmg, { player: true, y: 0.6 });
+      this.game.vfx.bloodBurst(this.centerPoint(), 1.1);
       Assets.sfx.hurt();
       if (source) {
         const d = new THREE.Vector3().subVectors(this.position, source.position);
@@ -403,6 +404,7 @@
       this.hp = 0;
       this.anim.play('die');
       Assets.sfx.die();
+      this.game.vfx.goreKill(this.centerPoint(), 1.6);
       this.game.onPlayerDeath();
     }
 

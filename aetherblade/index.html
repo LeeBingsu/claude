@@ -147,6 +147,8 @@
     <div class="mrow"><label>Y축 반전</label><input id="set-invert" type="checkbox"></div>
     <div class="mrow"><label>그림자</label><input id="set-shadow" type="checkbox" checked></div>
     <div class="mrow"><label>터치 컨트롤</label><input id="set-touch" type="checkbox"></div>
+    <div class="mrow"><label>유혈 표현 <b id="set-gore-val" class="mval">기본</b></label>
+      <input id="set-gore" type="range" min="0" max="2" step="1" value="1"></div>
     <div class="mbtns">
       <button id="menu-resume" class="prim">계속하기</button>
       <button id="menu-log">임무 기록</button>
@@ -169,7 +171,8 @@
       <button data-panel="panel-model">커스텀 모델</button>
       <button data-panel="panel-about">정보</button>
     </div>
-    <p class="t-hint">WASD 이동 · 마우스 시점 · 좌클릭 공격 · E 스킬 · Q 궁극기 · Shift 질주(짧게 눌러 회피)</p>
+    <p class="t-rating"><b>17+</b> 강도 높은 액션 폭력 · 유혈 표현 · 거친 대사 <span>(설정에서 유혈 표현 강도 조절 가능)</span></p>
+    <p class="t-hint">WASD 이동 · 마우스 시점 · 좌클릭 공격 · E 스킬 · Q 궁극기 · Shift 질주(짧게 눌러 회피) · C 의상 전환</p>
   </div>
 
   <!-- 조작법 -->
@@ -192,6 +195,7 @@
           <dt>R</dt><dd>회복약</dd>
           <dt>V</dt><dd>적 고정(락온)</dd>
           <dt>1 2 3</dt><dd>캐릭터 전환</dd>
+          <dt>C</dt><dd>의상(스킨) 전환</dd>
           <dt>Tab</dt><dd>임무 기록</dd>
           <dt>Esc</dt><dd>일시정지 / 컷신 건너뛰기</dd>
         </dl>
@@ -222,6 +226,10 @@
     <p class="pdesc">
       가지고 있는 <b>.pmx</b> 또는 모델 <b>.zip</b> 을 아래에 끌어다 놓으면 플레이어블 캐릭터의 몸이 그 모델로 바뀐다.
       게임의 절차적 애니메이션(달리기·콤보·회피·궁극기)이 PMX 스켈레톤에 그대로 적용된다.
+    </p>
+    <p class="pdesc" style="margin-top:-6px">
+      매번 드롭하기 번거로우면 게임 폴더의 <b>models/</b> 에 파일을 두고 <b>manifest.json</b> 을 만들면
+      실행할 때 자동으로 의상으로 등록된다 (<code>models/README.md</code> 참고). 게임 중 <b>C</b> 키로 전환.
     </p>
     <div id="model-drop">
       <b>zip 또는 .pmx 를 여기에 놓기</b>
@@ -266,7 +274,8 @@
       <li><b>모바일</b> — 가상 스틱 · 터치 시점 · 품질 자동 조절</li>
     </ul>
     <p class="pnote">
-      수위: 스타일화된 액션 폭력(15세 이용가 수준). 선혈·잔혹 묘사는 넣지 않았다.
+      수위: <b>17+</b> — 강도 높은 액션 폭력, 유혈 표현, 거친 대사. 일시정지 메뉴에서
+      유혈 표현을 <b>없음 / 기본 / 강함</b> 으로 조절할 수 있다. 성적 묘사는 포함하지 않는다.
     </p>
   </div>
 </div>

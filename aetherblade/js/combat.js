@@ -295,6 +295,70 @@
       this.decals.push({ mesh: m, life: 0.18, maxLife: 0.18, grow: 3.2, billboard: true });
     }
 
+    /* ---- 유혈 연출 (17+ 등급) ---- */
+    get goreLevel() {
+      const g = this.game.settings;
+      return g ? g.gore : 1;      // 0 없음 · 1 기본 · 2 강함
+    }
+
+    /** 피격 시 튀는 혈흔 */
+    bloodBurst(pos, power, dir) {
+      const lv = this.goreLevel;
+      if (lv <= 0) return;
+      power = (power || 1) * (lv === 2 ? 1.6 : 1);
+      const n = Math.round(9 * power);
+      // 진한 붉은 방울 — 중력 강하게, 빠르게 감쇠
+      this.particles.burst(pos, {
+        color: 0x8e0f12, count: n, speedMin: 2.5, speedMax: 9 * power,
+        sizeMin: 0.12, sizeMax: 0.34 * power, lifeMin: 0.35, lifeMax: 0.85,
+        up: 1.6, gravity: -16, drag: 0.7, spread: 0.22,
+        dir, dirPower: dir ? 4 * power : 0,
+      });
+      this.particles.burst(pos, {
+        color: 0xd42b1e, count: Math.round(5 * power), speedMin: 1.5, speedMax: 6,
+        sizeMin: 0.10, sizeMax: 0.26, lifeMin: 0.25, lifeMax: 0.6,
+        up: 1.2, gravity: -14, drag: 0.9, spread: 0.2,
+      });
+      // 강함 설정에서는 지면에 흔적
+      if (lv === 2 && Math.random() < 0.5) this.bloodStain(pos, 0.7 + Math.random() * 0.6);
+    }
+
+    /** 지면 혈흔 (일정 시간 뒤 서서히 사라짐) */
+    bloodStain(pos, scale) {
+      if (this.goreLevel <= 0) return;
+      const x = pos.x + U.rand(-0.4, 0.4), z = pos.z + U.rand(-0.4, 0.4);
+      const y = this.game.world.height(x, z) + 0.05;
+      const s = (scale || 1) * U.rand(0.34, 0.62);
+      const m = new THREE.Mesh(
+        new THREE.PlaneGeometry(s * 2, s * 2),
+        new THREE.MeshBasicMaterial({
+          map: Assets.tex.blood, color: 0x3d0507, transparent: true,
+          opacity: 0.52, depthWrite: false,
+        })
+      );
+      m.rotation.x = -Math.PI / 2;
+      m.rotation.z = Math.random() * U.TAU;
+      m.position.set(x, y, z);
+      m.renderOrder = 3;
+      this.scene.add(m);
+      // 오래 남았다가 천천히 사라짐
+      this.decals.push({ mesh: m, life: 18, maxLife: 18, spin: 0, stain: true });
+    }
+
+    /** 처치 연출 — 크게 터지는 혈흔 + 바닥 웅덩이 */
+    goreKill(pos, power) {
+      const lv = this.goreLevel;
+      if (lv <= 0) return;
+      power = (power || 1) * (lv === 2 ? 1.7 : 1);
+      this.particles.burst(pos, {
+        color: 0x8e0f12, count: Math.round(30 * power), speedMin: 3, speedMax: 13 * power,
+        sizeMin: 0.16, sizeMax: 0.5 * power, lifeMin: 0.5, lifeMax: 1.2,
+        up: 3, gravity: -17, drag: 0.65, spread: 0.4,
+      });
+      const pools = lv === 2 ? 3 : 2;
+      for (let i = 0; i < pools; i++) this.bloodStain(pos, 0.85 * power);
+    }
+
     deathBurst(pos, element, scale) {
       const color = ELEM_COLOR[element] || 0xff7a4a;
       scale = scale || 1;
@@ -452,6 +516,9 @@
           d.mesh.material.opacity = k * 0.9;
         } else if (d.pulse) {
           d.mesh.material.opacity = (0.18 + (1 - k) * 0.45) * (0.7 + 0.3 * Math.sin(this.game.time * 30));
+        } else if (d.stain) {
+          // 지면 혈흔 — 옅게 깔렸다가 서서히 마른다
+          d.mesh.material.opacity = 0.52 * Math.min(1, k * 6);
         } else {
           d.mesh.material.opacity = (d.fadeIn && k > 0.85 ? (1 - k) / 0.15 : 1) * Math.min(1, k * 2.5) * 0.85;
         }

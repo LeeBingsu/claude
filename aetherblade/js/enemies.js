@@ -341,7 +341,15 @@
       this.game.vfx.damageNumber(this.position, final, {
         crit: opts.crit, element, y: this.type.height * (this.type.scale || 1) * 0.8,
       });
-      this.game.vfx.hitBurst(opts.hitPoint || this.centerPoint(), element, opts.crit ? 1.6 : 1.0);
+      const hitAt = opts.hitPoint || this.centerPoint();
+      this.game.vfx.hitBurst(hitAt, element, opts.crit ? 1.6 : 1.0);
+      // 유혈 (17+ 연출) — 타격 방향으로 튄다
+      let bdir = null;
+      if (opts.from) {
+        bdir = new THREE.Vector3().subVectors(this.position, opts.from);
+        bdir.y = 0; bdir.normalize();
+      }
+      this.game.vfx.bloodBurst(hitAt, opts.crit ? 1.5 : 1.0, bdir);
 
       if (opts.knockback) {
         const d = new THREE.Vector3().subVectors(this.position, opts.from || this.game.player.position);
@@ -380,6 +388,7 @@
       this.game.onEnemyKilled(this);
       Assets.sfx.die();
       this.game.vfx.deathBurst(this.centerPoint(), this.aura ? this.aura.element : null, this.type.boss ? 3 : 1);
+      this.game.vfx.goreKill(this.centerPoint(), this.type.boss ? 2.4 : this.type.elite ? 1.5 : 1);
       if (this.game.vfx) this.game.vfx.setTrail(this, false);
     }
 

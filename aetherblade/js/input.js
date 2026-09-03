@@ -22,6 +22,7 @@
     Digit1: 'char1', Digit2: 'char2', Digit3: 'char3',
     Tab: 'questlog',
     Escape: 'menu',
+    KeyC: 'outfit',
     KeyM: 'map',
     KeyP: 'photo',
   };
