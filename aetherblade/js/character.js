@@ -797,18 +797,23 @@
       else Object.assign(target, base);
 
       // 본 적용 (감쇠 보간)
+      // 리그가 자체 적용 방식을 정의하면(예: MMD — 본 축이 제각각) 그쪽에 위임한다.
       const lam = this.clip ? 26 : 13;
-      for (const name of BONES) {
-        const o = rig.bones[name];
-        if (!o) continue;
-        const r = rig.rest[name];
-        const t = target[name];
-        const tx = r[0] + (t ? t[0] : 0);
-        const ty = r[1] + (t ? t[1] : 0);
-        const tz = r[2] + (t ? t[2] : 0);
-        o.rotation.x = U.damp(o.rotation.x, tx, lam, dt);
-        o.rotation.y = U.damp(o.rotation.y, ty, lam, dt);
-        o.rotation.z = U.damp(o.rotation.z, tz, lam, dt);
+      if (rig.applyPose) {
+        rig.applyPose(target, lam, dt);
+      } else {
+        for (const name of BONES) {
+          const o = rig.bones[name];
+          if (!o) continue;
+          const r = rig.rest[name];
+          const t = target[name];
+          const tx = r[0] + (t ? t[0] : 0);
+          const ty = r[1] + (t ? t[1] : 0);
+          const tz = r[2] + (t ? t[2] : 0);
+          o.rotation.x = U.damp(o.rotation.x, tx, lam, dt);
+          o.rotation.y = U.damp(o.rotation.y, ty, lam, dt);
+          o.rotation.z = U.damp(o.rotation.z, tz, lam, dt);
+        }
       }
       // 골반 상하 바운스
       const hip = rig.bones.hip;

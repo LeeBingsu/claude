@@ -10,15 +10,34 @@
   'use strict';
   const AB = global.AB, U = AB.U;
 
+  // 로컬 vendor/ 를 먼저 쓰고, 없으면 CDN 으로 대체한다 (오프라인에서도 동작)
+  const LOCAL = {
+    tga: 'vendor/TGALoader.js',
+    mmdParser: 'vendor/mmdparser.min.js',
+    mmdToonShader: 'vendor/MMDToonShader.js',
+    mmdLoader: 'vendor/MMDLoader.js',
+    mmdPhysics: 'vendor/MMDPhysics.js',
+    ccdik: 'vendor/CCDIKSolver.js',
+    mmdHelper: 'vendor/MMDAnimationHelper.js',
+  };
   const CDN = {
     tga: 'https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/TGALoader.js',
     mmdParser: 'https://cdn.jsdelivr.net/npm/mmd-parser@1.0.4/build/mmdparser.min.js',
+    mmdToonShader: 'https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/MMDToonShader.js',
     mmdLoader: 'https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/MMDLoader.js',
     ammo: 'https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/libs/ammo.wasm.js',
     mmdPhysics: 'https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/animation/MMDPhysics.js',
     ccdik: 'https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/animation/CCDIKSolver.js',
     mmdHelper: 'https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/animation/MMDAnimationHelper.js',
   };
+
+  /** vendor 우선, 실패하면 CDN */
+  async function loadLib(key) {
+    if (LOCAL[key]) {
+      try { await loadScript(LOCAL[key]); return; } catch (e) { /* CDN 으로 폴백 */ }
+    }
+    await loadScript(CDN[key]);
+  }
 
   const RES = 'abzip/';   // MMDLoader 가 텍스처 경로 앞에 붙일 가상 경로
 
@@ -169,12 +188,26 @@
     footR: ['右足首', 'ankle_R'],
   };
 
-  // MMD 표준 A 포즈를 게임의 T/기본 포즈에 가깝게 보정
-  const POSE_FIX = {
-    armL: [0, 0, 0.28],
-    armR: [0, 0, -0.28],
-    forearmL: [0, 0, 0.10],
-    forearmR: [0, 0, -0.10],
+  /* 게임 리그(절차 생성)에서 각 본이 뻗는 방향.
+     팔·다리는 -Y, 척추는 +Y, 발은 +Z 로 뻗는다는 전제로 모션이 작성돼 있다. */
+  const CANON_DIR = {
+    hip: [0, 1, 0], torso: [0, 1, 0], chest: [0, 1, 0], neck: [0, 1, 0], head: [0, 1, 0],
+    shoulderL: [-1, 0, 0], shoulderR: [1, 0, 0],
+    armL: [0, -1, 0], armR: [0, -1, 0],
+    forearmL: [0, -1, 0], forearmR: [0, -1, 0],
+    handL: [0, -1, 0], handR: [0, -1, 0],
+    thighL: [0, -1, 0], thighR: [0, -1, 0],
+    shinL: [0, -1, 0], shinR: [0, -1, 0],
+    footL: [0, 0, 1], footR: [0, 0, 1],
+  };
+
+  /* 축 보정을 계산할 때 "이 본이 어느 자식 쪽으로 뻗는가" */
+  const CHAIN_CHILD = {
+    hip: 'torso', torso: 'chest', chest: 'neck', neck: 'head',
+    shoulderL: 'armL', armL: 'forearmL', forearmL: 'handL',
+    shoulderR: 'armR', armR: 'forearmR', forearmR: 'handR',
+    thighL: 'shinL', shinL: 'footL',
+    thighR: 'shinR', shinR: 'footR',
   };
 
   /**
@@ -219,16 +252,22 @@
       if (!this.bones.hip) this.bones.hip = mesh.skeleton ? mesh.skeleton.bones[0] : new THREE.Object3D();
       if (!this.bones.chest) this.bones.chest = this.bones.torso || this.bones.hip;
 
-      // A 포즈 보정을 rest 에 반영
+      // 축 보정 계산 — 게임 모션의 회전축을 이 모델의 본 축으로 옮긴다
+      this.buildAxisFix();
+
+      // rest 는 0 (바인드 포즈는 restQuat 에 담아 둔다)
       this.rest = {};
-      for (const name of AB.BONES) {
-        const b = this.bones[name];
-        const fix = POSE_FIX[name] || [0, 0, 0];
-        this.rest[name] = b
-          ? [b.rotation.x + fix[0], b.rotation.y + fix[1], b.rotation.z + fix[2]]
-          : [0, 0, 0];
-      }
+      for (const name of AB.BONES) this.rest[name] = [0, 0, 0];
       this.hipRestY = this.bones.hip.position.y;
+
+      // 다리 길이 / 키 비율로 보폭 보정 (스케일 무관하게 계산)
+      // 절차 리그 기준: 다리 0.86m / 키 1.90m = 0.452
+      this.legScale = 1;
+      if (this.bones.shinL && this.bones.footL) {
+        const legLen = this.bones.shinL.position.length() + this.bones.footL.position.length();
+        const ratio = legLen / Math.max(1e-6, size.y);
+        if (ratio > 0.15 && ratio < 0.9) this.legScale = U.clamp(ratio / 0.452, 0.75, 1.35);
+      }
 
       // 표정 모프
       this.morphs = mesh.morphTargetDictionary || null;
@@ -249,6 +288,95 @@
       mesh.frustumCulled = false;
     }
 
+    /**
+     * 각 본마다 "게임 모션이 가정한 축" → "이 모델의 실제 본 축" 보정 쿼터니언을 만든다.
+     * MMD 모델은 A 포즈이고 본이 제각각 기울어져 있어서, 회전값을 그대로 꽂으면
+     * 팔이 몸을 파고들거나 다리가 옆으로 벌어진다. 본이 실제로 뻗은 방향을 재서
+     * 그 프레임 안에서 회전시키면 절차 모션이 자연스럽게 얹힌다.
+     */
+    buildAxisFix() {
+      this.axisFix = {};
+      this.restQuat = {};
+      const mesh = this.mesh;
+      mesh.updateMatrixWorld(true);
+
+      const wpA = new THREE.Vector3(), wpB = new THREE.Vector3();
+      const wq = new THREE.Quaternion(), wqInv = new THREE.Quaternion();
+      const dir = new THREE.Vector3(), canon = new THREE.Vector3();
+
+      for (const name of AB.BONES) {
+        const bone = this.bones[name];
+        if (!bone) continue;
+        this.restQuat[name] = bone.quaternion.clone();
+
+        const childName = CHAIN_CHILD[name];
+        const child = childName && this.bones[childName];
+        const canonArr = CANON_DIR[name];
+        if (!child || !canonArr) { this.axisFix[name] = null; continue; }
+
+        bone.getWorldPosition(wpA);
+        child.getWorldPosition(wpB);
+        dir.subVectors(wpB, wpA);
+        if (dir.lengthSq() < 1e-10) { this.axisFix[name] = null; continue; }
+        dir.normalize();
+
+        // 월드 방향 → 이 본의 로컬 축 기준 방향
+        bone.getWorldQuaternion(wq);
+        wqInv.copy(wq).invert();
+        dir.applyQuaternion(wqInv).normalize();
+
+        canon.set(canonArr[0], canonArr[1], canonArr[2]).normalize();
+        const q = new THREE.Quaternion().setFromUnitVectors(canon, dir);
+        this.axisFix[name] = { q, qi: q.clone().invert() };
+      }
+    }
+
+    /**
+     * 애니메이터가 넘겨준 포즈를 축 보정을 거쳐 본에 적용한다.
+     * target: {boneName: [rx, ry, rz]} — 게임 리그 기준 회전값
+     */
+    applyPose(target, lam, dt) {
+      if (!this._pq) {
+        this._pq = new THREE.Quaternion();
+        this._pe = new THREE.Euler();
+        this._pd = new THREE.Quaternion();
+      }
+      const alpha = 1 - Math.exp(-lam * dt);
+      const q = this._pq, e = this._pe, out = this._pd;
+
+      for (const name of AB.BONES) {
+        const bone = this.bones[name];
+        if (!bone) continue;
+        const t = target[name];
+        let rx = t ? t[0] : 0, ry = t ? t[1] : 0, rz = t ? t[2] : 0;
+
+        // 다리 스윙은 모델 비율에 맞춰 보폭 보정
+        if (this.legScale !== 1 &&
+          (name === 'thighL' || name === 'thighR' || name === 'shinL' || name === 'shinR')) {
+          rx /= this.legScale;
+        }
+
+        e.set(rx, ry, rz, 'XYZ');
+        q.setFromEuler(e);
+
+        const fix = this.axisFix[name];
+        if (fix) {
+          // 보정 프레임 안에서 회전: qFix * R * qFix⁻¹
+          out.copy(fix.q).multiply(q).multiply(fix.qi);
+        } else {
+          out.copy(q);
+        }
+        // 바인드 포즈에 얹는다
+        out.premultiply(this.restQuat[name]);
+        bone.quaternion.slerp(out, alpha);
+      }
+
+      // 부여(付与) 본 — 팔 비틀림 등 종속 본 갱신
+      if (this.grantSolver) {
+        try { this.grantSolver.update(); } catch (e2) { this.grantSolver = null; }
+      }
+    }
+
     attachWeapon(weapon, boneName) {
       const b = this.bones[boneName || 'handR'];
       if (!b) return;
@@ -260,9 +388,16 @@
     }
 
     updateDynamics(dt, accel, speed01) {
-      // PMX 는 자체 물리(강체) 를 쓰므로 별도 흔들림 없음
+      // PMX 는 자체 물리(강체)로 치마·머리카락이 흔들린다.
+      // 본 포즈가 이미 적용된 뒤이므로, 월드 행렬을 갱신하고 물리를 돌린다.
       if (this.physicsHelper) {
-        try { this.physicsHelper.update(Math.min(dt, 1 / 30)); } catch (e) { this.physicsHelper = null; }
+        try {
+          this.mesh.updateMatrixWorld(true);
+          this.physicsHelper.update(Math.min(dt, 1 / 30));
+        } catch (e) {
+          console.warn('[MMD] 물리 갱신 실패 — 비활성화', e);
+          this.physicsHelper = null;
+        }
       }
     }
 
@@ -289,15 +424,26 @@
   const MMDChar = {
     ready: false,
     vfs: null,
+    vfsList: [],
     lastError: null,
+
+    /** 등록된 모든 의상의 가상 파일 시스템을 해제 (기본 모델로 되돌릴 때만) */
+    disposeAll() {
+      for (const v of (this.vfsList || [])) {
+        try { v.dispose(); } catch (e) { /* 무시 */ }
+      }
+      this.vfsList = [];
+      this.vfs = null;
+    },
 
     async ensureLibs(onStatus) {
       if (this.ready) return;
       onStatus && onStatus('MMD 라이브러리를 불러오는 중…');
-      await loadScript(CDN.mmdParser);
-      await loadScript(CDN.tga);
-      await loadScript(CDN.ccdik);
-      await loadScript(CDN.mmdLoader);
+      await loadLib('mmdParser');
+      await loadLib('tga');
+      await loadLib('ccdik');
+      await loadLib('mmdToonShader');   // MMDLoader 가 THREE.MMDToonShader 를 참조한다
+      await loadLib('mmdLoader');
       this.ready = true;
     },
 
@@ -309,8 +455,8 @@
         if (typeof global.Ammo === 'function') {
           global.Ammo = await global.Ammo();
         }
-        await loadScript(CDN.mmdPhysics);
-        await loadScript(CDN.mmdHelper);
+        await loadLib('mmdPhysics');
+        await loadLib('mmdHelper');
         return true;
       })().catch(e => { console.warn('Ammo 실패', e); return false; });
       return global.__abAmmoReady;
@@ -370,7 +516,12 @@
         m.transparent = m.transparent || false;
       });
 
-      this.vfs && this.vfs.dispose();
+      // 이전 VFS 를 여기서 해제하면 안 된다.
+      // 의상을 여러 벌 등록할 때, 먼저 읽은 모델의 텍스처가 아직 디코딩 중인데
+      // blob URL 이 revoke 되면 그 모델이 영구히 흰색으로 남는다.
+      // 등록된 의상이 살아 있는 동안에는 전부 유지하고, 초기화할 때만 해제한다.
+      this.vfsList = this.vfsList || [];
+      this.vfsList.push(vfs);
       this.vfs = vfs;
       return { mesh, vfs, pmxList, picked: pick };
     },
@@ -383,8 +534,14 @@
         if (ok && THREE.MMDAnimationHelper) {
           try {
             const helper = new THREE.MMDAnimationHelper({ afterglow: 2.0 });
+            // 애니메이션 클립을 주지 않으므로 helper.update() 는 물리만 돌린다.
             helper.add(mesh, { physics: true });
             rig.physicsHelper = helper;
+            // 부여(付与) 본 솔버 — 팔 비틀림 등 종속 본 처리
+            const mmd = mesh.geometry && mesh.geometry.userData && mesh.geometry.userData.MMD;
+            if (mmd && mmd.grants && mmd.grants.length) {
+              rig.grantSolver = helper.createGrantSolver(mesh);
+            }
           } catch (e) {
             console.warn('MMD 물리 초기화 실패:', e);
           }

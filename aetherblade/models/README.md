@@ -9,6 +9,9 @@
 2. `manifest.example.json` 을 `manifest.json` 으로 복사하고 파일명을 맞춘다.
 3. 정적 서버로 게임을 연다 (`python3 -m http.server` — `file://` 로는 fetch 가 막힌다).
 
+`physics: true` 로 두면 치마·머리카락이 흔들린다. 물리 엔진(Ammo)만 CDN 에서 지연 로드하므로,
+오프라인이면 `false` 로 두는 편이 빠르다 (모델 자체는 오프라인에서도 정상 표시된다).
+
 ```json
 {
   "outfits": [

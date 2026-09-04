@@ -974,6 +974,7 @@
       $('model-clear').addEventListener('click', async () => {
         await AB.ModelCache.clear();
         this.removeCustomRig();
+        AB.MMDChar.disposeAll();
         this.outfits = [];
         this.activeOutfit = -1;
         renderOutfits();
