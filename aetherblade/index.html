@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b0d16">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="AETHER BLADE — 브라우저에서 돌아가는 3D 액션 RPG">
+<title>AETHER BLADE · 에테르 블레이드</title>
+<link rel="stylesheet" href="css/game.css">
+</head>
+<body>
+
+<canvas id="game"></canvas>
+
+<!-- ═══════════ 데미지 숫자 레이어 ═══════════ -->
+<div id="dmg-layer"></div>
+
+<!-- ═══════════ HUD ═══════════ -->
+<div id="hud">
+  <!-- 좌상단: 체력 · 파티 -->
+  <div class="hud-left">
+    <div class="vitals">
+      <div class="lv-badge"><span id="lv-text">Lv.1</span></div>
+      <div class="bars">
+        <div class="bar hp"><i id="hp-fill"></i><span id="hp-text">0 / 0</span></div>
+        <div class="bar stam"><i id="stam-fill"></i></div>
+        <div class="bar xp"><i id="xp-fill"></i></div>
+      </div>
+    </div>
+    <div id="party"></div>
+  </div>
+
+  <!-- 우상단: 미니맵 -->
+  <div class="hud-right">
+    <div class="mmwrap">
+      <canvas id="minimap" width="176" height="176"></canvas>
+      <div class="mm-n">N</div>
+    </div>
+    <div id="quest-tracker">
+      <div class="qt-head"><span class="qt-tag">임무</span><b id="qt-title">—</b></div>
+      <ul id="qt-objs"></ul>
+    </div>
+  </div>
+
+  <!-- 지역 배너 -->
+  <div id="region-name"></div>
+
+  <!-- 보스 체력 -->
+  <div id="boss-bar">
+    <div class="bb-top"><b id="bb-name">—</b><span id="bb-phase">PHASE 1</span></div>
+    <div class="bb-track"><i id="bb-fill"></i></div>
+  </div>
+
+  <!-- 콤보 -->
+  <div id="combo-pips"></div>
+
+  <!-- 우하단: 스킬 -->
+  <div class="hud-skills">
+    <div class="sk" id="btn-potion" data-act="potion">
+      <div class="sk-ico">✚</div>
+      <span class="sk-key">R</span>
+      <span class="sk-count" id="potion-count">3</span>
+    </div>
+    <div class="sk big" id="btn-skill" data-act="skill">
+      <div class="sk-ico">✦</div>
+      <i class="sk-cd" id="skill-cd"></i>
+      <span class="sk-key">E</span>
+      <span class="sk-label" id="skill-name">—</span>
+    </div>
+    <div class="sk big ult" id="btn-ult" data-act="ult">
+      <div class="sk-ico">◈</div>
+      <i class="sk-fill" id="ult-fill"></i>
+      <span class="sk-key">Q</span>
+      <span class="sk-label" id="ult-name">—</span>
+    </div>
+  </div>
+
+  <div id="interact-prompt"><b>F</b><span id="ip-text">조사</span></div>
+  <div id="lock-marker"></div>
+</div>
+
+<!-- ═══════════ 모바일 터치 컨트롤 ═══════════ -->
+<div id="touch-controls">
+  <div id="tc-look"></div>
+  <div id="tc-stick"><i id="tc-knob"></i></div>
+  <div id="tc-actions">
+    <button class="tbtn atk" data-act="attack">공격</button>
+    <button class="tbtn" data-act="dash">회피</button>
+    <button class="tbtn" data-act="jump">점프</button>
+    <button class="tbtn small" data-act="interact">F</button>
+    <button class="tbtn small" data-act="lock">🎯</button>
+  </div>
+  <div id="tc-party">
+    <button class="tswap" data-act="char1">1</button>
+    <button class="tswap" data-act="char2">2</button>
+    <button class="tswap" data-act="char3">3</button>
+    <button class="tswap menu" data-act="menu">☰</button>
+  </div>
+</div>
+
+<!-- ═══════════ 효과 오버레이 ═══════════ -->
+<div id="hurt-vig"></div>
+<div id="ult-flash"><div class="uf-band"><b id="uf-name"></b><span id="uf-skill"></span></div></div>
+
+<!-- ═══════════ 대화창 ═══════════ -->
+<div id="dialogue">
+  <img id="dlg-portrait" alt="">
+  <div class="dlg-body">
+    <b id="dlg-name"></b>
+    <p id="dlg-text"></p>
+    <span class="dlg-next">▼ 계속 (F / 클릭)</span>
+  </div>
+</div>
+
+<!-- ═══════════ 컷신 ═══════════ -->
+<div id="cine">
+  <div id="cine-top" class="cine-bar"></div>
+  <div id="cine-bot" class="cine-bar"></div>
+  <div id="cine-sub"><b id="cine-who"></b><p id="cine-text"></p></div>
+  <button id="cine-skip">건너뛰기 ▸</button>
+</div>
+<div id="cine-fade"></div>
+
+<!-- ═══════════ 토스트 ═══════════ -->
+<div id="toast-layer"></div>
+
+<!-- ═══════════ 퀘스트 로그 ═══════════ -->
+<div id="questlog">
+  <div class="ql-panel">
+    <header><h2>임무 기록</h2><button id="ql-close">✕</button></header>
+    <div id="ql-body"></div>
+  </div>
+</div>
+
+<!-- ═══════════ 사망 ═══════════ -->
+<div id="death-screen"><b>쓰러졌다</b><span>재의 야영지로 돌아갑니다…</span></div>
+
+<!-- ═══════════ 일시정지 메뉴 ═══════════ -->
+<div id="menu">
+  <div class="menu-panel">
+    <h2>일시정지</h2>
+    <div class="mrow"><label>음량</label><input id="set-volume" type="range" min="0" max="1" step="0.05" value="0.7"></div>
+    <div class="mrow"><label>감도</label><input id="set-sens" type="range" min="0.3" max="2.5" step="0.05" value="1"></div>
+    <div class="mrow"><label>Y축 반전</label><input id="set-invert" type="checkbox"></div>
+    <div class="mrow"><label>그림자</label><input id="set-shadow" type="checkbox" checked></div>
+    <div class="mrow"><label>터치 컨트롤</label><input id="set-touch" type="checkbox"></div>
+    <div class="mrow"><label>유혈 표현 <b id="set-gore-val" class="mval">기본</b></label>
+      <input id="set-gore" type="range" min="0" max="2" step="1" value="1"></div>
+    <div class="mbtns">
+      <button id="menu-resume" class="prim">계속하기</button>
+      <button id="menu-log">임무 기록</button>
+      <button id="menu-title">타이틀로</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ 타이틀 ═══════════ -->
+<div id="title">
+  <div class="t-bg"></div>
+  <div class="t-inner">
+    <p class="t-sup">ACTION RPG</p>
+    <h1>AETHER<span>BLADE</span></h1>
+    <p class="t-sub">에테르 블레이드 — 재의 균열</p>
+    <div class="t-menu">
+      <button id="btn-continue">이어하기</button>
+      <button id="btn-start" class="prim">새 게임</button>
+      <button data-panel="panel-controls">조작법</button>
+      <button data-panel="panel-model">커스텀 모델</button>
+      <button data-panel="panel-about">정보</button>
+    </div>
+    <p class="t-rating"><b>17+</b> 강도 높은 액션 폭력 · 유혈 표현 · 거친 대사 <span>(설정에서 유혈 표현 강도 조절 가능)</span></p>
+    <p class="t-hint">WASD 이동 · 마우스 시점 · 좌클릭 공격 · E 스킬 · Q 궁극기 · Shift 질주(짧게 눌러 회피) · C 의상 전환</p>
+  </div>
+
+  <!-- 조작법 -->
+  <div class="tpanel" id="panel-controls">
+    <button class="close">✕</button>
+    <h3>조작법</h3>
+    <div class="ctrl-cols">
+      <div>
+        <h4>PC</h4>
+        <dl>
+          <dt>W A S D</dt><dd>이동</dd>
+          <dt>마우스</dt><dd>시점 (클릭하면 포인터 고정)</dd>
+          <dt>좌클릭 / J</dt><dd>일반 공격 (연타로 콤보)</dd>
+          <dt>E / K</dt><dd>원소 스킬</dd>
+          <dt>Q / L</dt><dd>궁극기 (에너지 100)</dd>
+          <dt>Shift (길게)</dt><dd>질주</dd>
+          <dt>Shift (짧게) / 휠클릭</dt><dd>회피 대시 (무적)</dd>
+          <dt>Space</dt><dd>점프</dd>
+          <dt>F</dt><dd>상호작용 / 대화</dd>
+          <dt>R</dt><dd>회복약</dd>
+          <dt>V</dt><dd>적 고정(락온)</dd>
+          <dt>1 2 3</dt><dd>캐릭터 전환</dd>
+          <dt>C</dt><dd>의상(스킨) 전환</dd>
+          <dt>Tab</dt><dd>임무 기록</dd>
+          <dt>Esc</dt><dd>일시정지 / 컷신 건너뛰기</dd>
+        </dl>
+      </div>
+      <div>
+        <h4>모바일</h4>
+        <dl>
+          <dt>왼쪽 화면 드래그</dt><dd>이동 (끝까지 밀면 질주)</dd>
+          <dt>오른쪽 화면 드래그</dt><dd>시점</dd>
+          <dt>오른쪽 화면 탭</dt><dd>공격</dd>
+          <dt>우하단 버튼</dt><dd>공격 · 회피 · 점프 · F · 락온</dd>
+          <dt>좌하단 스킬</dt><dd>E 스킬 / Q 궁극기 / 회복약</dd>
+          <dt>1 2 3</dt><dd>캐릭터 전환</dd>
+          <dt>☰</dt><dd>메뉴</dd>
+        </dl>
+        <h4>전투 팁</h4>
+        <p class="tip">속성이 다른 캐릭터로 번갈아 때리면 <b>원소 반응</b>이 터진다 —
+          빙결→염화 <b>융해(×2)</b>, 염화→뇌전 <b>과부하(폭발)</b>, 빙결→뇌전 <b>초전도(방어↓)</b>.
+          붉은 부채꼴이 뜨면 적의 공격 예고다. 대시로 빠져나가면 무적 판정이 붙는다.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 커스텀 모델 -->
+  <div class="tpanel" id="panel-model">
+    <button class="close">✕</button>
+    <h3>커스텀 캐릭터 모델 (MMD · PMX)</h3>
+    <p class="pdesc">
+      가지고 있는 <b>.pmx</b> 또는 모델 <b>.zip</b> 을 아래에 끌어다 놓으면 플레이어블 캐릭터의 몸이 그 모델로 바뀐다.
+      게임의 절차적 애니메이션(달리기·콤보·회피·궁극기)이 PMX 스켈레톤에 그대로 적용된다.
+    </p>
+    <p class="pdesc" style="margin-top:-6px">
+      매번 드롭하기 번거로우면 게임 폴더의 <b>models/</b> 에 파일을 두고 <b>manifest.json</b> 을 만들면
+      실행할 때 자동으로 의상으로 등록된다 (<code>models/README.md</code> 참고). 게임 중 <b>C</b> 키로 전환.
+    </p>
+    <div id="model-drop">
+      <b>zip 또는 .pmx 를 여기에 놓기</b>
+      <span>또는 눌러서 파일 선택 · 여러 개 한 번에 가능</span>
+      <input type="file" id="model-file" accept=".zip,.pmx,.pmd" multiple hidden>
+    </div>
+    <div class="mopts">
+      <label><input type="checkbox" id="model-physics" checked> 치마·머리카락 물리 (Ammo)</label>
+      <label><input type="checkbox" id="model-flip"> 정면 방향 뒤집기</label>
+      <label><input type="checkbox" id="model-cache" checked> 브라우저에 저장해 두기</label>
+      <label><input type="checkbox" id="model-signature"> 전용 무기 「빙화 낙월」 장착</label>
+      <label class="num">키 <input type="number" id="model-height" value="1.72" step="0.02" min="1.2" max="2.6"> m</label>
+    </div>
+    <div id="model-outfits" style="display:none">
+      <span class="mo-lead">의상 · 스킨</span>
+      <div id="mo-list"></div>
+      <span class="mo-hint">파일을 추가로 넣으면 의상으로 등록된다. 눌러서 갈아입기.</span>
+    </div>
+    <p id="model-status">모델을 기다리는 중.</p>
+    <button id="model-clear" style="display:none">저장된 모델 지우고 기본 모델로</button>
+    <p class="pnote">
+      파일은 <b>이 브라우저 밖으로 나가지 않는다</b> — 서버 업로드 없이 전부 로컬에서 처리하고,
+      저장을 켜면 이 기기의 IndexedDB 에만 남는다. 모델 파일은 이 저장소에 포함되어 있지 않다.
+      원작자가 재배포를 금지한 모델이 많으니, 본인이 정식으로 받아 둔 파일만 개인 용도로 사용할 것.
+    </p>
+  </div>
+
+  <!-- 정보 -->
+  <div class="tpanel" id="panel-about">
+    <button class="close">✕</button>
+    <h3>AETHER BLADE</h3>
+    <p class="pdesc">
+      three.js 로 만든 브라우저 3D 액션 RPG. 지형·캐릭터·몬스터·텍스처·효과음·배경음까지
+      전부 코드로 즉석 생성하며, 외부 에셋 파일을 쓰지 않는다.
+    </p>
+    <ul class="feat">
+      <li><b>플레이어블 3인</b> — 염화 대검 리엔 / 빙결 쌍검 세라 / 뇌전 장창 카이. 실시간 전환</li>
+      <li><b>원소 반응</b> — 융해 · 과부하 · 초전도 · 균열 파열</li>
+      <li><b>몬스터 6종</b> — 늑대, 우두머리, 허물 병사, 근위병, 균열 술사, 그리고 3페이즈 보스</li>
+      <li><b>임무 5장</b> — 컷신과 대사로 이어지는 스토리 · 레벨업 · 전리품</li>
+      <li><b>연출</b> — 시네마틱 카메라, 무기 궤적, 히트스톱, 화면 흔들림, 잔상</li>
+      <li><b>모바일</b> — 가상 스틱 · 터치 시점 · 품질 자동 조절</li>
+    </ul>
+    <p class="pnote">
+      수위: <b>17+</b> — 강도 높은 액션 폭력, 유혈 표현, 거친 대사. 일시정지 메뉴에서
+      유혈 표현을 <b>없음 / 기본 / 강함</b> 으로 조절할 수 있다. 성적 묘사는 포함하지 않는다.
+    </p>
+  </div>
+</div>
+
+<!-- ═══════════ 로딩 / 오류 ═══════════ -->
+<div id="loading"><div class="spin"></div><p>세계를 생성하는 중…</p></div>
+<div id="boot-error">
+  <h3>실행할 수 없습니다</h3>
+  <p>WebGL 을 지원하는 최신 브라우저가 필요합니다. 콘솔 로그를 확인하세요.</p>
+  <code></code>
+</div>
+
+<!-- three.js r147 (UMD). CDN 우선, 실패 시 로컬 사본으로 대체 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.147.0/three.min.js"></script>
+<script>if(typeof THREE==='undefined'){document.write('<scr'+'ipt src="vendor/three.min.js"><\/scr'+'ipt>');}</script>
+<script src="js/utils.js"></script>
+<script src="js/assets.js"></script>
+<script src="js/character.js"></script>
+<script src="js/roster.js"></script>
+<script src="js/world.js"></script>
+<script src="js/enemies.js"></script>
+<script src="js/combat.js"></script>
+<script src="js/quests.js"></script>
+<script src="js/cutscene.js"></script>
+<script src="js/mmdchar.js"></script>
+<script src="js/input.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/game.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
