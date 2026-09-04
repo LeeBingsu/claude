@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>팔 벌려 비행 — Arm Wing Flight</title>
+<link
+  rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.css"
+/>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="stage">
+    <!-- 상단: 웹캠 + 스켈레톤 -->
+    <section id="cam-panel">
+      <video id="cam" playsinline muted autoplay></video>
+      <canvas id="skeleton"></canvas>
+      <p id="cam-hint" class="hidden"></p>
+    </section>
+
+    <!-- 하단: 게임 -->
+    <section id="game-panel">
+      <canvas id="scene"></canvas>
+
+      <div id="hud">
+        <div id="energy"><div id="energy-fill"></div></div>
+
+        <div id="alt-gauge"><div id="alt-fill"></div></div>
+        <div id="alt-label">0m</div>
+
+        <div id="right-stats">
+          <div id="dist-label">0m</div>
+          <div id="time-label">0.0s</div>
+        </div>
+
+        <div id="caption"></div>
+      </div>
+    </section>
+
+    <!-- 시작 / 게임오버 -->
+    <div id="overlay">
+      <div id="panel-title">
+        <h1>팔 벌려<br />비행</h1>
+        <p class="lead">두 팔을 활짝 펴면 날개가 됩니다.</p>
+        <ul class="howto">
+          <li><b>팔 벌리기</b> — 양력, 상승</li>
+          <li><b>한쪽 팔 내리기</b> — 그쪽으로 선회</li>
+          <li><b>팔 아래로 힘껏</b> — 날갯짓 부스트</li>
+          <li><b>팔 내리고 있기</b> — 활공, 체력 회복</li>
+        </ul>
+        <button id="btn-start" class="btn">카메라 켜고 시작</button>
+        <button id="btn-keys" class="btn ghost">키보드로 하기</button>
+        <p id="status" class="status"></p>
+      </div>
+
+      <div id="panel-over" class="hidden">
+        <h2 id="over-title">추락!</h2>
+        <div class="score">
+          <div><span id="over-dist">0</span><small>m 비행</small></div>
+          <div><span id="over-alt">0</span><small>m 최고 고도</small></div>
+          <div><span id="over-time">0.0</span><small>초 생존</small></div>
+        </div>
+        <p id="over-best" class="best"></p>
+        <button id="btn-retry" class="btn">다시 날기</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
