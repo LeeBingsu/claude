@@ -23,6 +23,7 @@
     <string name="editor_action_rename">이름 바꾸기</string>
     <string name="editor_action_preview_on">미리보기</string>
     <string name="editor_action_preview_off">편집</string>
+    <string name="editor_action_live_on">실시간 실행</string>
     <string name="editor_saved">저장했습니다</string>
     <string name="editor_save_failed">저장하지 못했습니다: %1$s</string>
     <string name="editor_open_failed">파일을 열지 못했습니다: %1$s</string>

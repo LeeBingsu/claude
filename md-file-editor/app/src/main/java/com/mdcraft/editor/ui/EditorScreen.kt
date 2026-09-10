@@ -1,6 +1,7 @@
 package com.mdcraft.editor.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -11,6 +12,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
@@ -19,6 +21,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -30,6 +33,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +52,7 @@ import com.mdcraft.editor.model.DocumentUiState
 import com.mdcraft.editor.ui.preview.HtmlPreview
 import com.mdcraft.editor.ui.preview.JsonPreview
 import com.mdcraft.editor.ui.preview.MarkdownPreview
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -88,12 +93,20 @@ fun EditorScreen(
                         )
                     }
                     if (hasPreview) {
+                        val isHtml = document.type == DocumentType.HTML
                         IconButton(onClick = onTogglePreview) {
                             Icon(
-                                imageVector = if (document.isPreview) Icons.Filled.Edit else Icons.Filled.Visibility,
+                                imageVector = when {
+                                    document.isPreview -> Icons.Filled.Edit
+                                    isHtml -> Icons.Filled.PlayArrow
+                                    else -> Icons.Filled.Visibility
+                                },
                                 contentDescription = stringResource(
-                                    if (document.isPreview) R.string.editor_action_preview_off
-                                    else R.string.editor_action_preview_on
+                                    when {
+                                        document.isPreview -> R.string.editor_action_preview_off
+                                        isHtml -> R.string.editor_action_live_on
+                                        else -> R.string.editor_action_preview_on
+                                    }
                                 )
                             )
                         }
@@ -132,7 +145,7 @@ fun EditorScreen(
                 document.isPreview && hasPreview -> {
                     when (document.type) {
                         DocumentType.MARKDOWN -> MarkdownPreview(document.content, Modifier.fillMaxSize())
-                        DocumentType.HTML -> HtmlPreview(document.content, Modifier.fillMaxSize())
+                        DocumentType.HTML -> HtmlLiveView(document.content, onContentChange, Modifier.fillMaxSize())
                         DocumentType.JSON -> JsonPreview(document.content, Modifier.fillMaxSize())
                         DocumentType.TEXT -> Unit
                     }
@@ -189,6 +202,36 @@ private fun RenameFileDialog(
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         }
     )
+}
+
+/**
+ * Source editor on top, a live-running WebView below — edits reflect in the
+ * preview a short debounce after typing stops, instead of forcing a static
+ * preview that only ever shows a snapshot.
+ */
+@Composable
+private fun HtmlLiveView(
+    content: String,
+    onContentChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var rendered by remember { mutableStateOf(content) }
+    LaunchedEffect(content) {
+        delay(350)
+        rendered = content
+    }
+
+    Column(modifier = modifier) {
+        EditorTextField(
+            value = content,
+            onValueChange = onContentChange,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+        )
+        HorizontalDivider()
+        HtmlPreview(rendered, Modifier.weight(1f))
+    }
 }
 
 @Composable

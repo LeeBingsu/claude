@@ -94,7 +94,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             type = type,
                             extension = extension,
                             content = text,
-                            isDirty = false
+                            isDirty = false,
+                            // Opening a file should show it, not its raw markup;
+                            // a plain-text file has no other view to show.
+                            isPreview = type != DocumentType.TEXT
                         )
                     )
                 }
