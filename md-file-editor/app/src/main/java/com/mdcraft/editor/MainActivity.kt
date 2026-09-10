@@ -99,8 +99,11 @@ private fun AppRoot(viewModel: MainViewModel) {
             Screen.HOME -> HomeScreen(
                 modifier = Modifier.padding(padding),
                 recentFiles = uiState.recentFiles,
+                customTypes = uiState.customTypes,
                 onOpenFile = { openDocumentLauncher.launch(arrayOf("*/*")) },
-                onCreateNew = { type, name -> viewModel.createNewDraft(type, name) },
+                onCreateNew = { type, extension, name -> viewModel.createNewDraft(type, extension, name) },
+                onAddCustomType = viewModel::addCustomType,
+                onRemoveCustomType = viewModel::removeCustomType,
                 onOpenRecent = { file -> viewModel.openDocument(android.net.Uri.parse(file.uri)) },
                 onRemoveRecent = { file -> viewModel.removeRecent(file.uri) }
             )
@@ -113,7 +116,8 @@ private fun AppRoot(viewModel: MainViewModel) {
                 onSave = viewModel::requestSave,
                 onSaveAs = {
                     createDocumentLauncher.launch(uiState.document.fileName)
-                }
+                },
+                onRename = viewModel::renameDocument
             )
         }
     }

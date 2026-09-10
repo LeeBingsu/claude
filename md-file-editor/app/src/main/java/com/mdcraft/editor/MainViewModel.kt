@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.mdcraft.editor.data.CustomTypesStore
 import com.mdcraft.editor.data.DocumentRepository
 import com.mdcraft.editor.data.RecentFilesStore
 import com.mdcraft.editor.model.AppUiState
@@ -24,6 +25,7 @@ import kotlinx.coroutines.launch
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val recentFilesStore = RecentFilesStore(application)
+    private val customTypesStore = CustomTypesStore(application)
 
     private val _uiState = MutableStateFlow(AppUiState())
     val uiState: StateFlow<AppUiState> = _uiState.asStateFlow()
@@ -37,13 +39,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _uiState.update { it.copy(recentFiles = files) }
             }
         }
+        viewModelScope.launch {
+            customTypesStore.customExtensions.collect { extensions ->
+                _uiState.update { it.copy(customTypes = extensions) }
+            }
+        }
     }
 
     fun goHome() {
         _uiState.update { it.copy(screen = Screen.HOME, document = DocumentUiState()) }
     }
 
-    fun createNewDraft(type: DocumentType, requestedName: String) {
+    fun addCustomType(extension: String) {
+        viewModelScope.launch { customTypesStore.add(extension) }
+    }
+
+    fun removeCustomType(extension: String) {
+        viewModelScope.launch { customTypesStore.remove(extension) }
+    }
+
+    fun createNewDraft(type: DocumentType, extension: String, requestedName: String) {
         val safeName = requestedName.ifBlank { getApplication<Application>().getString(R.string.editor_untitled) }
         _uiState.update {
             it.copy(
@@ -52,6 +67,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     uri = null,
                     name = safeName,
                     type = type,
+                    extension = extension,
                     content = type.template,
                     isDirty = true
                 )
@@ -68,6 +84,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val name = DocumentRepository.displayName(context, uri)
                 val mimeType = DocumentRepository.mimeType(context, uri)
                 val type = DocumentType.fromMimeType(mimeType, name)
+                val extension = name.substringAfterLast('.', type.extension)
                 val text = DocumentRepository.readText(context, uri)
                 _uiState.update {
                     it.copy(
@@ -75,6 +92,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             uri = uri.toString(),
                             name = name,
                             type = type,
+                            extension = extension,
                             content = text,
                             isDirty = false
                         )
@@ -136,6 +154,52 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun removeRecent(uri: String) {
         viewModelScope.launch { recentFilesStore.remove(uri) }
+    }
+
+    /** Renames the open document, extension included. Unsaved drafts just update in memory. */
+    fun renameDocument(newName: String) {
+        val trimmed = newName.trim()
+        val current = _uiState.value.document
+        if (trimmed.isBlank() || trimmed == current.fileName) return
+
+        val newExtension = trimmed.substringAfterLast('.', "")
+        val newType = DocumentType.fromFileName(trimmed)
+
+        if (current.uri == null) {
+            _uiState.update {
+                it.copy(document = it.document.copy(name = trimmed, extension = newExtension, type = newType))
+            }
+            return
+        }
+
+        val context = getApplication<Application>()
+        val oldUri = Uri.parse(current.uri)
+        viewModelScope.launch {
+            val renamedUri = DocumentRepository.renameDocument(context, oldUri, trimmed)
+            if (renamedUri != null) {
+                _uiState.update {
+                    it.copy(
+                        document = it.document.copy(
+                            uri = renamedUri.toString(),
+                            name = trimmed,
+                            extension = newExtension,
+                            type = newType
+                        )
+                    )
+                }
+                recentFilesStore.remove(oldUri.toString())
+                recentFilesStore.upsert(
+                    RecentFile(
+                        uri = renamedUri.toString(),
+                        displayName = trimmed,
+                        type = newType,
+                        lastOpenedAt = System.currentTimeMillis()
+                    )
+                )
+            } else {
+                _events.tryEmit(UiEvent.Message(context.getString(R.string.editor_rename_failed)))
+            }
+        }
     }
 
     private fun performSave(uri: Uri) {

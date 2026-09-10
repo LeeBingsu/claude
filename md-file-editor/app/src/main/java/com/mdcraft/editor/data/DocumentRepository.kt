@@ -4,7 +4,9 @@ import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.provider.DocumentsContract
 import android.provider.OpenableColumns
+import java.io.File
 import java.io.FileNotFoundException
 
 /** Reads and writes document contents through [ContentResolver], independent of scheme. */
@@ -34,6 +36,27 @@ object DocumentRepository {
         val stream = context.contentResolver.openOutputStream(uri, "wt")
             ?: throw FileNotFoundException("openOutputStream returned null for $uri")
         stream.use { it.bufferedWriter(Charsets.UTF_8).apply { write(text); flush() } }
+    }
+
+    /** Renames (and, for SAF documents, potentially re-URIs) a document. Null on failure. */
+    fun renameDocument(context: Context, uri: Uri, newName: String): Uri? = try {
+        when (uri.scheme) {
+            ContentResolver.SCHEME_CONTENT ->
+                DocumentsContract.renameDocument(context.contentResolver, uri, newName)
+            ContentResolver.SCHEME_FILE -> {
+                val oldFile = uri.path?.let(::File)
+                val parent = oldFile?.parentFile
+                if (parent != null) {
+                    val newFile = File(parent, newName)
+                    if (oldFile.renameTo(newFile)) Uri.fromFile(newFile) else null
+                } else {
+                    null
+                }
+            }
+            else -> null
+        }
+    } catch (e: Exception) {
+        null
     }
 
     /** Best-effort: keeps read/write access across app restarts when the system allows it. */
