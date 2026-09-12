@@ -4,11 +4,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -19,10 +20,12 @@ import androidx.compose.material.icons.filled.DataObject
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -51,8 +54,11 @@ import java.util.Date
 @Composable
 fun HomeScreen(
     recentFiles: List<RecentFile>,
+    customTypes: List<String>,
     onOpenFile: () -> Unit,
-    onCreateNew: (DocumentType, String) -> Unit,
+    onCreateNew: (type: DocumentType, extension: String, name: String) -> Unit,
+    onAddCustomType: (String) -> Unit,
+    onRemoveCustomType: (String) -> Unit,
     onOpenRecent: (RecentFile) -> Unit,
     onRemoveRecent: (RecentFile) -> Unit,
     modifier: Modifier = Modifier
@@ -96,10 +102,13 @@ fun HomeScreen(
 
     if (showNewFileDialog) {
         NewFileDialog(
+            customTypes = customTypes,
+            onAddCustomType = onAddCustomType,
+            onRemoveCustomType = onRemoveCustomType,
             onDismiss = { showNewFileDialog = false },
-            onConfirm = { type, name ->
+            onConfirm = { type, extension, name ->
                 showNewFileDialog = false
-                onCreateNew(type, name)
+                onCreateNew(type, extension, name)
             }
         )
     }
@@ -150,13 +159,21 @@ private fun iconFor(type: DocumentType) = when (type) {
 private fun formatTimestamp(millis: Long): String =
     DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(millis))
 
+/** Built-in types map to their fixed extension; any other extension edits as plain text. */
+private fun typeForExtension(extension: String): DocumentType =
+    DocumentType.entries.find { it.extension == extension } ?: DocumentType.TEXT
+
 @Composable
 private fun NewFileDialog(
+    customTypes: List<String>,
+    onAddCustomType: (String) -> Unit,
+    onRemoveCustomType: (String) -> Unit,
     onDismiss: () -> Unit,
-    onConfirm: (DocumentType, String) -> Unit
+    onConfirm: (type: DocumentType, extension: String, name: String) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
-    var selectedType by remember { mutableStateOf(DocumentType.MARKDOWN) }
+    var selectedExtension by remember { mutableStateOf(DocumentType.MARKDOWN.extension) }
+    var showAddCustomTypeDialog by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -175,20 +192,107 @@ private fun NewFileDialog(
                     style = MaterialTheme.typography.labelLarge,
                     modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    DocumentType.entries.forEach { type ->
+                // A plain Row clips extra chips off-screen with no way to reach
+                // them; a scrollable row keeps every built-in and custom type
+                // reachable no matter how many are registered.
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(DocumentType.entries, key = { it.extension }) { type ->
                         FilterChip(
-                            selected = selectedType == type,
-                            onClick = { selectedType = type },
+                            selected = selectedExtension == type.extension,
+                            onClick = { selectedExtension = type.extension },
                             label = { Text(type.label) }
+                        )
+                    }
+                    items(customTypes, key = { it }) { extension ->
+                        FilterChip(
+                            selected = selectedExtension == extension,
+                            onClick = { selectedExtension = extension },
+                            label = { Text(".$extension") },
+                            trailingIcon = {
+                                IconButton(
+                                    onClick = {
+                                        onRemoveCustomType(extension)
+                                        if (selectedExtension == extension) {
+                                            selectedExtension = DocumentType.MARKDOWN.extension
+                                        }
+                                    },
+                                    modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Close,
+                                        contentDescription = stringResource(R.string.action_remove_recent),
+                                        modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                    )
+                                }
+                            }
+                        )
+                    }
+                    item {
+                        AssistChip(
+                            onClick = { showAddCustomTypeDialog = true },
+                            label = { Text(stringResource(R.string.action_add)) },
+                            leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) }
                         )
                     }
                 }
             }
         },
         confirmButton = {
-            Button(onClick = { onConfirm(selectedType, name.trim()) }) {
+            Button(onClick = { onConfirm(typeForExtension(selectedExtension), selectedExtension, name.trim()) }) {
                 Text(stringResource(R.string.action_create))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        }
+    )
+
+    if (showAddCustomTypeDialog) {
+        val reserved = remember(customTypes) { DocumentType.entries.map { it.extension } + customTypes }
+        AddCustomTypeDialog(
+            reservedExtensions = reserved,
+            onDismiss = { showAddCustomTypeDialog = false },
+            onConfirm = { extension ->
+                showAddCustomTypeDialog = false
+                onAddCustomType(extension)
+                selectedExtension = extension
+            }
+        )
+    }
+}
+
+@Composable
+private fun AddCustomTypeDialog(
+    reservedExtensions: List<String>,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var text by remember { mutableStateOf("") }
+    val cleaned = text.trim().removePrefix(".").lowercase().filter { it.isLetterOrDigit() }
+    val isDuplicate = cleaned.isNotEmpty() && reservedExtensions.contains(cleaned)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.custom_type_title)) },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                label = { Text(stringResource(R.string.custom_type_label)) },
+                singleLine = true,
+                isError = isDuplicate,
+                supportingText = {
+                    if (isDuplicate) Text(stringResource(R.string.custom_type_duplicate))
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(cleaned) },
+                enabled = cleaned.isNotEmpty() && !isDuplicate
+            ) {
+                Text(stringResource(R.string.action_add))
             }
         },
         dismissButton = {
