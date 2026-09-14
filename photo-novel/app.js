@@ -425,6 +425,7 @@ function stepLabel(step) {
 function renderStory() {
   state.steps = buildSteps(state.images.length, opts());
   const box = $('story');
+  const keepScroll = window.scrollY;      // 다시 그리는 동안 보던 자리를 지킨다
   box.textContent = '';
 
   if (!state.images.length) {
@@ -433,6 +434,7 @@ function renderStory() {
     p.textContent = '아직 쓴 글이 없습니다.';
     box.append(p);
     updateCharCount();
+    window.scrollTo(0, keepScroll);
     return;
   }
 
@@ -454,6 +456,7 @@ function renderStory() {
   });
 
   updateCharCount();
+  window.scrollTo(0, keepScroll);
 }
 
 function passageNode(si) {
@@ -557,8 +560,6 @@ async function generateStep(si, o, signal) {
   p.error = '';
   p.status = 'busy';
   renderStory();
-  const el = proseEl(si);
-  el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
 
   const parts = buildStepParts({
     step,
