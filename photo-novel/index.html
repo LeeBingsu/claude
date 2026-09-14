@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>사진 소설 · Photo Novel</title>
+<meta name="description" content="사진 여러 장 또는 zip 을 올리면 Gemini 가 장면과 장면 사이를 잇는 소설을 써 주는 도구">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128214;</text></svg>">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <span class="sym">&#128214;</span>
+      <div>
+        <h1>사진 소설</h1>
+        <div class="tag">사진 사이사이를 Gemini 가 소설로 이어 줍니다</div>
+      </div>
+    </div>
+    <button class="icon-btn" id="themeBtn" title="테마 전환" aria-label="테마 전환">&#9681;</button>
+  </header>
+
+  <!-- ------------------------------------------------------- 1. 설정 -->
+  <section class="card">
+    <div class="card-head"><h2><span class="num">1</span> Gemini 설정</h2></div>
+
+    <div class="field">
+      <label for="apiKey">API 키</label>
+      <div class="row">
+        <input type="password" id="apiKey" placeholder="AIza…" autocomplete="off" spellcheck="false">
+        <button class="btn ghost" id="keyToggle" type="button" title="키 보기/숨기기">&#128065;</button>
+      </div>
+      <div class="row wrap-row">
+        <label class="check"><input type="checkbox" id="saveKey"> 이 브라우저에 저장</label>
+        <a class="link" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">키 발급받기 &#8599;</a>
+      </div>
+      <p class="hint">키는 이 브라우저에만 남고, 요청은 브라우저에서 구글 서버로 바로 갑니다. 중간 서버가 없습니다.</p>
+    </div>
+
+    <div class="field">
+      <label for="model">모델</label>
+      <div class="row">
+        <select id="model"></select>
+        <button class="btn ghost" id="loadModels" type="button">목록 불러오기</button>
+      </div>
+      <div class="row">
+        <label class="check"><input type="checkbox" id="customModelOn"> 모델 이름 직접 입력</label>
+        <input type="text" id="customModel" placeholder="gemini-2.5-pro" hidden spellcheck="false">
+      </div>
+      <p class="hint" id="modelHint">키를 넣고 <b>목록 불러오기</b>를 누르면 계정에서 쓸 수 있는 모델이 채워집니다.</p>
+    </div>
+
+    <div class="field">
+      <label for="instructions">맞춤 지시사항</label>
+      <textarea id="instructions" rows="5" placeholder="예) 20대 연인의 여름 여행기. 담담하고 건조한 문체, 짧은 문장 위주. 인물 이름은 '해원'과 '지오'. 대화는 가끔만."></textarea>
+      <p class="hint">문체·시점·인물 설정·금지사항 등 원하는 것을 자유롭게 적으세요. 매 요청에 그대로 전달됩니다.</p>
+    </div>
+
+    <details class="adv">
+      <summary>고급 옵션</summary>
+
+      <div class="grid">
+        <div class="field">
+          <label for="length">대목 분량</label>
+          <select id="length"></select>
+        </div>
+        <div class="field">
+          <label for="language">언어</label>
+          <input type="text" id="language" value="한국어" spellcheck="false">
+        </div>
+        <div class="field">
+          <label for="pov">시점</label>
+          <select id="pov">
+            <option value="auto">자동 (지시사항에 맡김)</option>
+            <option value="first">1인칭</option>
+            <option value="third">3인칭 제한적</option>
+            <option value="omniscient">3인칭 전지적</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="tense">시제</label>
+          <select id="tense">
+            <option value="auto">자동</option>
+            <option value="past">과거</option>
+            <option value="present">현재</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="safety">안전 필터</label>
+          <select id="safety"></select>
+          <p class="hint">모델이 거부하면 한 단계씩 자동으로 내려가며 다시 시도합니다.</p>
+        </div>
+        <div class="field">
+          <label for="thinking">사고(thinking) 예산</label>
+          <select id="thinking">
+            <option value="">모델 기본값</option>
+            <option value="-1">자동 (동적)</option>
+            <option value="0">끔 (빠름)</option>
+            <option value="1024">1024</option>
+            <option value="4096">4096</option>
+            <option value="8192">8192</option>
+            <option value="24576">24576</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="temperature">temperature <b class="val" id="temperatureVal">1.0</b></label>
+          <input type="range" id="temperature" min="0" max="2" step="0.05" value="1">
+        </div>
+        <div class="field">
+          <label for="topP">top_p <b class="val" id="topPVal">0.95</b></label>
+          <input type="range" id="topP" min="0" max="1" step="0.01" value="0.95">
+        </div>
+        <div class="field">
+          <label for="maxTokens">최대 출력 토큰</label>
+          <input type="number" id="maxTokens" min="256" max="65536" step="256" value="4096">
+        </div>
+        <div class="field">
+          <label for="contextChars">참고할 앞 내용 길이(자)</label>
+          <input type="number" id="contextChars" min="500" max="200000" step="500" value="4000">
+        </div>
+        <div class="field">
+          <label for="delayMs">요청 간 대기(ms)</label>
+          <input type="number" id="delayMs" min="0" max="60000" step="100" value="0">
+        </div>
+        <div class="field">
+          <label for="maxDim">이미지 최대 변 길이(px)</label>
+          <input type="number" id="maxDim" min="0" max="4096" step="64" value="1568">
+          <p class="hint">0 이면 원본 그대로 보냅니다. 줄이면 토큰과 업로드 시간이 줄어듭니다.</p>
+        </div>
+      </div>
+
+      <div class="checks">
+        <label class="check"><input type="checkbox" id="optOpening" checked> 첫 대목에 도입부 쓰기</label>
+        <label class="check"><input type="checkbox" id="optEnding" checked> 마지막 사진 뒤에 마무리 쓰기</label>
+        <label class="check"><input type="checkbox" id="optPrevImage" checked> 직전 사진도 함께 보여주기</label>
+        <label class="check"><input type="checkbox" id="optMemo"> 장기 일관성 메모 사용 (요청 2배)</label>
+      </div>
+    </details>
+  </section>
+
+  <!-- ------------------------------------------------------- 2. 사진 -->
+  <section class="card">
+    <div class="card-head">
+      <h2><span class="num">2</span> 사진 올리기</h2>
+      <span class="pill" id="countPill"><b id="countVal">0</b>장</span>
+    </div>
+
+    <div id="drop" class="drop" tabindex="0" role="button" aria-label="사진 또는 zip 올리기">
+      <div class="drop-in">
+        <div class="drop-sym">&#128247;</div>
+        <div><b>여기로 끌어다 놓거나 눌러서 선택</b></div>
+        <div class="hint">zip 파일 또는 이미지 여러 장 · 1.jpg, 2.jpg … 이름 순서대로 정렬됩니다</div>
+      </div>
+      <input type="file" id="fileInput" multiple accept="image/*,.zip,application/zip" hidden>
+      <input type="file" id="dirInput" webkitdirectory directory hidden>
+    </div>
+
+    <div class="row wrap-row tools">
+      <button class="btn ghost" id="pickFiles" type="button">파일 선택</button>
+      <button class="btn ghost" id="pickDir" type="button">폴더 선택</button>
+      <button class="btn ghost" id="sortNow" type="button">이름순 재정렬</button>
+      <button class="btn ghost danger" id="clearImages" type="button">모두 지우기</button>
+    </div>
+
+    <p class="note" id="loadNote" hidden></p>
+    <ul class="thumbs" id="imageList"></ul>
+  </section>
+
+  <!-- ------------------------------------------------------- 3. 생성 -->
+  <section class="card">
+    <div class="card-head"><h2><span class="num">3</span> 소설 만들기</h2></div>
+    <div class="row wrap-row tools">
+      <button class="btn primary" id="runBtn" type="button">생성 시작</button>
+      <button class="btn" id="resumeBtn" type="button">빈 대목만 이어서</button>
+      <button class="btn danger" id="stopBtn" type="button" hidden>중단</button>
+    </div>
+    <div class="bar"><div class="bar-in" id="barIn"></div></div>
+    <p class="status" id="status">사진을 올리고 생성을 시작하세요.</p>
+  </section>
+
+  <!-- ------------------------------------------------------- 4. 결과 -->
+  <section class="card">
+    <div class="card-head">
+      <h2><span class="num">4</span> 결과</h2>
+      <span class="pill"><b id="charVal">0</b>자</span>
+    </div>
+    <div class="row wrap-row tools">
+      <button class="btn ghost" id="copyBtn" type="button">본문 복사</button>
+      <button class="btn ghost" id="saveMd" type="button">.md 저장</button>
+      <button class="btn ghost" id="saveHtml" type="button">.html 저장 (사진 포함)</button>
+      <button class="btn ghost" id="saveTxt" type="button">.txt 저장</button>
+      <button class="btn ghost danger" id="clearStory" type="button">본문 지우기</button>
+    </div>
+    <div id="story" class="story"><p class="empty">아직 쓴 글이 없습니다.</p></div>
+  </section>
+
+  <footer class="foot">
+    브라우저에서만 동작하는 정적 페이지입니다 · 사진과 API 키는 서버로 보내지 않습니다
+  </footer>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

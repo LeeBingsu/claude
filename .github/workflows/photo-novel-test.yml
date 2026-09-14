@@ -1,0 +1,32 @@
+name: Test photo-novel
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'photo-novel/**'
+      - '.github/workflows/photo-novel-test.yml'
+  pull_request:
+    paths:
+      - 'photo-novel/**'
+      - '.github/workflows/photo-novel-test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: photo-novel-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Unit tests
+        run: node photo-novel/test/run-tests.js
