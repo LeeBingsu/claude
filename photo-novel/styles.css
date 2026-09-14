@@ -197,6 +197,9 @@ html[data-theme="dark"] .btn.primary { color: #17131f; }
 .passage.fail .prose { color: var(--bad); }
 .passage .err { font-size: 12px; color: var(--bad); margin: 4px 0 0; }
 
+.saved-row { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); align-items: center; }
+.saved-row .hint { flex: 1; min-width: 180px; margin: 0; }
+
 .foot { text-align: center; color: var(--ink-3); font-size: 12px; margin-top: 26px; }
 
 @media (max-width: 560px) {

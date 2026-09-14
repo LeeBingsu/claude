@@ -138,7 +138,9 @@
         <label class="check"><input type="checkbox" id="optEnding" checked> 마지막 사진 뒤에 마무리 쓰기</label>
         <label class="check"><input type="checkbox" id="optPrevImage" checked> 직전 사진도 함께 보여주기</label>
         <label class="check"><input type="checkbox" id="optMemo"> 장기 일관성 메모 사용 (요청 2배)</label>
+        <label class="check"><input type="checkbox" id="optAutosave" checked> 사진과 본문 자동 저장</label>
       </div>
+
     </details>
   </section>
 
@@ -196,6 +198,11 @@
       <button class="btn ghost danger" id="clearStory" type="button">본문 지우기</button>
     </div>
     <div id="story" class="story"><p class="empty">아직 쓴 글이 없습니다.</p></div>
+
+    <div class="row wrap-row saved-row">
+      <span class="hint" id="savedInfo">자동 저장을 켜 두면 사진·본문·순서가 이 브라우저에 남아 다음에 열 때 그대로 복원됩니다.</span>
+      <button class="btn ghost danger" id="clearSaved" type="button">저장된 작업 지우기</button>
+    </div>
   </section>
 
   <footer class="foot">

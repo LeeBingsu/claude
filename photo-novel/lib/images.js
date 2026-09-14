@@ -61,6 +61,11 @@ async function reencode(blob, maxDim, quality) {
 }
 
 let seq = 0;
+const idBase = Date.now().toString(36);
+
+function nextId() {
+  return `img${idBase}${(++seq).toString(36)}`;
+}
 
 /*
   하나의 이미지 blob → 레코드
@@ -98,15 +103,32 @@ export async function makeImageRecord(name, blob, opts = {}) {
   }
 
   return {
-    id: `img${++seq}`,
+    id: nextId(),
     name,
     mimeType,
     width,
     height,
     bytes: data.size,
     converted,
+    blob: data,                    // 자동 저장(IndexedDB)에 그대로 넣는다
     base64: await blobToBase64(data),
     url: URL.createObjectURL(data)
+  };
+}
+
+/* IndexedDB 에 저장해 둔 사진을 다시 화면에 쓸 수 있는 레코드로 되돌린다. */
+export async function recordFromStored(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    mimeType: row.mimeType,
+    width: row.width || 0,
+    height: row.height || 0,
+    bytes: row.blob.size,
+    converted: Boolean(row.converted),
+    blob: row.blob,
+    base64: await blobToBase64(row.blob),
+    url: URL.createObjectURL(row.blob)
   };
 }
 
