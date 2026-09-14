@@ -1,9 +1,10 @@
 /* app.js - 화면 로직. 설정은 localStorage 에만 저장한다. */
 
-import { collectImages } from './lib/images.js';
+import { collectImages, recordFromStored } from './lib/images.js';
 import { sortByName } from './lib/sort.js';
 import { generate, listModels, SAFETY_LADDER } from './lib/gemini.js';
 import { buildSystem, buildSteps, buildStepParts, buildMemoParts, LENGTHS } from './lib/prompt.js';
+import { saveWork, loadWork, clearWork, storageAvailable } from './lib/store.js';
 
 const $ = (id) => document.getElementById(id);
 const STORE_KEY = 'photoNovel.settings.v1';
@@ -35,7 +36,7 @@ const FIELDS = [
   ['temperature', 'value'], ['topP', 'value'], ['maxTokens', 'value'],
   ['contextChars', 'value'], ['delayMs', 'value'], ['maxDim', 'value'],
   ['optOpening', 'checked'], ['optEnding', 'checked'], ['optPrevImage', 'checked'],
-  ['optMemo', 'checked'], ['saveKey', 'checked']
+  ['optMemo', 'checked'], ['optAutosave', 'checked'], ['saveKey', 'checked']
 ];
 
 function saveSettings() {
@@ -97,6 +98,84 @@ function genConfig() {
     maxOutputTokens: Math.max(64, Number($('maxTokens').value) || 4096),
     candidateCount: 1
   };
+}
+
+/* ------------------------------------------------------------- 자동 저장 */
+
+let saveTimer = 0;
+let saveStopped = '';     // 저장 공간 부족 등으로 멈춘 이유
+
+function autosaveOn() {
+  return $('optAutosave').checked && !saveStopped && storageAvailable();
+}
+
+/* 잦은 호출을 한 번으로 묶는다. */
+function scheduleSave(delay = 600) {
+  if (!autosaveOn()) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(flushSave, delay);
+}
+
+async function flushSave() {
+  if (!autosaveOn()) return;
+  clearTimeout(saveTimer);
+  try {
+    await saveWork({ images: state.images, passages: state.passages, memo: state.memo });
+    showSaved(Date.now());
+  } catch (err) {
+    saveStopped = err.name === 'QuotaExceededError'
+      ? '브라우저 저장 공간이 부족합니다. 고급 옵션의 이미지 최대 변 길이를 줄이거나 저장된 작업을 지워 주세요.'
+      : err.message;
+    $('savedInfo').textContent = `자동 저장을 멈췄습니다 — ${saveStopped}`;
+  }
+}
+
+function storyChars() {
+  return state.passages.reduce((a, p) => a + (p?.text?.length || 0), 0);
+}
+
+function clockOf(ts) {
+  const d = new Date(ts);
+  const p = (n) => String(n).padStart(2, '0');
+  const today = new Date().toDateString() === d.toDateString();
+  return today ? `${p(d.getHours())}:${p(d.getMinutes())}` : `${d.getMonth() + 1}월 ${d.getDate()}일 ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function showSaved(ts) {
+  $('savedInfo').textContent = state.images.length || storyChars()
+    ? `자동 저장됨 · 사진 ${state.images.length}장 · ${storyChars().toLocaleString('ko-KR')}자 · ${clockOf(ts)}`
+    : '저장된 작업이 없습니다.';
+}
+
+/* 지난번 작업을 되살린다. */
+async function restoreWork() {
+  if (!$('optAutosave').checked || !storageAvailable()) return;
+  let work = null;
+  try {
+    work = await loadWork();
+  } catch (err) {
+    setStatus(`저장된 작업을 불러오지 못했습니다: ${err.message}`, true);
+    return;
+  }
+  if (!work) return;
+  const hasText = work.passages.some((p) => p?.text);
+  if (!work.images.length && !hasText) return;
+
+  try {
+    const images = [];
+    for (const row of work.images) images.push(await recordFromStored(row));
+    state.images = images;
+    state.passages = work.passages;
+    state.memo = work.memo;
+  } catch (err) {
+    setStatus(`저장된 사진을 여는 데 실패했습니다: ${err.message}`, true);
+    return;
+  }
+
+  renderImages();
+  renderStory();
+  showSaved(work.updatedAt || Date.now());
+  setStatus(`지난 작업을 불러왔습니다 · 사진 ${state.images.length}장 · ${storyChars().toLocaleString('ko-KR')}자 (${clockOf(work.updatedAt || Date.now())} 저장)`);
 }
 
 /* ------------------------------------------------------------- 초기 UI */
@@ -218,6 +297,7 @@ function move(i, d) {
   state.images.splice(j, 0, x);
   renderImages();
   renderStory();
+  scheduleSave();
 }
 
 function remove(i) {
@@ -225,6 +305,7 @@ function remove(i) {
   URL.revokeObjectURL(x.url);
   renderImages();
   renderStory();
+  scheduleSave();
 }
 
 /* 드래그로 순서 바꾸기 */
@@ -256,6 +337,7 @@ $('imageList').addEventListener('drop', (e) => {
   dragFrom = -1;
   renderImages();
   renderStory();
+  scheduleSave();
 });
 $('imageList').addEventListener('dragend', () => {
   document.querySelectorAll('.thumb.over, .thumb.drag').forEach((n) => n.classList.remove('over', 'drag'));
@@ -284,6 +366,7 @@ async function addFiles(files) {
       note.textContent = errors.join('\n');
     }
     setStatus(state.images.length ? `${state.images.length}장 준비됨. 생성을 시작할 수 있습니다.` : '읽어들인 사진이 없습니다.');
+    scheduleSave(0);
   } catch (err) {
     note.hidden = false;
     note.textContent = err.message;
@@ -316,6 +399,7 @@ $('sortNow').addEventListener('click', () => {
   state.images = sortByName(state.images);
   renderImages();
   renderStory();
+  scheduleSave();
 });
 $('clearImages').addEventListener('click', () => {
   if (state.images.length && !confirm('사진을 모두 지울까요?')) return;
@@ -323,6 +407,7 @@ $('clearImages').addEventListener('click', () => {
   state.images = [];
   renderImages();
   renderStory();
+  scheduleSave(0);
 });
 
 /* ------------------------------------------------------------- 결과 화면 */
@@ -340,6 +425,7 @@ function stepLabel(step) {
 function renderStory() {
   state.steps = buildSteps(state.images.length, opts());
   const box = $('story');
+  const keepScroll = window.scrollY;      // 다시 그리는 동안 보던 자리를 지킨다
   box.textContent = '';
 
   if (!state.images.length) {
@@ -348,6 +434,7 @@ function renderStory() {
     p.textContent = '아직 쓴 글이 없습니다.';
     box.append(p);
     updateCharCount();
+    window.scrollTo(0, keepScroll);
     return;
   }
 
@@ -369,6 +456,7 @@ function renderStory() {
   });
 
   updateCharCount();
+  window.scrollTo(0, keepScroll);
 }
 
 function passageNode(si) {
@@ -407,6 +495,7 @@ function passageNode(si) {
     p.text = prose.innerText;
     p.status = p.text.trim() ? 'done' : 'empty';
     updateCharCount();
+    scheduleSave(1200);
   });
 
   wrap.append(head, prose);
@@ -471,8 +560,6 @@ async function generateStep(si, o, signal) {
   p.error = '';
   p.status = 'busy';
   renderStory();
-  const el = proseEl(si);
-  el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
 
   const parts = buildStepParts({
     step,
@@ -508,6 +595,7 @@ async function generateStep(si, o, signal) {
     if (res.finishReason === 'MAX_TOKENS') p.error = FINISH_MESSAGE.MAX_TOKENS;
   }
   renderStory();
+  scheduleSave(0);
 
   if (o.memo && p.status === 'done') {
     try {
@@ -521,7 +609,10 @@ async function generateStep(si, o, signal) {
         state: state.api,
         signal
       });
-      if (memoRes.text.trim()) state.memo = memoRes.text.trim();
+      if (memoRes.text.trim()) {
+        state.memo = memoRes.text.trim();
+        scheduleSave(0);
+      }
     } catch (err) {
       if (err.name === 'AbortError') throw err;   // 메모 실패는 본문 생성을 막지 않는다
     }
@@ -715,6 +806,7 @@ $('clearStory').addEventListener('click', () => {
   renderStory();
   setProgress(0, 1);
   setStatus('본문을 지웠습니다.');
+  scheduleSave(0);
 });
 
 /* ------------------------------------------------------------- 기타 UI */
@@ -738,6 +830,33 @@ $('customModelOn').addEventListener('change', () => {
 });
 
 $('loadModels').addEventListener('click', fetchModels);
+
+$('optAutosave').addEventListener('change', async () => {
+  saveStopped = '';
+  if ($('optAutosave').checked) {
+    await flushSave();
+    return;
+  }
+  try { await clearWork(); } catch { /* 지울 게 없으면 그만 */ }
+  $('savedInfo').textContent = '자동 저장이 꺼져 있습니다. 새로고침하면 사진과 본문이 사라집니다.';
+});
+
+$('clearSaved').addEventListener('click', async () => {
+  if (!confirm('이 브라우저에 저장된 사진과 본문을 지울까요? 화면에 있는 내용은 그대로 남습니다.')) return;
+  try {
+    await clearWork();
+    saveStopped = '';
+    $('savedInfo').textContent = $('optAutosave').checked
+      ? '저장된 작업을 지웠습니다. 다음 변경부터 다시 저장됩니다.'
+      : '저장된 작업을 지웠습니다.';
+  } catch (err) {
+    $('savedInfo').textContent = `지우지 못했습니다: ${err.message}`;
+  }
+});
+
+// 탭을 덮거나 닫을 때, 아직 미뤄 둔 저장을 흘려보낸다.
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSave(); });
+window.addEventListener('pagehide', () => { flushSave(); });
 
 $('temperature').addEventListener('input', () => { $('temperatureVal').textContent = Number($('temperature').value).toFixed(2); });
 $('topP').addEventListener('input', () => { $('topPVal').textContent = Number($('topP').value).toFixed(2); });
@@ -763,3 +882,10 @@ $('temperatureVal').textContent = Number($('temperature').value).toFixed(2);
 $('topPVal').textContent = Number($('topP').value).toFixed(2);
 renderImages();
 renderStory();
+if (!storageAvailable()) {
+  $('optAutosave').checked = false;
+  $('optAutosave').disabled = true;
+  $('savedInfo').textContent = '이 브라우저에서는 자동 저장을 쓸 수 없습니다.';
+} else {
+  await restoreWork();
+}

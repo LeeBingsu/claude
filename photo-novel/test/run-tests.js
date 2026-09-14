@@ -5,6 +5,7 @@ import { naturalCompare, naturalPathCompare, sortByName } from '../lib/sort.js';
 import { listZipEntries, unzip } from '../lib/zip.js';
 import { buildSteps, buildSystem, buildStepParts, trimContext } from '../lib/prompt.js';
 import { generate, safetySettingsFor, SAFETY_LADDER } from '../lib/gemini.js';
+import { planImageSync, normalizePassages } from '../lib/store.js';
 
 let passed = 0;
 const failures = [];
@@ -203,6 +204,32 @@ await check('단계를 내리면 BLOCK_NONE, 마지막은 기본값', () => {
   eq(safetySettingsFor(1).length, 4);
   ok(safetySettingsFor(2).every((x) => x.threshold === 'BLOCK_NONE'), 'BLOCK_NONE');
   eq(safetySettingsFor(SAFETY_LADDER.length - 1), null);
+});
+
+/* ------------------------------------------------------------- 자동 저장 */
+
+await check('이미 저장한 사진은 다시 쓰지 않고, 빠진 사진만 지운다', () => {
+  eq(planImageSync(['a', 'b', 'c'], ['b', 'c', 'd']), { put: ['d'], del: ['a'] });
+  eq(planImageSync([], ['a']), { put: ['a'], del: [] });
+  eq(planImageSync(['a'], []), { put: [], del: ['a'] });
+  eq(planImageSync(['a', 'b'], ['b', 'a']), { put: [], del: [] });   // 순서만 바뀐 경우
+});
+
+await check('저장할 때 생성 중(busy) 상태는 남기지 않는다', () => {
+  eq(normalizePassages([
+    { text: '쓰다 만 글', status: 'busy' },
+    { text: '', status: 'busy' },
+    { text: '완성', status: 'done' },
+    { text: '', status: 'error', error: '차단됨' },
+    null
+  ]), [
+    { text: '쓰다 만 글', status: 'done', error: '' },
+    { text: '', status: 'empty', error: '' },
+    { text: '완성', status: 'done', error: '' },
+    { text: '', status: 'error', error: '차단됨' },
+    { text: '', status: 'empty', error: '' }
+  ]);
+  eq(normalizePassages(undefined), []);
 });
 
 /* ------------------------------------------------------------- API 호출 */
