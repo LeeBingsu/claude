@@ -51,6 +51,60 @@ export function buildSystem(opts) {
   return lines.join('\n');
 }
 
+/* 본문과 메모를 한 응답 안에서 가르는 표시줄 */
+export const MEMO_MARKER = '<<<메모>>>';
+
+const MEMO_LINE = /^[\s*_#>-]*<<<\s*메모\s*>>>[\s*_#:>-]*$/m;
+
+/* 스트리밍 도중 표시줄이 반쯤 도착한 경우("<<<메") 화면에 새지 않게 잘라낸다. */
+function trimPartialMarker(text) {
+  for (let n = Math.min(MEMO_MARKER.length - 1, text.length); n > 0; n--) {
+    if (text.endsWith(MEMO_MARKER.slice(0, n))) return text.slice(0, text.length - n);
+  }
+  return text;
+}
+
+/* 한 응답을 본문과 메모로 가른다. 표시줄이 없으면 전부 본문으로 본다. */
+export function splitMemo(text) {
+  if (!text) return { passage: '', memo: '' };
+  let at = -1;
+  let len = 0;
+  const line = MEMO_LINE.exec(text);
+  if (line) {
+    at = line.index;
+    len = line[0].length;
+  } else {
+    const i = text.indexOf(MEMO_MARKER);
+    if (i >= 0) { at = i; len = MEMO_MARKER.length; }
+  }
+  if (at < 0) return { passage: trimPartialMarker(text).trimEnd(), memo: '' };
+  return {
+    // 표시줄에 ** 같은 장식이 붙어 오는 경우가 있어 양쪽에서 걷어낸다.
+    passage: text.slice(0, at).replace(/[\s*_#>-]+$/, ''),
+    memo: text.slice(at + len).replace(/^[\s*_#:>-]+/, '').trim()
+  };
+}
+
+/* 같은 요청에서 메모까지 받아 올 때 덧붙이는 지시 */
+export function memoInstruction(memo) {
+  return [
+    '',
+    `본문을 다 쓴 뒤, 아래 표시줄을 그대로 한 줄에 적고 그 아래에 이야기 설정 메모를 ${memo ? '갱신해' : ''} 적어라.`,
+    MEMO_MARKER,
+    '메모에는 인물(이름·호칭·외모·말투), 관계, 장소, 시간의 흐름, 반복해서 나오는 소품, 문체와 어조만 담는다.',
+    '600자를 넘기지 말고 짧은 문장으로만 쓴다. 표시줄 위에는 소설 본문만 있어야 한다.',
+    '메모는 다음 대목을 쓸 때만 쓰는 작업 노트다. 이 요청에 한해 "본문만 출력" 규칙보다 이 지시가 우선한다.'
+  ].join('\n');
+}
+
+/* 메모를 갱신할 차례인지. 마지막 대목 뒤에는 쓸 곳이 없으니 건너뛴다. */
+export function memoDue(stepIndex, totalSteps, every) {
+  const n = Number(every) || 0;
+  if (n <= 0) return false;
+  if (stepIndex >= totalSteps - 1) return false;
+  return (stepIndex + 1) % n === 0;
+}
+
 function imagePart(image) {
   return { inline_data: { mime_type: image.mimeType, data: image.base64 } };
 }
@@ -85,6 +139,7 @@ export function buildStepParts({ step, images, story, memo, opts }) {
         '본문만 출력한다.'
       ].join('\n')
     });
+    if (opts.askMemo) parts.push({ text: memoInstruction(memo) });
     return parts;
   }
 
@@ -116,6 +171,7 @@ export function buildStepParts({ step, images, story, memo, opts }) {
     task.push('다음 사진이 마지막 장면이므로, 이 대목이 이야기의 끝으로 향하도록 마무리해라.');
   }
   task.push('설명 없이 소설 본문만 출력한다.');
+  if (opts.askMemo) task.push(memoInstruction(memo));
   parts.push({ text: task.join('\n') });
   return parts;
 }

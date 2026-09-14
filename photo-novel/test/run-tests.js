@@ -3,7 +3,7 @@
 import { deflateRawSync, crc32 } from 'node:zlib';
 import { naturalCompare, naturalPathCompare, sortByName } from '../lib/sort.js';
 import { listZipEntries, unzip } from '../lib/zip.js';
-import { buildSteps, buildSystem, buildStepParts, trimContext } from '../lib/prompt.js';
+import { buildSteps, buildSystem, buildStepParts, trimContext, splitMemo, memoDue, MEMO_MARKER } from '../lib/prompt.js';
 import { generate, safetySettingsFor, SAFETY_LADDER } from '../lib/gemini.js';
 import { planImageSync, normalizePassages } from '../lib/store.js';
 
@@ -190,6 +190,50 @@ await check('문맥은 뒤쪽만 남기고 잘린다', () => {
   ok(t.length < 1100, '길이');
   ok(t.startsWith('…(앞부분 생략)'), '생략 표시');
   eq(trimContext('짧음', 1000), '짧음');
+});
+
+/* ------------------------------------------------------------- 메모 */
+
+await check('한 응답에서 본문과 메모를 가른다', () => {
+  eq(splitMemo(`해가 기울었다.\n\n${MEMO_MARKER}\n해원: 20대, 존댓말.`),
+    { passage: '해가 기울었다.', memo: '해원: 20대, 존댓말.' });
+  eq(splitMemo('표시줄이 없으면 전부 본문'), { passage: '표시줄이 없으면 전부 본문', memo: '' });
+  eq(splitMemo(''), { passage: '', memo: '' });
+});
+
+await check('표시줄에 장식이 붙어도 본문에 새지 않는다', () => {
+  eq(splitMemo(`앞 문장.\n**${MEMO_MARKER}**\n메모 내용`), { passage: '앞 문장.', memo: '메모 내용' });
+  eq(splitMemo(`앞 문장.\n### ${MEMO_MARKER}\n메모 내용`), { passage: '앞 문장.', memo: '메모 내용' });
+});
+
+await check('스트리밍 중 반쯤 온 표시줄은 화면에 내보내지 않는다', () => {
+  eq(splitMemo('본문입니다. <<<메').passage, '본문입니다.');
+  eq(splitMemo('본문입니다. <<<메모>>').passage, '본문입니다.');
+  eq(splitMemo('본문입니다.').passage, '본문입니다.');
+});
+
+await check('메모는 주기대로, 마지막 대목에서는 요청하지 않는다', () => {
+  eq([0, 1, 2, 3].map((i) => memoDue(i, 4, 1)), [true, true, true, false]);
+  eq([0, 1, 2, 3].map((i) => memoDue(i, 4, 2)), [false, true, false, false]);
+  eq([0, 1, 2, 3, 4, 5].map((i) => memoDue(i, 6, 3)), [false, false, true, false, false, false]);
+  eq(memoDue(0, 1, 1), false, '대목이 하나뿐이면');
+  eq(memoDue(0, 4, 0), false, '주기가 0이면');
+});
+
+await check('메모를 함께 요청할 때만 지시가 붙는다', () => {
+  const images = [0, 1].map((i) => ({ name: `${i + 1}.jpg`, mimeType: 'image/jpeg', base64: 'X' }));
+  const step = { kind: 'bridge', from: 0, to: 1 };
+  const base = { includePrevImage: true, contextChars: 4000 };
+
+  const without = buildStepParts({ step, images, story: '', memo: '', opts: base });
+  ok(!without.some((p) => p.text && p.text.includes(MEMO_MARKER)), '기본은 없음');
+
+  const withMemo = buildStepParts({ step, images, story: '', memo: '기존 메모', opts: { ...base, askMemo: true } });
+  ok(withMemo.some((p) => p.text && p.text.includes(MEMO_MARKER)), '표시줄 안내');
+  ok(withMemo.some((p) => p.text && p.text.includes('갱신해')), '기존 메모가 있으면 갱신 지시');
+
+  const ending = buildStepParts({ step: { kind: 'ending', from: 1 }, images, story: '', memo: '', opts: { ...base, askMemo: true } });
+  ok(ending.some((p) => p.text && p.text.includes(MEMO_MARKER)), '마무리 대목도 같은 형식');
 });
 
 /* ------------------------------------------------------------- 안전 설정 */

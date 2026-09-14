@@ -3,7 +3,7 @@
 import { collectImages, recordFromStored } from './lib/images.js';
 import { sortByName } from './lib/sort.js';
 import { generate, listModels, SAFETY_LADDER } from './lib/gemini.js';
-import { buildSystem, buildSteps, buildStepParts, buildMemoParts, LENGTHS } from './lib/prompt.js';
+import { buildSystem, buildSteps, buildStepParts, buildMemoParts, splitMemo, memoDue, LENGTHS } from './lib/prompt.js';
 import { saveWork, loadWork, clearWork, storageAvailable } from './lib/store.js';
 
 const $ = (id) => document.getElementById(id);
@@ -36,7 +36,7 @@ const FIELDS = [
   ['temperature', 'value'], ['topP', 'value'], ['maxTokens', 'value'],
   ['contextChars', 'value'], ['delayMs', 'value'], ['maxDim', 'value'],
   ['optOpening', 'checked'], ['optEnding', 'checked'], ['optPrevImage', 'checked'],
-  ['optMemo', 'checked'], ['optAutosave', 'checked'], ['saveKey', 'checked']
+  ['memoMode', 'value'], ['memoEvery', 'value'], ['optAutosave', 'checked'], ['saveKey', 'checked']
 ];
 
 function saveSettings() {
@@ -56,6 +56,8 @@ function loadSettings() {
   let s = {};
   try { s = JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); } catch { s = {}; }
   if (s.theme) document.documentElement.dataset.theme = s.theme;
+  // 예전 버전의 체크박스 설정을 새 선택값으로 옮긴다.
+  if (s.memoMode === undefined && s.optMemo !== undefined) s.memoMode = s.optMemo ? 'separate' : 'off';
   for (const [id, prop] of FIELDS) {
     const el = $(id);
     if (!el || s[id] === undefined) continue;
@@ -81,7 +83,8 @@ function opts() {
     opening: $('optOpening').checked,
     ending: $('optEnding').checked,
     includePrevImage: $('optPrevImage').checked,
-    memo: $('optMemo').checked,
+    memoMode: $('memoMode').value,
+    memoEvery: Number($('memoEvery').value) || 1,
     contextChars: Math.max(0, Number($('contextChars').value) || 4000),
     delayMs: Math.max(0, Number($('delayMs').value) || 0)
   };
@@ -187,6 +190,7 @@ function fillSelects() {
   }
   len.value = 'medium';
 
+  $('memoMode').value = 'inline';      // 추가 요청 없이 일관성을 지킬 수 있으므로 기본값
   const safety = $('safety');
   SAFETY_LADDER.forEach((rung, i) => safety.append(new Option(rung.label, String(i))));
   safety.value = '0';
@@ -456,6 +460,7 @@ function renderStory() {
   });
 
   updateCharCount();
+  renderMemo();
   window.scrollTo(0, keepScroll);
 }
 
@@ -512,6 +517,15 @@ function proseEl(si) {
   return document.querySelector(`.passage[data-p="${si}"] .prose`);
 }
 
+function renderMemo() {
+  const box = $('memoBox');
+  const text = $('memoText');
+  const on = $('memoMode').value !== 'off' || Boolean(state.memo);
+  box.hidden = !on;
+  if (document.activeElement !== text) text.value = state.memo;
+  $('memoLen').textContent = state.memo ? `${state.memo.length}자` : '(아직 없음)';
+}
+
 function updateCharCount() {
   const n = state.passages.reduce((a, p) => a + (p?.text?.length || 0), 0);
   $('charVal').textContent = String(n);
@@ -555,6 +569,8 @@ const FINISH_MESSAGE = {
 
 async function generateStep(si, o, signal) {
   const step = state.steps[si];
+  const askMemo = o.memoMode !== 'off' && memoDue(si, state.steps.length, o.memoEvery);
+  const inlineMemo = askMemo && o.memoMode === 'inline';
   const p = passageAt(si);
   p.text = '';
   p.error = '';
@@ -565,9 +581,11 @@ async function generateStep(si, o, signal) {
     step,
     images: state.images,
     story: storyBefore(si),
-    memo: o.memo ? state.memo : '',
-    opts: o
+    memo: o.memoMode !== 'off' ? state.memo : '',
+    opts: { ...o, askMemo: inlineMemo }
   });
+
+  let raw = '';
 
   const res = await generate({
     apiKey: $('apiKey').value.trim(),
@@ -579,14 +597,22 @@ async function generateStep(si, o, signal) {
     state: state.api,
     signal,
     onDelta: (t) => {
-      p.text += t;
+      raw += t;
+      // 메모를 같이 받는 중이면 표시줄 뒤쪽은 화면에 내보내지 않는다.
+      p.text = inlineMemo ? splitMemo(raw).passage : raw;
       const node = proseEl(si);
       if (node) node.textContent = p.text;
       updateCharCount();
     }
   });
 
-  p.text = (res.text || '').trim();
+  if (inlineMemo) {
+    const cut = splitMemo(res.text || '');
+    p.text = cut.passage.trim();
+    if (cut.memo) state.memo = cut.memo;      // 표시줄이 없으면 이전 메모를 그대로 둔다
+  } else {
+    p.text = (res.text || '').trim();
+  }
   if (!p.text) {
     p.status = 'error';
     p.error = FINISH_MESSAGE[res.blockReason] || FINISH_MESSAGE[res.finishReason] || '빈 응답을 받았습니다.';
@@ -597,7 +623,7 @@ async function generateStep(si, o, signal) {
   renderStory();
   scheduleSave(0);
 
-  if (o.memo && p.status === 'done') {
+  if (askMemo && o.memoMode === 'separate' && p.status === 'done') {
     try {
       const memoRes = await generate({
         apiKey: $('apiKey').value.trim(),
@@ -611,6 +637,7 @@ async function generateStep(si, o, signal) {
       });
       if (memoRes.text.trim()) {
         state.memo = memoRes.text.trim();
+        renderMemo();
         scheduleSave(0);
       }
     } catch (err) {
@@ -830,6 +857,14 @@ $('customModelOn').addEventListener('change', () => {
 });
 
 $('loadModels').addEventListener('click', fetchModels);
+
+$('memoMode').addEventListener('change', renderMemo);
+
+$('memoText').addEventListener('input', () => {
+  state.memo = $('memoText').value;
+  $('memoLen').textContent = state.memo ? `${state.memo.length}자` : '(아직 없음)';
+  scheduleSave(1200);
+});
 
 $('optAutosave').addEventListener('change', async () => {
   saveStopped = '';

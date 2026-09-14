@@ -127,6 +127,24 @@
           <input type="number" id="delayMs" min="0" max="60000" step="100" value="0">
         </div>
         <div class="field">
+          <label for="memoMode">장기 일관성 메모</label>
+          <select id="memoMode">
+            <option value="off">사용 안 함</option>
+            <option value="inline">같은 요청에 함께 (추가 요청 없음)</option>
+            <option value="separate">따로 요청 (요청 수 2배)</option>
+          </select>
+          <p class="hint">인물·장소·문체 메모를 유지해 사진이 많아도 설정이 흐트러지지 않게 합니다.</p>
+        </div>
+        <div class="field">
+          <label for="memoEvery">메모 갱신 주기</label>
+          <select id="memoEvery">
+            <option value="1">대목마다</option>
+            <option value="2">2대목마다</option>
+            <option value="3">3대목마다</option>
+            <option value="5">5대목마다</option>
+          </select>
+        </div>
+        <div class="field">
           <label for="maxDim">이미지 최대 변 길이(px)</label>
           <input type="number" id="maxDim" min="0" max="4096" step="64" value="1568">
           <p class="hint">0 이면 원본 그대로 보냅니다. 줄이면 토큰과 업로드 시간이 줄어듭니다.</p>
@@ -137,7 +155,6 @@
         <label class="check"><input type="checkbox" id="optOpening" checked> 첫 대목에 도입부 쓰기</label>
         <label class="check"><input type="checkbox" id="optEnding" checked> 마지막 사진 뒤에 마무리 쓰기</label>
         <label class="check"><input type="checkbox" id="optPrevImage" checked> 직전 사진도 함께 보여주기</label>
-        <label class="check"><input type="checkbox" id="optMemo"> 장기 일관성 메모 사용 (요청 2배)</label>
         <label class="check"><input type="checkbox" id="optAutosave" checked> 사진과 본문 자동 저장</label>
       </div>
 
@@ -198,6 +215,12 @@
       <button class="btn ghost danger" id="clearStory" type="button">본문 지우기</button>
     </div>
     <div id="story" class="story"><p class="empty">아직 쓴 글이 없습니다.</p></div>
+
+    <details class="memo" id="memoBox" hidden>
+      <summary>이야기 메모 <span class="hint" id="memoLen"></span></summary>
+      <textarea id="memoText" rows="6" spellcheck="false" placeholder="인물·장소·문체 메모가 여기에 쌓입니다."></textarea>
+      <p class="hint">모델이 다음 대목을 쓸 때 참고하는 노트입니다. 틀린 곳은 직접 고쳐도 됩니다.</p>
+    </details>
 
     <div class="row wrap-row saved-row">
       <span class="hint" id="savedInfo">자동 저장을 켜 두면 사진·본문·순서가 이 브라우저에 남아 다음에 열 때 그대로 복원됩니다.</span>
