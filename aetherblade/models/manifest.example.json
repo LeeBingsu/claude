@@ -1,9 +1,0 @@
-{
-  "outfits": [
-    { "name": "교복",   "files": ["chisa_base_v1.03.zip"] },
-    { "name": "수영복", "files": ["chisa_swimsuit.zip"] }
-  ],
-  "targetHeight": 1.72,
-  "physics": true,
-  "faceFlip": false
-}

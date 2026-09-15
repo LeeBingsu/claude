@@ -1,2 +1,0 @@
-A balanced multiplayer PvP ruleset in one vanilla datapack — pearl/totem caps, mace & spear cooldowns, crystal & anchor safety, and combat-logging death.
-No mods or plugins; server-side only, works on 1.21.11 through 26.2 and beyond.
