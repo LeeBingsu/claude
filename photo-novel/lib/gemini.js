@@ -12,6 +12,8 @@ export const HARM_CATEGORIES = [
 
 /* 차단을 최대한 푸는 순서. 앞쪽이 가장 느슨하고, 모델이 거부하면 한 칸씩 내려간다.
    OFF 는 필터 자체를 끄는 값이고(지원 모델 한정), BLOCK_NONE 은 "차단하지 않음" 이다. */
+const RETRYABLE = new Set([408, 429, 500, 502, 503, 504]);
+
 export const SAFETY_LADDER = [
   { id: 'off-all', label: '필터 끔(OFF) · 전체', threshold: 'OFF', civic: true },
   { id: 'off-nocivic', label: '필터 끔(OFF) · 시민무결성 제외', threshold: 'OFF', civic: false },
@@ -26,6 +28,25 @@ export function safetySettingsFor(step) {
   return HARM_CATEGORIES
     .filter((c) => rung.civic || c !== 'HARM_CATEGORY_CIVIC_INTEGRITY')
     .map((category) => ({ category, threshold: rung.threshold }));
+}
+
+/* 내용 때문에 막힌 응답인지. 이런 실패는 같은 요청을 다시 보내면 통과하기도 한다. */
+const REFUSAL_REASONS = new Set([
+  'SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'RECITATION', 'SPII', 'OTHER', 'IMAGE_SAFETY'
+]);
+
+export function isRefusal(result) {
+  if (!result) return true;
+  if (result.blockReason) return true;
+  if (!String(result.text || '').trim()) return true;          // 빈 응답도 사실상 거부
+  return REFUSAL_REASONS.has(result.finishReason);
+}
+
+/* 오류로 던져진 경우, 잠시 뒤 다시 걸어 볼 만한지(설정 잘못은 다시 걸어도 소용없다) */
+export function isWorthRetrying(err) {
+  if (!err || err.name === 'AbortError') return false;
+  if (!(err instanceof GeminiError)) return true;              // 네트워크 문제
+  return err.status === 0 || RETRYABLE.has(err.status);
 }
 
 export class GeminiError extends Error {
@@ -75,8 +96,6 @@ export async function listModels(apiKey, { signal } = {}) {
   }
   return models;
 }
-
-const RETRYABLE = new Set([408, 429, 500, 502, 503, 504]);
 
 function isSafetyArgError(err) {
   if (err.status !== 400) return false;

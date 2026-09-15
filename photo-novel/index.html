@@ -127,6 +127,19 @@
           <input type="number" id="delayMs" min="0" max="60000" step="100" value="0">
         </div>
         <div class="field">
+          <label for="retryRefusal">거부·빈 응답일 때</label>
+          <select id="retryRefusal">
+            <option value="0">그냥 넘어가기 — 실패로 두고 다음 대목으로</option>
+            <option value="3">3번까지 다시 시도하고, 안 되면 넘어가기</option>
+            <option value="5">5번까지 다시 시도하고, 안 되면 넘어가기</option>
+            <option value="10">10번까지 다시 시도하고, 안 되면 넘어가기</option>
+            <option value="-1">될 때까지 — 이 대목이 나오기 전엔 다음으로 넘어가지 않음</option>
+          </select>
+          <p class="hint">"정책상 거부", 안전 필터, 빈 응답으로 끝난 대목에 해당합니다.
+            "될 때까지" 는 중단을 누를 때까지 같은 자리에서 계속 씁니다.
+            설정값(temperature 등)은 그대로 두고, 다른 문장으로 써 달라고만 덧붙입니다.</p>
+        </div>
+        <div class="field">
           <label for="memoMode">장기 일관성 메모</label>
           <select id="memoMode">
             <option value="off">사용 안 함</option>
@@ -157,6 +170,9 @@
         <label class="check"><input type="checkbox" id="optOpening" checked> 첫 대목에서 인물·배경 소개</label>
         <label class="check"><input type="checkbox" id="optEnding" checked> 마지막 사진 뒤에 마무리 쓰기</label>
         <label class="check"><input type="checkbox" id="optPrevImage" checked> 직전 사진도 함께 보여주기</label>
+        <label class="check"><input type="checkbox" id="optSoften"> 여러 번 막히면 더 우회적으로 쓰도록 요청</label>
+        <label class="check"><input type="checkbox" id="optWakeLock" checked> 생성 중 화면 꺼짐 방지</label>
+        <label class="check"><input type="checkbox" id="optAutoResume" checked> 다시 열면 남은 대목 이어 쓰기</label>
         <label class="check"><input type="checkbox" id="optAutosave" checked> 사진과 본문 자동 저장</label>
       </div>
 

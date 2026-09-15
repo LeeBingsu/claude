@@ -5,9 +5,9 @@ import { naturalCompare, naturalPathCompare, sortByName } from '../lib/sort.js';
 import { listZipEntries, unzip, createZip } from '../lib/zip.js';
 import {
   buildSteps, buildSystem, buildStepParts, trimContext, splitMemo, memoDue, MEMO_MARKER,
-  parseMemoBlock, appendSettings, buildTimeline, stepId, stepTitle
+  parseMemoBlock, appendSettings, buildTimeline, stepId, stepTitle, retryNote
 } from '../lib/prompt.js';
-import { generate, safetySettingsFor, SAFETY_LADDER } from '../lib/gemini.js';
+import { generate, safetySettingsFor, isRefusal, isWorthRetrying, GeminiError, SAFETY_LADDER } from '../lib/gemini.js';
 import { planImageSync, normalizePassages } from '../lib/store.js';
 import { buildProject, readProject, readManifest, imageEntryName, safeFileName, PROJECT_FILE } from '../lib/project.js';
 
@@ -326,7 +326,7 @@ await check('이미 저장한 사진은 다시 쓰지 않고, 빠진 사진만 �
   eq(planImageSync(['a', 'b'], ['b', 'a']), { put: [], del: [] });   // 순서만 바뀐 경우
 });
 
-await check('저장할 때 생성 중(busy) 상태는 남기지 않는다', () => {
+await check('쓰다 만 대목은 저장하지 않는다', () => {
   eq(normalizePassages([
     { text: '쓰다 만 글', status: 'busy' },
     { text: '', status: 'busy' },
@@ -334,7 +334,7 @@ await check('저장할 때 생성 중(busy) 상태는 남기지 않는다', () =
     { text: '', status: 'error', error: '차단됨' },
     null
   ]), [
-    { text: '쓰다 만 글', status: 'done', error: '' },
+    { text: '', status: 'empty', error: '' },
     { text: '', status: 'empty', error: '' },
     { text: '완성', status: 'done', error: '' },
     { text: '', status: 'error', error: '차단됨' },
@@ -343,15 +343,101 @@ await check('저장할 때 생성 중(busy) 상태는 남기지 않는다', () =
   eq(normalizePassages(undefined), {});
 });
 
-await check('이름표로 저장할 때 빈 대목은 빼고 담는다', () => {
+await check('이름표로 저장할 때 빈 대목과 쓰다 만 대목은 빼고 담는다', () => {
   eq(normalizePassages({
-    pro: { text: '도입부', status: 'busy' },
+    pro: { text: '완성된 도입부', status: 'done' },
+    half: { text: '쓰다 만', status: 'busy' },
     b0: { text: '', status: 'empty' },
     b1: { text: '', status: 'error', error: '차단됨' }
   }), {
-    pro: { text: '도입부', status: 'done', error: '' },
+    pro: { text: '완성된 도입부', status: 'done', error: '' },
     b1: { text: '', status: 'error', error: '차단됨' }
   });
+});
+
+/* ------------------------------------------------------------- 구멍 메우기 */
+
+await check('건너뛴 구간은 줄거리에 비었다고 적힌다', () => {
+  const steps = buildSteps(4, { prologue: true, ending: false });
+  const beats = { pro: '집을 나섰다', b1: '바다에 닿았다' };
+  eq(buildTimeline(steps, beats, Infinity, new Set(['b0'])),
+    '1번 장면 앞 · 도입부: 집을 나섰다\n1→2번 장면 사이: (비어 있음 — 아직 쓰지 않은 구간)\n2→3번 장면 사이: 바다에 닿았다');
+  // 아직 차례가 오지 않은 뒷구간은 알리지 않는다
+  eq(buildTimeline(steps, beats, 2, new Set(['b0'])),
+    '1번 장면 앞 · 도입부: 집을 나섰다\n1→2번 장면 사이: (비어 있음 — 아직 쓰지 않은 구간)');
+  // 글은 있는데 줄거리 한 줄만 없는 구간은 조용히 건너뛴다
+  eq(buildTimeline(steps, beats, Infinity, new Set()),
+    '1번 장면 앞 · 도입부: 집을 나섰다\n2→3번 장면 사이: 바다에 닿았다');
+});
+
+await check('앞이 비면 그 사이를 메우라고 시킨다', () => {
+  const images = [0, 1, 2].map((i) => ({ name: `${i + 1}.jpg`, mimeType: 'image/jpeg', base64: 'X' }));
+  const base = { includePrevImage: true, contextChars: 4000 };
+  const parts = buildStepParts({
+    step: { kind: 'bridge', from: 1, to: 2 }, images, story: '앞 본문', memo: '', timeline: '',
+    gapBefore: '1→2번 장면 사이', opts: base
+  });
+  const all = parts.map((x) => x.text || '').join('\n');
+  ok(all.includes('비어 있다'), '빈 구간을 알려 준다');
+  ok(all.includes('흘려 넣어'), '메우라고 시킨다');
+
+  const clean = buildStepParts({ step: { kind: 'bridge', from: 1, to: 2 }, images, story: '', memo: '', timeline: '', opts: base });
+  ok(!clean.map((x) => x.text || '').join('\n').includes('비어 있다'), '구멍이 없으면 붙지 않는다');
+});
+
+await check('뒤에 이미 쓴 글이 있으면 거기에 닿게 시킨다', () => {
+  const images = [0, 1, 2].map((i) => ({ name: `${i + 1}.jpg`, mimeType: 'image/jpeg', base64: 'X' }));
+  const parts = buildStepParts({
+    step: { kind: 'bridge', from: 0, to: 1 }, images, story: '', memo: '', timeline: '',
+    nextText: '그는 방파제에 서 있었다.', opts: { includePrevImage: true, contextChars: 4000 }
+  });
+  const all = parts.map((x) => x.text || '').join('\n');
+  ok(all.includes('그는 방파제에 서 있었다.'), '뒷글을 보여 준다');
+  ok(all.includes('되풀이하지 마라'), '겹치지 않게');
+  ok(all.includes('자연스럽게 닿도록'), '이어지게');
+});
+
+/* ------------------------------------------------------------- 거부 재시도 */
+
+await check('거부·빈 응답을 가려낸다', () => {
+  eq(isRefusal({ text: '본문', finishReason: 'STOP' }), false);
+  eq(isRefusal({ text: '잘린 본문', finishReason: 'MAX_TOKENS' }), false, '잘린 건 거부가 아니다');
+  eq(isRefusal({ text: '', finishReason: 'STOP' }), true, '빈 응답');
+  eq(isRefusal({ text: '   ', finishReason: 'STOP' }), true, '공백뿐');
+  eq(isRefusal({ text: '본문', finishReason: 'PROHIBITED_CONTENT' }), true);
+  eq(isRefusal({ text: '본문', finishReason: 'SAFETY' }), true);
+  eq(isRefusal({ text: '본문', finishReason: 'STOP', blockReason: 'SAFETY' }), true, '프롬프트가 막힌 경우');
+  eq(isRefusal(null), true);
+});
+
+await check('다시 걸어 볼 오류와 그렇지 않은 오류를 가른다', () => {
+  eq(isWorthRetrying(new GeminiError('쿼터', { status: 429 })), true);
+  eq(isWorthRetrying(new GeminiError('서버', { status: 503 })), true);
+  eq(isWorthRetrying(new GeminiError('네트워크', { status: 0 })), true);
+  eq(isWorthRetrying(new GeminiError('API key not valid', { status: 400 })), false, '설정 잘못');
+  eq(isWorthRetrying(new GeminiError('권한 없음', { status: 403 })), false);
+  eq(isWorthRetrying(new DOMException('중단됨', 'AbortError')), false, '사용자가 멈춘 것');
+});
+
+await check('다시 보낼 때만 재시도 안내가 붙는다', () => {
+  eq(retryNote(0, true), '');
+  ok(retryNote(1, false).includes('다른 문장으로'), '다시 쓰라고');
+  ok(!retryNote(1, true).includes('암시'), '한 번 실패로는 우회 요청까지 가지 않는다');
+  ok(retryNote(2, true).includes('암시'), '여러 번이면 우회 요청');
+  ok(!retryNote(2, false).includes('암시'), '끄면 붙지 않는다');
+
+  const images = [0, 1].map((i) => ({ name: `${i + 1}.jpg`, mimeType: 'image/jpeg', base64: 'X' }));
+  const parts = buildStepParts({
+    step: { kind: 'bridge', from: 0, to: 1 }, images, story: '', memo: '', timeline: '',
+    opts: { includePrevImage: true, contextChars: 4000, retryNote: retryNote(1, false) }
+  });
+  ok(parts.at(-1).text.includes('앞선 시도'), '맨 끝에 붙는다');
+
+  const plain = buildStepParts({
+    step: { kind: 'prologue', to: 0 }, images, story: '', memo: '', timeline: '',
+    opts: { contextChars: 4000 }
+  });
+  ok(!plain.some((x) => x.text && x.text.includes('앞선 시도')), '기본은 없음');
 });
 
 /* ------------------------------------------------------------- 전체 내보내기 */

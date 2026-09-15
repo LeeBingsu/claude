@@ -2,10 +2,10 @@
 
 import { collectImages, recordFromStored } from './lib/images.js';
 import { sortByName } from './lib/sort.js';
-import { generate, listModels, SAFETY_LADDER } from './lib/gemini.js';
+import { generate, listModels, isRefusal, isWorthRetrying, SAFETY_LADDER } from './lib/gemini.js';
 import {
   buildSystem, buildSteps, buildStepParts, buildMemoParts, splitMemo, parseMemoBlock,
-  appendSettings, buildTimeline, stepId, stepTitle, memoDue, LENGTHS
+  appendSettings, buildTimeline, stepId, stepTitle, memoDue, retryNote, LENGTHS
 } from './lib/prompt.js';
 import { saveWork, loadWork, clearWork, storageAvailable } from './lib/store.js';
 import { createZip, unzip } from './lib/zip.js';
@@ -42,7 +42,8 @@ const FIELDS = [
   ['temperature', 'value'], ['topP', 'value'], ['maxTokens', 'value'],
   ['contextChars', 'value'], ['delayMs', 'value'], ['maxDim', 'value'],
   ['optPrologue', 'checked'], ['optOpening', 'checked'], ['optEnding', 'checked'], ['optPrevImage', 'checked'],
-  ['memoMode', 'value'], ['memoEvery', 'value'], ['optAutosave', 'checked'], ['saveKey', 'checked']
+  ['memoMode', 'value'], ['memoEvery', 'value'], ['retryRefusal', 'value'], ['optSoften', 'checked'],
+  ['optWakeLock', 'checked'], ['optAutoResume', 'checked'], ['optAutosave', 'checked'], ['saveKey', 'checked']
 ];
 
 function saveSettings() {
@@ -91,6 +92,8 @@ function opts() {
     includePrevImage: $('optPrevImage').checked,
     prologue: $('optPrologue').checked,
     memoMode: $('memoMode').value,
+    retryRefusal: Number($('retryRefusal').value),   // 0 안 함, -1 될 때까지
+    soften: $('optSoften').checked,
     memoEvery: Number($('memoEvery').value) || 1,
     contextChars: Math.max(0, Number($('contextChars').value) || 4000),
     delayMs: Math.max(0, Number($('delayMs').value) || 0)
@@ -200,6 +203,34 @@ async function restoreWork() {
   renderStory();
   showSaved(work.updatedAt || Date.now());
   setStatus(`지난 작업을 불러왔습니다 · 사진 ${state.images.length}장 · ${storyChars().toLocaleString('ko-KR')}자 (${clockOf(work.updatedAt || Date.now())} 저장)`);
+  maybeAutoResume();
+}
+
+/* 쓰다 만 작업이 남아 있고 키가 저장돼 있으면, 다시 열었을 때 이어서 쓴다. */
+function unfinishedCount() {
+  if (!state.images.length) return 0;
+  return state.steps.filter((st) => {
+    const p = state.passages[stepId(st)];
+    return !(p && p.status === 'done' && p.text.trim());
+  }).length;
+}
+
+function maybeAutoResume() {
+  const left = unfinishedCount();
+  const written = Object.values(state.passages).some((p) => p?.status === 'done' && p.text.trim());
+  if (!left || !written) return;                      // 아직 시작도 안 한 작업은 건드리지 않는다
+  if (!$('apiKey').value.trim()) {
+    setStatus(`남은 대목이 ${left}개 있습니다. API 키를 넣고 "빈 대목만 이어서" 를 누르세요.`);
+    return;
+  }
+  if (!$('optAutoResume').checked) {
+    setStatus(`남은 대목이 ${left}개 있습니다. "빈 대목만 이어서" 로 이어 쓸 수 있습니다.`);
+    return;
+  }
+  setStatus(`나갔던 자리에서 이어 씁니다 · 남은 대목 ${left}개 (멈추려면 중단)`);
+  setTimeout(() => {
+    if (!state.running && unfinishedCount()) runAll({ onlyEmpty: true });
+  }, 1500);
 }
 
 /* ------------------------------------------------------------- 초기 UI */
@@ -212,6 +243,7 @@ function fillSelects() {
   len.value = 'medium';
 
   $('memoMode').value = 'inline';      // 추가 요청 없이 일관성을 지킬 수 있으므로 기본값
+  $('retryRefusal').value = '3';       // 그냥 넘어가면 이야기에 구멍이 생긴다
   const safety = $('safety');
   SAFETY_LADDER.forEach((rung, i) => safety.append(new Option(rung.label, String(i))));
   safety.value = '0';
@@ -591,7 +623,74 @@ function setProgress(done, total) {
   $('barIn').style.width = total ? `${Math.round((done / total) * 100)}%` : '0%';
 }
 
+/* ------------------------------------------------------------- 자리 비움 대비 */
+
+let wakeLock = null;
+
+/* 휴대폰에서 화면이 꺼지면 페이지가 얼어붙어 생성이 멈춘다. 그동안만 잡아 둔다. */
+async function holdScreen() {
+  if (!$('optWakeLock').checked || !navigator.wakeLock) return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener?.('release', () => { wakeLock = null; });
+  } catch { /* 배터리 절약 모드 등에서는 거절된다 */ }
+}
+
+function releaseScreen() {
+  try { wakeLock?.release(); } catch { /* 이미 풀렸으면 그만 */ }
+  wakeLock = null;
+}
+
+// 탭을 다시 보면 브라우저가 풀어 둔 잠금을 다시 잡는다.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && state.running && !wakeLock) holdScreen();
+});
+
+/* 연결이 끊겼으면 다시 붙을 때까지 기다린다(재시도 횟수를 축내지 않는다). */
+function waitForOnline(signal) {
+  if (navigator.onLine !== false) return Promise.resolve();
+  setStatus('인터넷 연결이 끊겼습니다. 다시 연결되면 이어서 씁니다…');
+  return new Promise((resolve, reject) => {
+    const done = () => {
+      window.removeEventListener('online', done);
+      resolve();
+    };
+    window.addEventListener('online', done);
+    signal?.addEventListener('abort', () => {
+      window.removeEventListener('online', done);
+      reject(new DOMException('중단됨', 'AbortError'));
+    }, { once: true });
+  });
+}
+
 /* ------------------------------------------------------------- 생성 */
+
+/* 아직 글이 없는 구간들의 이름표 */
+function gapIds() {
+  const out = new Set();
+  for (const st of state.steps) {
+    const p = state.passages[stepId(st)];
+    if (!(p && p.status === 'done' && p.text.trim())) out.add(stepId(st));
+  }
+  return out;
+}
+
+/* 바로 앞 구간이 비어 있으면 그 이름. 없으면 빈 문자열. */
+function gapBefore(si) {
+  const prev = state.steps[si - 1];
+  if (!prev) return '';
+  const p = state.passages[stepId(prev)];
+  return p && p.status === 'done' && p.text.trim() ? '' : stepTitle(prev);
+}
+
+/* 이 대목 뒤에 이미 쓰여 있는 본문. 구멍을 메우거나 다시 쓸 때 거기에 닿게 한다. */
+function storyAfter(si) {
+  for (let i = si + 1; i < state.steps.length; i++) {
+    const p = state.passages[stepId(state.steps[i])];
+    if (p && p.status === 'done' && p.text.trim()) return p.text;
+  }
+  return '';
+}
 
 /* 바로 앞까지 쓴 본문. 줄거리 메모가 앞쪽을 대신하므로 길이는 옵션으로 자른다. */
 function storyBefore(si) {
@@ -610,7 +709,13 @@ function thinkingBudget() {
   return v === '' ? null : Number(v);
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms, signal) => new Promise((resolve, reject) => {
+  const timer = setTimeout(resolve, ms);
+  signal?.addEventListener('abort', () => {
+    clearTimeout(timer);
+    reject(new DOMException('중단됨', 'AbortError'));
+  }, { once: true });
+});
 
 const FINISH_MESSAGE = {
   SAFETY: '안전 필터에 막혔습니다. 고급 옵션에서 안전 필터 단계를 바꾸거나 지시사항을 조정해 보세요.',
@@ -621,13 +726,10 @@ const FINISH_MESSAGE = {
   OTHER: '모델이 알 수 없는 이유로 중단했습니다.'
 };
 
-async function generateStep(si, o, signal) {
+/* 한 대목을 한 번 생성해 본다. 결과 판정은 부르는 쪽에서 한다. */
+async function attemptPassage({ si, o, signal, attempt, askMemo, askSettings, inlineMemo }) {
   const step = state.steps[si];
   const id = stepId(step);
-  // 줄거리 한 줄은 매 대목마다(마지막 대목 제외), 설정은 고른 주기대로만 받는다.
-  const askMemo = o.memoMode !== 'off' && si < state.steps.length - 1;
-  const askSettings = askMemo && memoDue(si, state.steps.length, o.memoEvery);
-  const inlineMemo = askMemo && o.memoMode === 'inline';
   const p = passageAt(id);
   p.text = '';
   p.error = '';
@@ -639,8 +741,10 @@ async function generateStep(si, o, signal) {
     images: state.images,
     story: storyBefore(si),
     memo: o.memoMode !== 'off' ? state.memo : '',
-    timeline: o.memoMode !== 'off' ? buildTimeline(state.steps, state.beats, si) : '',
-    opts: { ...o, askMemo: inlineMemo, askSettings }
+    timeline: o.memoMode !== 'off' ? buildTimeline(state.steps, state.beats, si, gapIds()) : '',
+    nextText: storyAfter(si),
+    gapBefore: gapBefore(si),
+    opts: { ...o, askMemo: inlineMemo, askSettings, retryNote: retryNote(attempt, o.soften) }
   });
 
   let raw = '';
@@ -657,31 +761,72 @@ async function generateStep(si, o, signal) {
     onDelta: (t) => {
       raw += t;
       // 메모를 같이 받는 중이면 표시줄 뒤쪽은 화면에 내보내지 않는다.
-      p.text = inlineMemo ? splitMemo(raw).passage : raw;
+      p.text = splitMemo(raw).passage;          // 표시줄이 없으면 그대로 본문이다
       const node = proseEl(id);
       if (node) node.textContent = p.text;
       updateCharCount();
     }
   });
 
-  if (inlineMemo) {
-    const cut = splitMemo(res.text || '');
-    p.text = cut.passage.trim();
-    if (cut.memo) {                           // 표시줄이 없으면 이전 메모를 그대로 둔다
-      const note = parseMemoBlock(cut.memo);
-      if (note.beat) state.beats[id] = note.beat;
-      if (note.settings) state.memo = appendSettings(state.memo, note.settings);
+  const cut = splitMemo(res.text || '');
+  p.text = cut.passage.trim();
+  // 부탁한 적 없는데 메모가 붙어 오기도 한다. 본문에서는 떼되, 받아 두는 건 부탁했을 때만.
+  if (inlineMemo && cut.memo) {
+    const note = parseMemoBlock(cut.memo);
+    if (note.beat) state.beats[id] = note.beat;
+    if (note.settings) state.memo = appendSettings(state.memo, note.settings);
+  }
+  return { res, id, p };
+}
+
+/* 거부·빈 응답으로 끝나면 설정한 만큼 다시 시도한다. */
+async function generateStep(si, o, signal) {
+  const step = state.steps[si];
+  const id = stepId(step);
+  // 줄거리 한 줄은 매 대목마다(마지막 대목 제외), 설정은 고른 주기대로만 받는다.
+  const askMemo = o.memoMode !== 'off' && si < state.steps.length - 1;
+  const askSettings = askMemo && memoDue(si, state.steps.length, o.memoEvery);
+  const inlineMemo = askMemo && o.memoMode === 'inline';
+  const limit = Number(o.retryRefusal) || 0;      // 0 = 안 함, -1 = 될 때까지
+  const label = stepTitle(step);
+  const p = passageAt(id);
+
+  let res = null;
+  let attempt = 0;
+  for (;;) {
+    let failure = '';
+    try {
+      await waitForOnline(signal);
+      const out = await attemptPassage({ si, o, signal, attempt, askMemo, askSettings, inlineMemo });
+      res = out.res;
+      if (!isRefusal({ text: p.text, finishReason: res.finishReason, blockReason: res.blockReason })) break;
+      failure = FINISH_MESSAGE[res.blockReason] || FINISH_MESSAGE[res.finishReason] || '빈 응답을 받았습니다.';
+    } catch (err) {
+      if (err.name === 'AbortError' || !isWorthRetrying(err) || limit === 0) throw err;
+      failure = err.message;
     }
-  } else {
-    p.text = (res.text || '').trim();
-  }
-  if (!p.text) {
+
+    const more = limit < 0 || attempt < limit;
+    if (!more) {
+      p.status = 'error';
+      p.error = attempt ? `${attempt + 1}번 시도했지만 계속 막혔습니다 — ${failure}` : failure;
+      renderStory();
+      scheduleSave(0);
+      return p;
+    }
+
+    attempt++;
+    const wait = Math.min(15000, 1000 * 2 ** (attempt - 1)) + (o.delayMs || 0);
     p.status = 'error';
-    p.error = FINISH_MESSAGE[res.blockReason] || FINISH_MESSAGE[res.finishReason] || '빈 응답을 받았습니다.';
-  } else {
-    p.status = 'done';
-    if (res.finishReason === 'MAX_TOKENS') p.error = FINISH_MESSAGE.MAX_TOKENS;
+    p.error = `${failure} · ${Math.round(wait / 1000)}초 뒤 ${attempt}번째 다시 시도합니다` + (limit > 0 ? ` (최대 ${limit}번)` : '');
+    renderStory();
+    setStatus(`${label} — ${failure} 다시 시도 ${attempt}${limit > 0 ? `/${limit}` : ''}회째…`);
+    await sleep(wait, signal);
   }
+
+  p.status = 'done';
+  p.error = res.finishReason === 'MAX_TOKENS' ? FINISH_MESSAGE.MAX_TOKENS : '';
+  if (attempt) setStatus(`${label} — ${attempt}번 다시 시도해서 받았습니다.`);
   renderStory();
   scheduleSave(0);
 
@@ -718,6 +863,14 @@ function preflight() {
   return true;
 }
 
+/* 쓰다 만 대목은 조각을 남기지 않는다. 이어쓰기가 이 대목을 다시 쓴다. */
+function dropHalfWritten(note) {
+  for (const [id, p] of Object.entries(state.passages)) {
+    if (p?.status !== 'busy') continue;
+    state.passages[id] = { text: '', status: 'error', error: note };
+  }
+}
+
 function setRunning(on) {
   state.running = on;
   $('runBtn').disabled = on;
@@ -741,6 +894,7 @@ async function runAll({ onlyEmpty }) {
   const ac = new AbortController();
   state.abort = ac;
   setRunning(true);
+  holdScreen();
   saveSettings();
 
   const total = state.steps.length;
@@ -755,21 +909,23 @@ async function runAll({ onlyEmpty }) {
       await generateStep(si, o, ac.signal);
       done++;
       setProgress(done, total);
-      if (o.delayMs && si < total - 1) await sleep(o.delayMs);
+      if (o.delayMs && si < total - 1) await sleep(o.delayMs, ac.signal);
     }
     const failed = Object.values(state.passages).filter((p) => p && p.status === 'error').length;
     setStatus(failed ? `완료 (실패한 대목 ${failed}개 — 다시 쓰기를 눌러 보세요)` : '완료되었습니다.', Boolean(failed));
   } catch (err) {
     if (err.name === 'AbortError') {
+      dropHalfWritten('중단했습니다. "빈 대목만 이어서" 로 이 대목부터 다시 씁니다.');
       setStatus('중단했습니다. "빈 대목만 이어서" 로 이어서 쓸 수 있습니다.');
     } else {
-      const p = Object.values(state.passages).find((x) => x && x.status === 'busy');
-      if (p) { p.status = 'error'; p.error = err.message; }
+      dropHalfWritten(err.message);
       setStatus(`오류: ${err.message}`, true);
-      renderStory();
     }
+    renderStory();
+    scheduleSave(0);
   } finally {
     setRunning(false);
+    releaseScreen();
     state.abort = null;
   }
 }
@@ -782,6 +938,7 @@ async function runOne(si) {
   const ac = new AbortController();
   state.abort = ac;
   setRunning(true);
+  holdScreen();
   state.api.safetyStep = Number($('safety').value) || 0;
   setStatus(`${stepTitle(state.steps[si])} 다시 쓰는 중…`);
   try {
@@ -789,16 +946,22 @@ async function runOne(si) {
     setStatus('완료되었습니다.');
   } catch (err) {
     if (err.name === 'AbortError') {
+      dropHalfWritten('중단했습니다.');
+      renderStory();
+      scheduleSave(0);
       setStatus('중단했습니다.');
     } else {
       const p = passageAt(stepId(state.steps[si]));
+      p.text = '';
       p.status = 'error';
       p.error = err.message;
       setStatus(`오류: ${err.message}`, true);
       renderStory();
+      scheduleSave(0);
     }
   } finally {
     setRunning(false);
+    releaseScreen();
     state.abort = null;
   }
 }

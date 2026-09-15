@@ -57,6 +57,8 @@ export function normalizePassages(passages) {
   const one = (p) => {
     if (!p) return { text: '', status: 'empty', error: '' };
     const text = p.text || '';
+    // 쓰다 만 대목(busy)은 완성본이 아니다. 조각을 남기면 이어쓰기가 건너뛰어 버린다.
+    if (p.status === 'busy') return { text: '', status: 'empty', error: '' };
     if (p.status === 'error') return { text, status: 'error', error: p.error || '' };
     return { text, status: text.trim() ? 'done' : 'empty', error: '' };
   };
