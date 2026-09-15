@@ -2,13 +2,14 @@
 
 import { deflateRawSync, crc32 } from 'node:zlib';
 import { naturalCompare, naturalPathCompare, sortByName } from '../lib/sort.js';
-import { listZipEntries, unzip } from '../lib/zip.js';
+import { listZipEntries, unzip, createZip } from '../lib/zip.js';
 import {
   buildSteps, buildSystem, buildStepParts, trimContext, splitMemo, memoDue, MEMO_MARKER,
   parseMemoBlock, appendSettings, buildTimeline, stepId, stepTitle
 } from '../lib/prompt.js';
 import { generate, safetySettingsFor, SAFETY_LADDER } from '../lib/gemini.js';
 import { planImageSync, normalizePassages } from '../lib/store.js';
+import { buildProject, readProject, readManifest, imageEntryName, safeFileName, PROJECT_FILE } from '../lib/project.js';
 
 let passed = 0;
 const failures = [];
@@ -351,6 +352,79 @@ await check('이름표로 저장할 때 빈 대목은 빼고 담는다', () => {
     pro: { text: '도입부', status: 'done', error: '' },
     b1: { text: '', status: 'error', error: '차단됨' }
   });
+});
+
+/* ------------------------------------------------------------- 전체 내보내기 */
+
+await check('zip 을 써서 다시 읽으면 그대로 나온다', async () => {
+  const blob = await createZip([
+    { name: 'a.json', data: '{"긴":"글"}'.repeat(30), compress: true },
+    { name: 'images/001-사진.jpg', data: new Uint8Array([1, 2, 3, 4, 5]) }
+  ]);
+  const entries = await unzip(await blob.arrayBuffer());
+  eq(entries.map((e) => e.name), ['a.json', 'images/001-사진.jpg']);
+  eq(new TextDecoder().decode(entries[0].bytes), '{"긴":"글"}'.repeat(30));
+  eq(Array.from(entries[1].bytes), [1, 2, 3, 4, 5]);
+  eq(listZipEntries(await blob.arrayBuffer())[0].method, 8, '텍스트는 압축');
+  eq(listZipEntries(await blob.arrayBuffer())[1].method, 0, '사진은 그대로');
+});
+
+await check('파일 이름은 경로와 특수문자를 걷어낸다', () => {
+  eq(imageEntryName(0, 'a/b/1.jpg'), 'images/001-1.jpg');
+  eq(imageEntryName(11, '사진?.png'), 'images/012-사진_.png');
+  eq(safeFileName('../../x.jpg'), 'x.jpg');
+  eq(safeFileName(''), 'image');
+});
+
+await check('프로젝트를 담고 되읽는다', async () => {
+  const images = [
+    { id: 'i1', name: '1.jpg', mimeType: 'image/jpeg', width: 800, height: 600, converted: true, blob: new Blob([new Uint8Array([9, 9])]) },
+    { id: 'i2', name: '2.jpg', mimeType: 'image/jpeg', width: 800, height: 600, converted: false, blob: new Blob([new Uint8Array([7])]) }
+  ];
+  const { files } = buildProject({
+    images,
+    passages: { pro: { text: '도입부', status: 'done' }, b0: { text: '사이 글', status: 'done' } },
+    beats: { pro: '집을 나섰다' },
+    memo: '- 해원: 20대',
+    settings: { instructions: '담담하게', model: 'gemini-2.5-pro' },
+    story: '사람이 읽는 본문'
+  });
+  const back = readProject(await unzip(await (await createZip(files)).arrayBuffer()));
+  eq(back.error, undefined);
+  eq(back.images.map((m) => m.name), ['1.jpg', '2.jpg']);
+  eq(Array.from(back.images[0].bytes), [9, 9]);
+  eq(back.manifest.passages.pro.text, '도입부');
+  eq(back.manifest.beats.pro, '집을 나섰다');
+  eq(back.manifest.memo, '- 해원: 20대');
+  eq(back.manifest.settings.instructions, '담담하게');
+  ok(files.some((f) => f.name === 'story.txt'), '읽을거리도 함께');
+});
+
+await check('API 키는 파일에 담기지 않는다', async () => {
+  const { manifest, files } = buildProject({
+    images: [], passages: {}, beats: {}, memo: '',
+    settings: { instructions: '비밀 아님', model: 'gemini-2.5-pro' }
+  });
+  const dumped = JSON.stringify(manifest) + files.map((f) => (typeof f.data === 'string' ? f.data : '')).join('');
+  ok(!/apiKey|AIza/.test(dumped), '키 흔적 없음');
+});
+
+await check('남의 zip 이나 깨진 파일은 알아볼 수 있게 거절한다', async () => {
+  ok(readManifest('{"app":"other"}').error.includes('사진 소설'), '다른 앱');
+  ok(readManifest('깨진 JSON').error.includes('읽지 못했'), '깨진 파일');
+  ok(readManifest(JSON.stringify({ app: 'photo-novel', version: 99 })).error.includes('새 버전'), '더 새 버전');
+
+  const plain = await unzip(await (await createZip([{ name: '1.jpg', data: new Uint8Array([1]) }])).arrayBuffer());
+  eq(readProject(plain).plainZip, true, '사진만 든 zip');
+});
+
+await check('사진이 빠진 파일은 남은 것만 되살린다', async () => {
+  const images = [{ id: 'i1', name: '1.jpg', mimeType: 'image/jpeg', blob: new Blob([new Uint8Array([1])]) }];
+  const { files } = buildProject({ images, passages: {}, beats: {}, memo: '', settings: {} });
+  const onlyJson = files.filter((f) => f.name === PROJECT_FILE);
+  const back = readProject(await unzip(await (await createZip(onlyJson)).arrayBuffer()));
+  eq(back.images.length, 0);
+  eq(back.missing, ['images/001-1.jpg']);
 });
 
 /* ------------------------------------------------------------- API 호출 */

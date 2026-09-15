@@ -8,6 +8,8 @@ import {
   appendSettings, buildTimeline, stepId, stepTitle, memoDue, LENGTHS
 } from './lib/prompt.js';
 import { saveWork, loadWork, clearWork, storageAvailable } from './lib/store.js';
+import { createZip, unzip } from './lib/zip.js';
+import { buildProject, readProject } from './lib/project.js';
 
 const $ = (id) => document.getElementById(id);
 const STORE_KEY = 'photoNovel.settings.v1';
@@ -900,6 +902,107 @@ p{margin:0 0 1.1em;white-space:pre-wrap}
 ${body}
 </body></html>`;
   download(`photo-novel-${stamp()}.html`, new Blob([html], { type: 'text/html;charset=utf-8' }));
+});
+
+/* 설정 중 파일에 담아도 되는 것만 (API 키는 절대 담지 않는다) */
+function exportableSettings() {
+  const out = {};
+  for (const [id, prop] of FIELDS) {
+    if (id === 'saveKey') continue;
+    const el = $(id);
+    if (el) out[id] = el[prop];
+  }
+  return out;
+}
+
+$('exportProject').addEventListener('click', async () => {
+  if (!state.images.length && !Object.keys(state.passages).length) {
+    setStatus('내보낼 것이 없습니다.', true);
+    return;
+  }
+  const btn = $('exportProject');
+  btn.disabled = true;
+  setStatus('전체 내보내기를 만드는 중…');
+  try {
+    const { files } = buildProject({
+      images: state.images,
+      passages: state.passages,
+      beats: state.beats,
+      memo: state.memo,
+      settings: exportableSettings(),
+      story: plainText()
+    });
+    const blob = await createZip(files);
+    download(`photo-novel-${stamp()}.zip`, blob);
+    const size = blob.size >= 1048576 ? `${(blob.size / 1048576).toFixed(1)}MB` : `${Math.max(1, Math.round(blob.size / 1024))}KB`;
+    setStatus(`전체 내보내기 완료 · 사진 ${state.images.length}장 · ${size}`);
+  } catch (err) {
+    setStatus(`내보내지 못했습니다: ${err.message}`, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$('importProject').addEventListener('click', () => $('importInput').click());
+
+$('importInput').addEventListener('change', async (e) => {
+  const file = e.target.files?.[0];
+  e.target.value = '';
+  if (!file) return;
+  if (state.running) { setStatus('생성 중에는 불러올 수 없습니다.', true); return; }
+  setStatus('파일을 여는 중…');
+  try {
+    const buf = await file.arrayBuffer();
+    const entries = await unzip(buf);
+    const project = readProject(entries);
+    if (project.error) { setStatus(project.error, true); return; }
+
+    if (project.plainZip) {
+      setStatus('사진만 들어 있는 zip 입니다. 사진 올리기로 넣어 주세요.', true);
+      return;
+    }
+    const has = state.images.length || Object.values(state.passages).some((p) => p?.text);
+    if (has && !confirm('지금 작업을 덮어쓰고 파일의 내용을 불러올까요?')) { setStatus('불러오기를 취소했습니다.'); return; }
+
+    const images = [];
+    for (const [i, meta] of project.images.entries()) {
+      const blob = new Blob([meta.bytes], { type: meta.mimeType || 'image/jpeg' });
+      // 예전 파일에는 id 가 없을 수 있어 그때는 새로 붙인다.
+      images.push(await recordFromStored({ ...meta, id: meta.id || `imp${Date.now().toString(36)}${i}`, blob }));
+    }
+
+    state.images.forEach((img) => URL.revokeObjectURL(img.url));
+    state.images = images;
+    state.passages = project.manifest.passages;
+    state.beats = project.manifest.beats;
+    state.memo = project.manifest.memo;
+
+    // 설정도 함께 복원한다. 키는 파일에 없으니 화면의 것을 그대로 둔다.
+    for (const [id, prop] of FIELDS) {
+      const el = $(id);
+      if (el && id !== 'saveKey' && project.manifest.settings[id] !== undefined) {
+        if (id === 'model' && !Array.from(el.options).some((o) => o.value === project.manifest.settings[id])) {
+          el.append(new Option(project.manifest.settings[id], project.manifest.settings[id]));
+        }
+        el[prop] = project.manifest.settings[id];
+      }
+    }
+    $('customModel').hidden = !$('customModelOn').checked;
+    $('model').disabled = $('customModelOn').checked;
+    $('temperatureVal').textContent = Number($('temperature').value).toFixed(2);
+    $('topPVal').textContent = Number($('topP').value).toFixed(2);
+
+    renderImages();
+    renderStory();
+    saveSettings();
+    scheduleSave(0);
+
+    const when = project.manifest.exportedAt ? ` (${clockOf(Date.parse(project.manifest.exportedAt))} 내보낸 파일)` : '';
+    const lost = project.missing?.length ? ` · 사진 ${project.missing.length}장은 파일에 없어 빠졌습니다` : '';
+    setStatus(`불러왔습니다 · 사진 ${images.length}장 · ${storyChars().toLocaleString('ko-KR')}자${when}${lost}`, Boolean(lost));
+  } catch (err) {
+    setStatus(`불러오지 못했습니다: ${err.message}`, true);
+  }
 });
 
 $('clearStory').addEventListener('click', () => {
