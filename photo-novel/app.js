@@ -2,10 +2,10 @@
 
 import { collectImages, recordFromStored } from './lib/images.js';
 import { sortByName } from './lib/sort.js';
-import { generate, listModels, SAFETY_LADDER } from './lib/gemini.js';
+import { generate, listModels, isRefusal, isWorthRetrying, SAFETY_LADDER } from './lib/gemini.js';
 import {
   buildSystem, buildSteps, buildStepParts, buildMemoParts, splitMemo, parseMemoBlock,
-  appendSettings, buildTimeline, stepId, stepTitle, memoDue, LENGTHS
+  appendSettings, buildTimeline, stepId, stepTitle, memoDue, retryNote, LENGTHS
 } from './lib/prompt.js';
 import { saveWork, loadWork, clearWork, storageAvailable } from './lib/store.js';
 import { createZip, unzip } from './lib/zip.js';
@@ -42,7 +42,7 @@ const FIELDS = [
   ['temperature', 'value'], ['topP', 'value'], ['maxTokens', 'value'],
   ['contextChars', 'value'], ['delayMs', 'value'], ['maxDim', 'value'],
   ['optPrologue', 'checked'], ['optOpening', 'checked'], ['optEnding', 'checked'], ['optPrevImage', 'checked'],
-  ['memoMode', 'value'], ['memoEvery', 'value'], ['optAutosave', 'checked'], ['saveKey', 'checked']
+  ['memoMode', 'value'], ['memoEvery', 'value'], ['retryRefusal', 'value'], ['optSoften', 'checked'], ['optAutosave', 'checked'], ['saveKey', 'checked']
 ];
 
 function saveSettings() {
@@ -91,6 +91,8 @@ function opts() {
     includePrevImage: $('optPrevImage').checked,
     prologue: $('optPrologue').checked,
     memoMode: $('memoMode').value,
+    retryRefusal: Number($('retryRefusal').value),   // 0 안 함, -1 될 때까지
+    soften: $('optSoften').checked,
     memoEvery: Number($('memoEvery').value) || 1,
     contextChars: Math.max(0, Number($('contextChars').value) || 4000),
     delayMs: Math.max(0, Number($('delayMs').value) || 0)
@@ -212,6 +214,7 @@ function fillSelects() {
   len.value = 'medium';
 
   $('memoMode').value = 'inline';      // 추가 요청 없이 일관성을 지킬 수 있으므로 기본값
+  $('retryRefusal').value = '3';       // 그냥 넘어가면 이야기에 구멍이 생긴다
   const safety = $('safety');
   SAFETY_LADDER.forEach((rung, i) => safety.append(new Option(rung.label, String(i))));
   safety.value = '0';
@@ -610,7 +613,13 @@ function thinkingBudget() {
   return v === '' ? null : Number(v);
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms, signal) => new Promise((resolve, reject) => {
+  const timer = setTimeout(resolve, ms);
+  signal?.addEventListener('abort', () => {
+    clearTimeout(timer);
+    reject(new DOMException('중단됨', 'AbortError'));
+  }, { once: true });
+});
 
 const FINISH_MESSAGE = {
   SAFETY: '안전 필터에 막혔습니다. 고급 옵션에서 안전 필터 단계를 바꾸거나 지시사항을 조정해 보세요.',
@@ -621,13 +630,10 @@ const FINISH_MESSAGE = {
   OTHER: '모델이 알 수 없는 이유로 중단했습니다.'
 };
 
-async function generateStep(si, o, signal) {
+/* 한 대목을 한 번 생성해 본다. 결과 판정은 부르는 쪽에서 한다. */
+async function attemptPassage({ si, o, signal, attempt, askMemo, askSettings, inlineMemo }) {
   const step = state.steps[si];
   const id = stepId(step);
-  // 줄거리 한 줄은 매 대목마다(마지막 대목 제외), 설정은 고른 주기대로만 받는다.
-  const askMemo = o.memoMode !== 'off' && si < state.steps.length - 1;
-  const askSettings = askMemo && memoDue(si, state.steps.length, o.memoEvery);
-  const inlineMemo = askMemo && o.memoMode === 'inline';
   const p = passageAt(id);
   p.text = '';
   p.error = '';
@@ -640,17 +646,20 @@ async function generateStep(si, o, signal) {
     story: storyBefore(si),
     memo: o.memoMode !== 'off' ? state.memo : '',
     timeline: o.memoMode !== 'off' ? buildTimeline(state.steps, state.beats, si) : '',
-    opts: { ...o, askMemo: inlineMemo, askSettings }
+    opts: { ...o, askMemo: inlineMemo, askSettings, retryNote: retryNote(attempt, o.soften) }
   });
 
   let raw = '';
+  const config = genConfig();
+  // 다시 걸 때는 표현이 달라지도록 temperature 를 조금씩 올린다.
+  if (attempt > 0) config.temperature = Math.min(2, (config.temperature || 1) + 0.1 * attempt);
 
   const res = await generate({
     apiKey: $('apiKey').value.trim(),
     model: modelName(),
     system: buildSystem(o),
     parts,
-    generationConfig: genConfig(),
+    generationConfig: config,
     thinkingBudget: thinkingBudget(),
     state: state.api,
     signal,
@@ -675,13 +684,56 @@ async function generateStep(si, o, signal) {
   } else {
     p.text = (res.text || '').trim();
   }
-  if (!p.text) {
+  return { res, id, p };
+}
+
+/* 거부·빈 응답으로 끝나면 설정한 만큼 다시 시도한다. */
+async function generateStep(si, o, signal) {
+  const step = state.steps[si];
+  const id = stepId(step);
+  // 줄거리 한 줄은 매 대목마다(마지막 대목 제외), 설정은 고른 주기대로만 받는다.
+  const askMemo = o.memoMode !== 'off' && si < state.steps.length - 1;
+  const askSettings = askMemo && memoDue(si, state.steps.length, o.memoEvery);
+  const inlineMemo = askMemo && o.memoMode === 'inline';
+  const limit = Number(o.retryRefusal) || 0;      // 0 = 안 함, -1 = 될 때까지
+  const label = stepTitle(step);
+  const p = passageAt(id);
+
+  let res = null;
+  let attempt = 0;
+  for (;;) {
+    let failure = '';
+    try {
+      const out = await attemptPassage({ si, o, signal, attempt, askMemo, askSettings, inlineMemo });
+      res = out.res;
+      if (!isRefusal({ text: p.text, finishReason: res.finishReason, blockReason: res.blockReason })) break;
+      failure = FINISH_MESSAGE[res.blockReason] || FINISH_MESSAGE[res.finishReason] || '빈 응답을 받았습니다.';
+    } catch (err) {
+      if (err.name === 'AbortError' || !isWorthRetrying(err) || limit === 0) throw err;
+      failure = err.message;
+    }
+
+    const more = limit < 0 || attempt < limit;
+    if (!more) {
+      p.status = 'error';
+      p.error = attempt ? `${attempt + 1}번 시도했지만 계속 막혔습니다 — ${failure}` : failure;
+      renderStory();
+      scheduleSave(0);
+      return p;
+    }
+
+    attempt++;
+    const wait = Math.min(15000, 1000 * 2 ** (attempt - 1)) + (o.delayMs || 0);
     p.status = 'error';
-    p.error = FINISH_MESSAGE[res.blockReason] || FINISH_MESSAGE[res.finishReason] || '빈 응답을 받았습니다.';
-  } else {
-    p.status = 'done';
-    if (res.finishReason === 'MAX_TOKENS') p.error = FINISH_MESSAGE.MAX_TOKENS;
+    p.error = `${failure} · ${Math.round(wait / 1000)}초 뒤 ${attempt}번째 다시 시도합니다` + (limit > 0 ? ` (최대 ${limit}번)` : '');
+    renderStory();
+    setStatus(`${label} — ${failure} 다시 시도 ${attempt}${limit > 0 ? `/${limit}` : ''}회째…`);
+    await sleep(wait, signal);
   }
+
+  p.status = 'done';
+  p.error = res.finishReason === 'MAX_TOKENS' ? FINISH_MESSAGE.MAX_TOKENS : '';
+  if (attempt) setStatus(`${label} — ${attempt}번 다시 시도해서 받았습니다.`);
   renderStory();
   scheduleSave(0);
 
@@ -755,7 +807,7 @@ async function runAll({ onlyEmpty }) {
       await generateStep(si, o, ac.signal);
       done++;
       setProgress(done, total);
-      if (o.delayMs && si < total - 1) await sleep(o.delayMs);
+      if (o.delayMs && si < total - 1) await sleep(o.delayMs, ac.signal);
     }
     const failed = Object.values(state.passages).filter((p) => p && p.status === 'error').length;
     setStatus(failed ? `완료 (실패한 대목 ${failed}개 — 다시 쓰기를 눌러 보세요)` : '완료되었습니다.', Boolean(failed));

@@ -5,9 +5,9 @@ import { naturalCompare, naturalPathCompare, sortByName } from '../lib/sort.js';
 import { listZipEntries, unzip, createZip } from '../lib/zip.js';
 import {
   buildSteps, buildSystem, buildStepParts, trimContext, splitMemo, memoDue, MEMO_MARKER,
-  parseMemoBlock, appendSettings, buildTimeline, stepId, stepTitle
+  parseMemoBlock, appendSettings, buildTimeline, stepId, stepTitle, retryNote
 } from '../lib/prompt.js';
-import { generate, safetySettingsFor, SAFETY_LADDER } from '../lib/gemini.js';
+import { generate, safetySettingsFor, isRefusal, isWorthRetrying, GeminiError, SAFETY_LADDER } from '../lib/gemini.js';
 import { planImageSync, normalizePassages } from '../lib/store.js';
 import { buildProject, readProject, readManifest, imageEntryName, safeFileName, PROJECT_FILE } from '../lib/project.js';
 
@@ -352,6 +352,49 @@ await check('이름표로 저장할 때 빈 대목은 빼고 담는다', () => {
     pro: { text: '도입부', status: 'done', error: '' },
     b1: { text: '', status: 'error', error: '차단됨' }
   });
+});
+
+/* ------------------------------------------------------------- 거부 재시도 */
+
+await check('거부·빈 응답을 가려낸다', () => {
+  eq(isRefusal({ text: '본문', finishReason: 'STOP' }), false);
+  eq(isRefusal({ text: '잘린 본문', finishReason: 'MAX_TOKENS' }), false, '잘린 건 거부가 아니다');
+  eq(isRefusal({ text: '', finishReason: 'STOP' }), true, '빈 응답');
+  eq(isRefusal({ text: '   ', finishReason: 'STOP' }), true, '공백뿐');
+  eq(isRefusal({ text: '본문', finishReason: 'PROHIBITED_CONTENT' }), true);
+  eq(isRefusal({ text: '본문', finishReason: 'SAFETY' }), true);
+  eq(isRefusal({ text: '본문', finishReason: 'STOP', blockReason: 'SAFETY' }), true, '프롬프트가 막힌 경우');
+  eq(isRefusal(null), true);
+});
+
+await check('다시 걸어 볼 오류와 그렇지 않은 오류를 가른다', () => {
+  eq(isWorthRetrying(new GeminiError('쿼터', { status: 429 })), true);
+  eq(isWorthRetrying(new GeminiError('서버', { status: 503 })), true);
+  eq(isWorthRetrying(new GeminiError('네트워크', { status: 0 })), true);
+  eq(isWorthRetrying(new GeminiError('API key not valid', { status: 400 })), false, '설정 잘못');
+  eq(isWorthRetrying(new GeminiError('권한 없음', { status: 403 })), false);
+  eq(isWorthRetrying(new DOMException('중단됨', 'AbortError')), false, '사용자가 멈춘 것');
+});
+
+await check('다시 보낼 때만 재시도 안내가 붙는다', () => {
+  eq(retryNote(0, true), '');
+  ok(retryNote(1, false).includes('다른 문장으로'), '다시 쓰라고');
+  ok(!retryNote(1, true).includes('암시'), '한 번 실패로는 우회 요청까지 가지 않는다');
+  ok(retryNote(2, true).includes('암시'), '여러 번이면 우회 요청');
+  ok(!retryNote(2, false).includes('암시'), '끄면 붙지 않는다');
+
+  const images = [0, 1].map((i) => ({ name: `${i + 1}.jpg`, mimeType: 'image/jpeg', base64: 'X' }));
+  const parts = buildStepParts({
+    step: { kind: 'bridge', from: 0, to: 1 }, images, story: '', memo: '', timeline: '',
+    opts: { includePrevImage: true, contextChars: 4000, retryNote: retryNote(1, false) }
+  });
+  ok(parts.at(-1).text.includes('앞선 시도'), '맨 끝에 붙는다');
+
+  const plain = buildStepParts({
+    step: { kind: 'prologue', to: 0 }, images, story: '', memo: '', timeline: '',
+    opts: { contextChars: 4000 }
+  });
+  ok(!plain.some((x) => x.text && x.text.includes('앞선 시도')), '기본은 없음');
 });
 
 /* ------------------------------------------------------------- 전체 내보내기 */

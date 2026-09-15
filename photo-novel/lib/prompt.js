@@ -192,8 +192,20 @@ export function trimContext(story, limit) {
   step: { kind: 'prologue' | 'bridge' | 'ending', from, to, opening }
   images: 전체 이미지 배열 (index 로 접근)
 */
+/* 막혔을 때 다시 보내며 덧붙이는 말. soften 을 켜면 표현을 우회하도록 부탁한다. */
+export function retryNote(attempt, soften) {
+  if (attempt <= 0) return '';
+  const lines = [`앞선 시도(${attempt}번)가 중간에 끊겼다. 같은 장면을 다시, 다른 문장으로 써라.`];
+  if (soften && attempt >= 2) {
+    lines.push('직접적인 묘사 대신 암시와 여백으로 같은 흐름을 전해라. 이야기의 내용과 방향은 그대로 둔다.');
+  }
+  return lines.join('\n');
+}
+
 export function buildStepParts({ step, images, story, memo, timeline, opts }) {
   const parts = [];
+  // 재시도 안내는 어느 갈래든 맨 끝에 붙인다.
+  const finish = (list) => (opts.retryNote ? [...list, { text: opts.retryNote }] : list);
   const total = images.length;
   const context = trimContext(story, opts.contextChars ?? 4000);
 
@@ -215,7 +227,7 @@ export function buildStepParts({ step, images, story, memo, timeline, opts }) {
       ].join('\n')
     });
     if (opts.askMemo) parts.push({ text: memoInstruction(opts.askSettings) });
-    return parts;
+    return finish(parts);
   }
 
   if (step.kind === 'ending') {
@@ -230,7 +242,7 @@ export function buildStepParts({ step, images, story, memo, timeline, opts }) {
       ].join('\n')
     });
     if (opts.askMemo) parts.push({ text: memoInstruction(opts.askSettings) });
-    return parts;
+    return finish(parts);
   }
 
   const prev = images[step.from];
@@ -263,7 +275,7 @@ export function buildStepParts({ step, images, story, memo, timeline, opts }) {
   task.push('설명 없이 소설 본문만 출력한다.');
   if (opts.askMemo) task.push(memoInstruction(opts.askSettings));
   parts.push({ text: task.join('\n') });
-  return parts;
+  return finish(parts);
 }
 
 /* 메모를 따로 요청할 때의 프롬프트. 같은 요청 방식과 형식을 맞춘다. */
