@@ -216,6 +216,13 @@
       <button class="btn ghost" id="saveTxt" type="button">.txt 저장</button>
       <button class="btn ghost danger" id="clearStory" type="button">본문 지우기</button>
     </div>
+
+    <div class="row wrap-row tools">
+      <button class="btn" id="exportProject" type="button">전체 내보내기 (.zip)</button>
+      <button class="btn" id="importProject" type="button">전체 불러오기</button>
+      <input type="file" id="importInput" accept=".zip,application/zip" hidden>
+      <span class="hint">사진 원본과 본문·줄거리·설정을 zip 하나로 묶습니다. API 키는 담기지 않습니다.</span>
+    </div>
     <div id="story" class="story"><p class="empty">아직 쓴 글이 없습니다.</p></div>
 
     <details class="memo" id="memoBox" hidden>
