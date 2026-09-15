@@ -737,23 +737,17 @@ async function attemptPassage({ si, o, signal, attempt, light, askMemo, askSetti
   p.status = 'busy';
   renderStory();
 
-  // 여러 번 막혔다면 딸려 가는 짐(앞 본문·줄거리·메모·직전 사진)이 원인일 수 있다.
-  // 마지막에는 사진 한 장과 지시사항만 남겨 가볍게 보내 본다.
+  // 여러 번 막혔다면 쌓아 온 메모와 줄거리가 원인일 수 있다.
+  // 가벼운 시도에서는 그 둘만 덜어내고, 사진과 바로 앞 본문은 그대로 보낸다.
   const parts = buildStepParts({
     step,
     images: state.images,
-    story: light ? '' : storyBefore(si),
+    story: storyBefore(si),
     memo: light || o.memoMode === 'off' ? '' : state.memo,
     timeline: light || o.memoMode === 'off' ? '' : buildTimeline(state.steps, state.beats, si, gapIds()),
-    nextText: light ? '' : storyAfter(si),
-    gapBefore: light ? '' : gapBefore(si),
-    opts: {
-      ...o,
-      includePrevImage: light ? false : o.includePrevImage,
-      askMemo: inlineMemo && !light,
-      askSettings,
-      retryNote: retryNote(attempt, o.soften)
-    }
+    nextText: storyAfter(si),
+    gapBefore: gapBefore(si),
+    opts: { ...o, askMemo: inlineMemo, askSettings, retryNote: retryNote(attempt, o.soften) }
   });
 
   let raw = '';
@@ -780,7 +774,7 @@ async function attemptPassage({ si, o, signal, attempt, light, askMemo, askSetti
   const cut = splitMemo(res.text || '');
   p.text = cut.passage.trim();
   // 부탁한 적 없는데 메모가 붙어 오기도 한다. 본문에서는 떼되, 받아 두는 건 부탁했을 때만.
-  if (inlineMemo && !light && cut.memo) {
+  if (inlineMemo && cut.memo) {
     const note = parseMemoBlock(cut.memo);
     if (note.beat) state.beats[id] = note.beat;
     if (note.settings) state.memo = appendSettings(state.memo, note.settings);
@@ -836,7 +830,7 @@ async function generateStep(si, o, signal) {
 
     attempt++;
     const wait = Math.min(15000, 1000 * 2 ** (attempt - 1)) + (o.delayMs || 0);
-    const how = attempt >= lightFrom ? '문맥을 덜어내고 ' : '';
+    const how = attempt >= lightFrom ? '메모·줄거리를 빼고 ' : '';
     p.status = 'error';
     p.error = `${failure} · ${Math.round(wait / 1000)}초 뒤 ${how}${attempt}번째 다시 시도합니다`;
     renderStory();
@@ -847,9 +841,9 @@ async function generateStep(si, o, signal) {
   p.status = 'done';
   p.error = res.finishReason === 'MAX_TOKENS' ? FINISH_MESSAGE.MAX_TOKENS : '';
   if (usedLight) {
-    p.error = `앞 내용을 빼고 사진만 보고 쓴 대목입니다. 앞뒤가 맞는지 확인해 주세요.${p.error ? ` ${p.error}` : ''}`;
+    p.error = `설정 메모와 줄거리를 빼고 쓴 대목입니다. 설정이 어긋나지 않았는지 확인해 주세요.${p.error ? ` ${p.error}` : ''}`;
   }
-  if (attempt) setStatus(`${label} — ${attempt}번 다시 시도해서 받았습니다.${usedLight ? ' (문맥을 덜어낸 시도)' : ''}`);
+  if (attempt) setStatus(`${label} — ${attempt}번 다시 시도해서 받았습니다.${usedLight ? ' (메모·줄거리를 덜어낸 시도)' : ''}`);
   renderStory();
   scheduleSave(0);
 
