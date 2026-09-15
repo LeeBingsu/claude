@@ -3,7 +3,10 @@
 import { collectImages, recordFromStored } from './lib/images.js';
 import { sortByName } from './lib/sort.js';
 import { generate, listModels, SAFETY_LADDER } from './lib/gemini.js';
-import { buildSystem, buildSteps, buildStepParts, buildMemoParts, splitMemo, memoDue, LENGTHS } from './lib/prompt.js';
+import {
+  buildSystem, buildSteps, buildStepParts, buildMemoParts, splitMemo, parseMemoBlock,
+  appendSettings, buildTimeline, stepId, stepTitle, memoDue, LENGTHS
+} from './lib/prompt.js';
 import { saveWork, loadWork, clearWork, storageAvailable } from './lib/store.js';
 
 const $ = (id) => document.getElementById(id);
@@ -19,7 +22,8 @@ const DEFAULT_MODELS = [
 
 const state = {
   images: [],
-  passages: [],          // { text, status: 'empty' | 'busy' | 'done' | 'error', error }
+  passages: {},          // 대목 이름 → { text, status: 'empty' | 'busy' | 'done' | 'error', error }
+  beats: {},             // 대목 이름 → 그 구간에서 일어난 일 한 줄
   steps: [],
   memo: '',
   running: false,
@@ -35,7 +39,7 @@ const FIELDS = [
   ['pov', 'value'], ['tense', 'value'], ['safety', 'value'], ['thinking', 'value'],
   ['temperature', 'value'], ['topP', 'value'], ['maxTokens', 'value'],
   ['contextChars', 'value'], ['delayMs', 'value'], ['maxDim', 'value'],
-  ['optOpening', 'checked'], ['optEnding', 'checked'], ['optPrevImage', 'checked'],
+  ['optPrologue', 'checked'], ['optOpening', 'checked'], ['optEnding', 'checked'], ['optPrevImage', 'checked'],
   ['memoMode', 'value'], ['memoEvery', 'value'], ['optAutosave', 'checked'], ['saveKey', 'checked']
 ];
 
@@ -83,6 +87,7 @@ function opts() {
     opening: $('optOpening').checked,
     ending: $('optEnding').checked,
     includePrevImage: $('optPrevImage').checked,
+    prologue: $('optPrologue').checked,
     memoMode: $('memoMode').value,
     memoEvery: Number($('memoEvery').value) || 1,
     contextChars: Math.max(0, Number($('contextChars').value) || 4000),
@@ -123,7 +128,7 @@ async function flushSave() {
   if (!autosaveOn()) return;
   clearTimeout(saveTimer);
   try {
-    await saveWork({ images: state.images, passages: state.passages, memo: state.memo });
+    await saveWork({ images: state.images, passages: state.passages, beats: state.beats, memo: state.memo });
     showSaved(Date.now());
   } catch (err) {
     saveStopped = err.name === 'QuotaExceededError'
@@ -134,7 +139,7 @@ async function flushSave() {
 }
 
 function storyChars() {
-  return state.passages.reduce((a, p) => a + (p?.text?.length || 0), 0);
+  return Object.values(state.passages).reduce((a, p) => a + (p?.text?.length || 0), 0);
 }
 
 function clockOf(ts) {
@@ -150,6 +155,18 @@ function showSaved(ts) {
     : '저장된 작업이 없습니다.';
 }
 
+/* 예전에는 대목을 배열 순서로 저장했다. 이름표(b0, end …)로 옮겨 준다. */
+function migratePassages(saved, imageCount) {
+  if (!saved) return {};
+  if (!Array.isArray(saved)) return saved;
+  const out = {};
+  saved.forEach((p, i) => {
+    if (!p || !p.text) return;
+    out[i >= Math.max(0, imageCount - 1) ? 'end' : `b${i}`] = p;
+  });
+  return out;
+}
+
 /* 지난번 작업을 되살린다. */
 async function restoreWork() {
   if (!$('optAutosave').checked || !storageAvailable()) return;
@@ -161,14 +178,16 @@ async function restoreWork() {
     return;
   }
   if (!work) return;
-  const hasText = work.passages.some((p) => p?.text);
+  const passages = migratePassages(work.passages, work.images.length);
+  const hasText = Object.values(passages).some((p) => p?.text);
   if (!work.images.length && !hasText) return;
 
   try {
     const images = [];
     for (const row of work.images) images.push(await recordFromStored(row));
     state.images = images;
-    state.passages = work.passages;
+    state.passages = passages;
+    state.beats = work.beats || {};
     state.memo = work.memo;
   } catch (err) {
     setStatus(`저장된 사진을 여는 데 실패했습니다: ${err.message}`, true);
@@ -416,14 +435,13 @@ $('clearImages').addEventListener('click', () => {
 
 /* ------------------------------------------------------------- 결과 화면 */
 
-function passageAt(i) {
-  if (!state.passages[i]) state.passages[i] = { text: '', status: 'empty', error: '' };
-  return state.passages[i];
+function passageAt(id) {
+  if (!state.passages[id]) state.passages[id] = { text: '', status: 'empty', error: '' };
+  return state.passages[id];
 }
 
-function stepLabel(step) {
-  if (step.kind === 'ending') return `${step.from + 1}번 장면 이후 · 마무리`;
-  return `${step.from + 1}번 → ${step.to + 1}번 장면 사이`;
+function passageText(id) {
+  return state.passages[id]?.text || '';
 }
 
 function renderStory() {
@@ -442,6 +460,9 @@ function renderStory() {
     return;
   }
 
+  const prologue = state.steps.find((st) => st.kind === 'prologue');
+  if (prologue) box.append(passageNode(prologue));
+
   state.images.forEach((img, i) => {
     const fig = document.createElement('figure');
     fig.className = 'scene';
@@ -455,8 +476,8 @@ function renderStory() {
     box.append(fig);
 
     // 이 사진 뒤에 오는 대목 (i → i+1 다리, 또는 마지막 사진의 마무리)
-    const si = state.steps.findIndex((s) => s.from === i);
-    if (si >= 0) box.append(passageNode(si));
+    const after = state.steps.find((st) => st.kind !== 'prologue' && st.from === i);
+    if (after) box.append(passageNode(after));
   });
 
   updateCharCount();
@@ -464,30 +485,32 @@ function renderStory() {
   window.scrollTo(0, keepScroll);
 }
 
-function passageNode(si) {
-  const step = state.steps[si];
-  const p = passageAt(si);
+function passageNode(step) {
+  const id = stepId(step);
+  const p = passageAt(id);
 
   const wrap = document.createElement('section');
   wrap.className = `passage ${p.status === 'busy' ? 'busy' : ''} ${p.status === 'error' ? 'fail' : ''}`;
-  wrap.dataset.p = String(si);
+  wrap.dataset.p = id;
 
   const head = document.createElement('div');
   head.className = 'passage-head';
   const label = document.createElement('span');
-  label.textContent = stepLabel(step);
+  label.textContent = stepTitle(step);
   const spacer = document.createElement('span');
   spacer.className = 'spacer';
   const again = document.createElement('button');
   again.type = 'button';
   again.textContent = p.text ? '다시 쓰기' : '이 대목 쓰기';
-  again.addEventListener('click', () => runOne(si));
+  again.addEventListener('click', () => runOne(state.steps.indexOf(step)));
   const clear = document.createElement('button');
   clear.type = 'button';
   clear.textContent = '지우기';
   clear.addEventListener('click', () => {
-    state.passages[si] = { text: '', status: 'empty', error: '' };
+    state.passages[id] = { text: '', status: 'empty', error: '' };
+    delete state.beats[id];
     renderStory();
+    scheduleSave(0);
   });
   head.append(label, spacer, again, clear);
 
@@ -513,21 +536,46 @@ function passageNode(si) {
   return wrap;
 }
 
-function proseEl(si) {
-  return document.querySelector(`.passage[data-p="${si}"] .prose`);
+function proseEl(id) {
+  return document.querySelector(`.passage[data-p="${id}"] .prose`);
+}
+
+/* 구간별 줄거리를 "1→2번 장면 사이: …" 꼴의 여러 줄로 */
+function beatsToText() {
+  return state.steps
+    .filter((st) => state.beats[stepId(st)])
+    .map((st) => `${stepTitle(st)}: ${state.beats[stepId(st)]}`)
+    .join('\n');
+}
+
+/* 사용자가 고친 줄거리를 다시 구간별로 되돌린다. 앞머리가 맞는 줄만 반영한다. */
+function textToBeats(text) {
+  const byTitle = new Map(state.steps.map((st) => [stepTitle(st), stepId(st)]));
+  const next = {};
+  for (const line of text.split('\n')) {
+    const at = line.indexOf(':');
+    if (at < 0) continue;
+    const id = byTitle.get(line.slice(0, at).trim());
+    if (!id) continue;
+    const body = line.slice(at + 1).trim();
+    if (body) next[id] = body;
+  }
+  return next;
 }
 
 function renderMemo() {
   const box = $('memoBox');
-  const text = $('memoText');
-  const on = $('memoMode').value !== 'off' || Boolean(state.memo);
+  const beats = beatsToText();
+  const on = $('memoMode').value !== 'off' || Boolean(state.memo) || Boolean(beats);
   box.hidden = !on;
-  if (document.activeElement !== text) text.value = state.memo;
-  $('memoLen').textContent = state.memo ? `${state.memo.length}자` : '(아직 없음)';
+  if (document.activeElement !== $('beatsText')) $('beatsText').value = beats;
+  if (document.activeElement !== $('memoText')) $('memoText').value = state.memo;
+  const n = Object.keys(state.beats).length;
+  $('memoLen').textContent = n ? `줄거리 ${n}줄 · 설정 ${state.memo.length}자` : '(아직 없음)';
 }
 
 function updateCharCount() {
-  const n = state.passages.reduce((a, p) => a + (p?.text?.length || 0), 0);
+  const n = Object.values(state.passages).reduce((a, p) => a + (p?.text?.length || 0), 0);
   $('charVal').textContent = String(n);
 }
 
@@ -543,10 +591,14 @@ function setProgress(done, total) {
 
 /* ------------------------------------------------------------- 생성 */
 
+/* 바로 앞까지 쓴 본문. 줄거리 메모가 앞쪽을 대신하므로 길이는 옵션으로 자른다. */
 function storyBefore(si) {
-  return state.passages
+  return state.steps
     .slice(0, si)
-    .map((p) => (p && p.status !== 'error' ? p.text : ''))
+    .map((st) => {
+      const p = state.passages[stepId(st)];
+      return p && p.status !== 'error' ? p.text : '';
+    })
     .filter(Boolean)
     .join('\n\n');
 }
@@ -569,9 +621,12 @@ const FINISH_MESSAGE = {
 
 async function generateStep(si, o, signal) {
   const step = state.steps[si];
-  const askMemo = o.memoMode !== 'off' && memoDue(si, state.steps.length, o.memoEvery);
+  const id = stepId(step);
+  // 줄거리 한 줄은 매 대목마다(마지막 대목 제외), 설정은 고른 주기대로만 받는다.
+  const askMemo = o.memoMode !== 'off' && si < state.steps.length - 1;
+  const askSettings = askMemo && memoDue(si, state.steps.length, o.memoEvery);
   const inlineMemo = askMemo && o.memoMode === 'inline';
-  const p = passageAt(si);
+  const p = passageAt(id);
   p.text = '';
   p.error = '';
   p.status = 'busy';
@@ -582,7 +637,8 @@ async function generateStep(si, o, signal) {
     images: state.images,
     story: storyBefore(si),
     memo: o.memoMode !== 'off' ? state.memo : '',
-    opts: { ...o, askMemo: inlineMemo }
+    timeline: o.memoMode !== 'off' ? buildTimeline(state.steps, state.beats, si) : '',
+    opts: { ...o, askMemo: inlineMemo, askSettings }
   });
 
   let raw = '';
@@ -600,7 +656,7 @@ async function generateStep(si, o, signal) {
       raw += t;
       // 메모를 같이 받는 중이면 표시줄 뒤쪽은 화면에 내보내지 않는다.
       p.text = inlineMemo ? splitMemo(raw).passage : raw;
-      const node = proseEl(si);
+      const node = proseEl(id);
       if (node) node.textContent = p.text;
       updateCharCount();
     }
@@ -609,7 +665,11 @@ async function generateStep(si, o, signal) {
   if (inlineMemo) {
     const cut = splitMemo(res.text || '');
     p.text = cut.passage.trim();
-    if (cut.memo) state.memo = cut.memo;      // 표시줄이 없으면 이전 메모를 그대로 둔다
+    if (cut.memo) {                           // 표시줄이 없으면 이전 메모를 그대로 둔다
+      const note = parseMemoBlock(cut.memo);
+      if (note.beat) state.beats[id] = note.beat;
+      if (note.settings) state.memo = appendSettings(state.memo, note.settings);
+    }
   } else {
     p.text = (res.text || '').trim();
   }
@@ -628,15 +688,17 @@ async function generateStep(si, o, signal) {
       const memoRes = await generate({
         apiKey: $('apiKey').value.trim(),
         model: modelName(),
-        system: '너는 소설의 설정 메모를 관리하는 편집자다. 요청한 메모만 출력한다.',
-        parts: buildMemoParts({ memo: state.memo, passage: p.text }),
+        system: '너는 소설의 작업 노트를 관리하는 편집자다. 요청한 형식의 노트만 출력한다.',
+        parts: buildMemoParts({ memo: state.memo, passage: p.text, wantSettings: askSettings }),
         generationConfig: { temperature: 0.2, maxOutputTokens: 1024 },
         thinkingBudget: 0,
         state: state.api,
         signal
       });
-      if (memoRes.text.trim()) {
-        state.memo = memoRes.text.trim();
+      const note = parseMemoBlock(memoRes.text || '');
+      if (note.beat) state.beats[id] = note.beat;
+      if (note.settings) state.memo = appendSettings(state.memo, note.settings);
+      if (note.beat || note.settings) {
         renderMemo();
         scheduleSave(0);
       }
@@ -668,7 +730,8 @@ async function runAll({ onlyEmpty }) {
   state.steps = buildSteps(state.images.length, o);
   state.api.safetyStep = Number($('safety').value) || 0;
   if (!onlyEmpty) {
-    state.passages = [];
+    state.passages = {};
+    state.beats = {};
     state.memo = '';
   }
   renderStory();
@@ -684,21 +747,21 @@ async function runAll({ onlyEmpty }) {
 
   try {
     for (let si = 0; si < total; si++) {
-      const cur = state.passages[si];
+      const cur = state.passages[stepId(state.steps[si])];
       if (onlyEmpty && cur && cur.status === 'done' && cur.text.trim()) { done++; setProgress(done, total); continue; }
-      setStatus(`(${si + 1}/${total}) ${stepLabel(state.steps[si])} 쓰는 중…`);
+      setStatus(`(${si + 1}/${total}) ${stepTitle(state.steps[si])} 쓰는 중…`);
       await generateStep(si, o, ac.signal);
       done++;
       setProgress(done, total);
       if (o.delayMs && si < total - 1) await sleep(o.delayMs);
     }
-    const failed = state.passages.filter((p) => p && p.status === 'error').length;
+    const failed = Object.values(state.passages).filter((p) => p && p.status === 'error').length;
     setStatus(failed ? `완료 (실패한 대목 ${failed}개 — 다시 쓰기를 눌러 보세요)` : '완료되었습니다.', Boolean(failed));
   } catch (err) {
     if (err.name === 'AbortError') {
       setStatus('중단했습니다. "빈 대목만 이어서" 로 이어서 쓸 수 있습니다.');
     } else {
-      const p = state.passages.find((x) => x && x.status === 'busy');
+      const p = Object.values(state.passages).find((x) => x && x.status === 'busy');
       if (p) { p.status = 'error'; p.error = err.message; }
       setStatus(`오류: ${err.message}`, true);
       renderStory();
@@ -713,12 +776,12 @@ async function runOne(si) {
   if (state.running || !preflight()) return;
   const o = opts();
   state.steps = buildSteps(state.images.length, o);
-  if (si >= state.steps.length) return;
+  if (si < 0 || si >= state.steps.length) return;
   const ac = new AbortController();
   state.abort = ac;
   setRunning(true);
   state.api.safetyStep = Number($('safety').value) || 0;
-  setStatus(`${stepLabel(state.steps[si])} 다시 쓰는 중…`);
+  setStatus(`${stepTitle(state.steps[si])} 다시 쓰는 중…`);
   try {
     await generateStep(si, o, ac.signal);
     setStatus('완료되었습니다.');
@@ -726,7 +789,7 @@ async function runOne(si) {
     if (err.name === 'AbortError') {
       setStatus('중단했습니다.');
     } else {
-      const p = passageAt(si);
+      const p = passageAt(stepId(state.steps[si]));
       p.status = 'error';
       p.error = err.message;
       setStatus(`오류: ${err.message}`, true);
@@ -739,7 +802,8 @@ async function runOne(si) {
 }
 
 $('runBtn').addEventListener('click', () => {
-  if (state.passages.some((p) => p && p.text) && !confirm('이미 쓴 본문을 지우고 처음부터 다시 쓸까요?')) return;
+  if (Object.values(state.passages).some((p) => p && p.text)
+    && !confirm('이미 쓴 본문을 지우고 처음부터 다시 쓸까요?')) return;
   runAll({ onlyEmpty: false });
 });
 $('resumeBtn').addEventListener('click', () => runAll({ onlyEmpty: true }));
@@ -747,14 +811,23 @@ $('stopBtn').addEventListener('click', () => state.abort?.abort());
 
 /* ------------------------------------------------------------- 내보내기 */
 
+/* 사진 앞에 오는 도입부와, 각 사진 뒤에 오는 대목을 순서대로 훑는다. */
+function walkStory(onPassage, onImage) {
+  const pro = state.steps.find((st) => st.kind === 'prologue');
+  if (pro) onPassage(passageText(stepId(pro)), pro);
+  state.images.forEach((img, i) => {
+    onImage(img, i);
+    const after = state.steps.find((st) => st.kind !== 'prologue' && st.from === i);
+    if (after) onPassage(passageText(stepId(after)), after);
+  });
+}
+
 function plainText() {
   const out = [];
-  state.images.forEach((img, i) => {
-    out.push(`[사진 ${i + 1} — ${img.name}]`);
-    const si = state.steps.findIndex((s) => s.from === i);
-    const p = si >= 0 ? state.passages[si] : null;
-    if (p?.text) out.push('', p.text, '');
-  });
+  walkStory(
+    (text) => { if (text) out.push('', text, ''); },
+    (img, i) => out.push(`[사진 ${i + 1} — ${img.name}]`)
+  );
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
@@ -777,7 +850,9 @@ function escapeHtml(s) {
 }
 
 $('copyBtn').addEventListener('click', async () => {
-  const text = state.passages.map((p) => p?.text || '').filter(Boolean).join('\n\n');
+  const chunks = [];
+  walkStory((t) => { if (t) chunks.push(t); }, () => {});
+  const text = chunks.join('\n\n');
   try {
     await navigator.clipboard.writeText(text);
     setStatus('본문을 복사했습니다.');
@@ -792,23 +867,24 @@ $('saveTxt').addEventListener('click', () => {
 
 $('saveMd').addEventListener('click', () => {
   const out = ['# 사진 소설', ''];
-  state.images.forEach((img, i) => {
-    out.push(`![${i + 1}번 장면](${img.name})`, '');
-    const si = state.steps.findIndex((s) => s.from === i);
-    const p = si >= 0 ? state.passages[si] : null;
-    if (p?.text) out.push(p.text, '');
-  });
+  walkStory(
+    (text) => { if (text) out.push(text, ''); },
+    (img, i) => out.push(`![${i + 1}번 장면](${img.name})`, '')
+  );
   download(`photo-novel-${stamp()}.md`, new Blob([out.join('\n')], { type: 'text/markdown;charset=utf-8' }));
 });
 
 $('saveHtml').addEventListener('click', () => {
-  const body = state.images.map((img, i) => {
-    const si = state.steps.findIndex((s) => s.from === i);
-    const p = si >= 0 ? state.passages[si] : null;
-    const fig = `<figure><img src="data:${img.mimeType};base64,${img.base64}" alt="${escapeHtml(String(i + 1))}번 장면"></figure>`;
-    const text = p?.text ? `<p>${escapeHtml(p.text).replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>')}</p>` : '';
-    return fig + text;
-  }).join('\n');
+  const chunks = [];
+  walkStory(
+    (text) => {
+      if (text) chunks.push(`<p>${escapeHtml(text).replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>')}</p>`);
+    },
+    (img, i) => chunks.push(
+      `<figure><img src="data:${img.mimeType};base64,${img.base64}" alt="${escapeHtml(String(i + 1))}번 장면"></figure>`
+    )
+  );
+  const body = chunks.join('\n');
 
   const html = `<!DOCTYPE html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -827,8 +903,9 @@ ${body}
 });
 
 $('clearStory').addEventListener('click', () => {
-  if (state.passages.some((p) => p && p.text) && !confirm('본문을 모두 지울까요?')) return;
-  state.passages = [];
+  if (Object.values(state.passages).some((p) => p && p.text) && !confirm('본문을 모두 지울까요?')) return;
+  state.passages = {};
+  state.beats = {};
   state.memo = '';
   renderStory();
   setProgress(0, 1);
@@ -862,7 +939,11 @@ $('memoMode').addEventListener('change', renderMemo);
 
 $('memoText').addEventListener('input', () => {
   state.memo = $('memoText').value;
-  $('memoLen').textContent = state.memo ? `${state.memo.length}자` : '(아직 없음)';
+  scheduleSave(1200);
+});
+
+$('beatsText').addEventListener('input', () => {
+  state.beats = textToBeats($('beatsText').value);
   scheduleSave(1200);
 });
 
@@ -901,7 +982,7 @@ for (const [id] of FIELDS) {
   if (el) el.addEventListener('change', saveSettings);
 }
 $('apiKey').addEventListener('change', saveSettings);
-['optOpening', 'optEnding'].forEach((id) => $(id).addEventListener('change', renderStory));
+['optOpening', 'optEnding', 'optPrologue'].forEach((id) => $(id).addEventListener('change', renderStory));
 
 window.addEventListener('beforeunload', (e) => {
   if (state.running) { e.preventDefault(); e.returnValue = ''; }

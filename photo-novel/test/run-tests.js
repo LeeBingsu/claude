@@ -3,7 +3,10 @@
 import { deflateRawSync, crc32 } from 'node:zlib';
 import { naturalCompare, naturalPathCompare, sortByName } from '../lib/sort.js';
 import { listZipEntries, unzip } from '../lib/zip.js';
-import { buildSteps, buildSystem, buildStepParts, trimContext, splitMemo, memoDue, MEMO_MARKER } from '../lib/prompt.js';
+import {
+  buildSteps, buildSystem, buildStepParts, trimContext, splitMemo, memoDue, MEMO_MARKER,
+  parseMemoBlock, appendSettings, buildTimeline, stepId, stepTitle
+} from '../lib/prompt.js';
 import { generate, safetySettingsFor, SAFETY_LADDER } from '../lib/gemini.js';
 import { planImageSync, normalizePassages } from '../lib/store.js';
 
@@ -139,17 +142,39 @@ await check('zip 이 아니면 알아볼 수 있는 오류', () => {
 
 /* ------------------------------------------------------------- 프롬프트 */
 
-await check('사진 n 장이면 사이 구간 n-1 개 + 마무리', () => {
-  eq(buildSteps(4, { opening: true, ending: true }).map((s) => `${s.kind}:${s.from}`),
-    ['bridge:0', 'bridge:1', 'bridge:2', 'ending:3']);
-  eq(buildSteps(4, { opening: true, ending: false }).length, 3);
-  eq(buildSteps(1, { opening: true, ending: false }).map((s) => s.kind), ['ending']);
-  eq(buildSteps(0, { opening: true, ending: true }).length, 0);
+await check('사진 n 장이면 도입부 + 사이 구간 n-1 개 + 마무리', () => {
+  eq(buildSteps(4, { prologue: true, opening: true, ending: true }).map(stepId),
+    ['pro', 'b0', 'b1', 'b2', 'end']);
+  eq(buildSteps(4, { prologue: false, opening: true, ending: true }).map(stepId),
+    ['b0', 'b1', 'b2', 'end']);
+  eq(buildSteps(4, { prologue: false, opening: true, ending: false }).length, 3);
+  eq(buildSteps(1, { prologue: true, ending: false }).map(stepId), ['pro', 'end']);
+  eq(buildSteps(0, { prologue: true, opening: true, ending: true }).length, 0);
 });
 
-await check('첫 대목에만 도입부 표시가 붙는다', () => {
-  const steps = buildSteps(3, { opening: true, ending: false });
-  eq([steps[0].opening, steps[1].opening], [true, false]);
+await check('대목 이름표는 옵션이 바뀌어도 그대로다', () => {
+  const a = buildSteps(3, { prologue: false, ending: false }).map(stepId);
+  const b = buildSteps(3, { prologue: true, ending: true }).map(stepId);
+  ok(a.every((id) => b.includes(id)), `${a} ⊂ ${b}`);
+  eq(stepTitle({ kind: 'prologue', to: 0 }), '1번 장면 앞 · 도입부');
+  eq(stepTitle({ kind: 'bridge', from: 1, to: 2 }), '2→3번 장면 사이');
+  eq(stepTitle({ kind: 'ending', from: 2 }), '3번 장면 뒤 · 마무리');
+});
+
+await check('앞에 도입부를 쓰면 첫 대목이 다시 이야기를 열지 않는다', () => {
+  eq(buildSteps(3, { opening: true, prologue: false })[0].opening, true);
+  eq(buildSteps(3, { opening: true, prologue: true })[1].opening, false);
+});
+
+await check('도입부 대목은 1번 사진만 보고 그 순간에 도착하게 한다', () => {
+  const images = [0, 1].map((i) => ({ name: `${i + 1}.jpg`, mimeType: 'image/jpeg', base64: `B${i}` }));
+  const parts = buildStepParts({
+    step: { kind: 'prologue', to: 0 }, images, story: '', memo: '', timeline: '',
+    opts: { contextChars: 4000 }
+  });
+  eq(parts.filter((p) => p.inline_data).map((p) => p.inline_data.data), ['B0']);
+  ok(parts.at(-1).text.includes('첫 장면'), '첫 장면 안내');
+  ok(parts.at(-1).text.includes('도입부'), '도입부 지시');
 });
 
 await check('맞춤 지시사항이 시스템 프롬프트에 들어간다', () => {
@@ -164,12 +189,12 @@ await check('맞춤 지시사항이 시스템 프롬프트에 들어간다', () 
 await check('사이 구간은 앞뒤 사진을 모두 넣는다', () => {
   const images = [0, 1, 2].map((i) => ({ name: `${i + 1}.jpg`, mimeType: 'image/jpeg', base64: `B${i}` }));
   const step = { kind: 'bridge', from: 0, to: 1, opening: true };
-  const parts = buildStepParts({ step, images, story: '', memo: '', opts: { includePrevImage: true, contextChars: 4000 } });
+  const parts = buildStepParts({ step, images, story: '', memo: '', timeline: '', opts: { includePrevImage: true, contextChars: 4000 } });
   const inline = parts.filter((p) => p.inline_data).map((p) => p.inline_data.data);
   eq(inline, ['B0', 'B1']);
   ok(parts.some((p) => p.text && p.text.includes('이야기의 시작')), '도입 지시');
 
-  const onlyNext = buildStepParts({ step: { kind: 'bridge', from: 1, to: 2 }, images, story: '앞 이야기', memo: '메모', opts: { includePrevImage: false, contextChars: 4000 } });
+  const onlyNext = buildStepParts({ step: { kind: 'bridge', from: 1, to: 2 }, images, story: '앞 이야기', memo: '메모', timeline: '', opts: { includePrevImage: false, contextChars: 4000 } });
   eq(onlyNext.filter((p) => p.inline_data).length, 1);
   ok(onlyNext[0].text.includes('메모'), '메모 우선');
   ok(onlyNext[1].text.includes('앞 이야기'), '앞 내용');
@@ -178,7 +203,7 @@ await check('사이 구간은 앞뒤 사진을 모두 넣는다', () => {
 await check('마지막 사진 앞 구간은 끝으로 향하라고 알려준다', () => {
   const images = [0, 1].map((i) => ({ name: `${i + 1}.jpg`, mimeType: 'image/jpeg', base64: 'X' }));
   const parts = buildStepParts({
-    step: { kind: 'bridge', from: 0, to: 1 }, images, story: '', memo: '',
+    step: { kind: 'bridge', from: 0, to: 1 }, images, story: '', memo: '', timeline: '',
     opts: { includePrevImage: true, contextChars: 100, ending: false }
   });
   ok(parts.at(-1).text.includes('마지막 장면'), '끝 안내');
@@ -220,20 +245,61 @@ await check('메모는 주기대로, 마지막 대목에서는 요청하지 않�
   eq(memoDue(0, 4, 0), false, '주기가 0이면');
 });
 
-await check('메모를 함께 요청할 때만 지시가 붙는다', () => {
+await check('메모를 함께 요청할 때만 지시가 붙고, 설정은 주기에만 묻는다', () => {
   const images = [0, 1].map((i) => ({ name: `${i + 1}.jpg`, mimeType: 'image/jpeg', base64: 'X' }));
   const step = { kind: 'bridge', from: 0, to: 1 };
   const base = { includePrevImage: true, contextChars: 4000 };
 
-  const without = buildStepParts({ step, images, story: '', memo: '', opts: base });
+  const without = buildStepParts({ step, images, story: '', memo: '', timeline: '', opts: base });
   ok(!without.some((p) => p.text && p.text.includes(MEMO_MARKER)), '기본은 없음');
 
-  const withMemo = buildStepParts({ step, images, story: '', memo: '기존 메모', opts: { ...base, askMemo: true } });
-  ok(withMemo.some((p) => p.text && p.text.includes(MEMO_MARKER)), '표시줄 안내');
-  ok(withMemo.some((p) => p.text && p.text.includes('갱신해')), '기존 메모가 있으면 갱신 지시');
+  const beatOnly = buildStepParts({ step, images, story: '', memo: '', timeline: '', opts: { ...base, askMemo: true } });
+  const beatText = beatOnly.map((p) => p.text || '').join('\n');
+  ok(beatText.includes(MEMO_MARKER), '표시줄 안내');
+  ok(beatText.includes('줄거리:'), '줄거리 한 줄');
+  ok(!beatText.includes('설정:'), '설정은 묻지 않음');
 
-  const ending = buildStepParts({ step: { kind: 'ending', from: 1 }, images, story: '', memo: '', opts: { ...base, askMemo: true } });
+  const both = buildStepParts({ step, images, story: '', memo: '', timeline: '', opts: { ...base, askMemo: true, askSettings: true } });
+  ok(both.map((p) => p.text || '').join('\n').includes('설정:'), '주기가 되면 설정도');
+
+  const ending = buildStepParts({ step: { kind: 'ending', from: 1 }, images, story: '', memo: '', timeline: '', opts: { ...base, askMemo: true } });
   ok(ending.some((p) => p.text && p.text.includes(MEMO_MARKER)), '마무리 대목도 같은 형식');
+});
+
+await check('메모 블록을 줄거리와 설정으로 가른다', () => {
+  eq(parseMemoBlock('줄거리: 둘은 버스를 탔다.\n설정: 지오는 반말을 쓴다.'),
+    { beat: '둘은 버스를 탔다.', settings: '지오는 반말을 쓴다.' });
+  eq(parseMemoBlock('- 줄거리: 비가 왔다.\n- 설정: 없음'), { beat: '비가 왔다.', settings: '' });
+  eq(parseMemoBlock('형식을 안 지킨 한 줄'), { beat: '형식을 안 지킨 한 줄', settings: '' });
+  eq(parseMemoBlock(''), { beat: '', settings: '' });
+});
+
+await check('설정은 덧붙이되 같은 줄은 넣지 않는다', () => {
+  eq(appendSettings('', '해원: 20대'), '- 해원: 20대');
+  eq(appendSettings('- 해원: 20대', '해원: 20대'), '- 해원: 20대');
+  eq(appendSettings('- 해원: 20대', '지오: 반말\n비 오는 저녁'), '- 해원: 20대\n- 지오: 반말\n- 비 오는 저녁');
+  const long = appendSettings('- 가'.repeat(1) + '\n- 나\n- 다', '라', 8);
+  ok(long.length <= 8, `길이 제한 (${long})`);
+  ok(long.includes('라'), '새 줄은 남는다');
+});
+
+await check('줄거리는 구간 이름과 함께 쌓인다', () => {
+  const steps = buildSteps(3, { prologue: true, ending: true });
+  const beats = { pro: '집을 나섰다', b0: '버스를 탔다', b1: '바다에 닿았다', end: '집에 돌아왔다' };
+  eq(buildTimeline(steps, beats, 2), '1번 장면 앞 · 도입부: 집을 나섰다\n1→2번 장면 사이: 버스를 탔다');
+  eq(buildTimeline(steps, {}), '');
+});
+
+await check('줄거리를 보내면 프롬프트에 구간별로 실린다', () => {
+  const images = [0, 1, 2].map((i) => ({ name: `${i + 1}.jpg`, mimeType: 'image/jpeg', base64: 'X' }));
+  const parts = buildStepParts({
+    step: { kind: 'bridge', from: 1, to: 2 }, images, story: '앞 본문', memo: '- 해원: 20대',
+    timeline: '1→2번 장면 사이: 버스를 탔다',
+    opts: { includePrevImage: false, contextChars: 4000 }
+  });
+  ok(parts[0].text.includes('해원'), '설정 먼저');
+  ok(parts[1].text.includes('버스를 탔다'), '줄거리 다음');
+  ok(parts[2].text.includes('앞 본문'), '본문 마지막');
 });
 
 /* ------------------------------------------------------------- 안전 설정 */
@@ -273,7 +339,18 @@ await check('저장할 때 생성 중(busy) 상태는 남기지 않는다', () =
     { text: '', status: 'error', error: '차단됨' },
     { text: '', status: 'empty', error: '' }
   ]);
-  eq(normalizePassages(undefined), []);
+  eq(normalizePassages(undefined), {});
+});
+
+await check('이름표로 저장할 때 빈 대목은 빼고 담는다', () => {
+  eq(normalizePassages({
+    pro: { text: '도입부', status: 'busy' },
+    b0: { text: '', status: 'empty' },
+    b1: { text: '', status: 'error', error: '차단됨' }
+  }), {
+    pro: { text: '도입부', status: 'done', error: '' },
+    b1: { text: '', status: 'error', error: '차단됨' }
+  });
 });
 
 /* ------------------------------------------------------------- API 호출 */
