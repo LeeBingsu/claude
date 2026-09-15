@@ -51,17 +51,25 @@ export function planImageSync(existingIds, wantedIds) {
   };
 }
 
-/* 생성 도중 상태(busy)는 저장하지 않는다. 다음에 열었을 때 멈춘 채로 남지 않도록. */
+/* 생성 도중 상태(busy)는 저장하지 않는다. 다음에 열었을 때 멈춘 채로 남지 않도록.
+   대목은 b0, end 같은 이름표를 키로 하는 객체다(예전 배열 형식도 그대로 받는다). */
 export function normalizePassages(passages) {
-  return (passages || []).map((p) => {
+  const one = (p) => {
     if (!p) return { text: '', status: 'empty', error: '' };
     const text = p.text || '';
     if (p.status === 'error') return { text, status: 'error', error: p.error || '' };
     return { text, status: text.trim() ? 'done' : 'empty', error: '' };
-  });
+  };
+  if (Array.isArray(passages)) return passages.map(one);
+  const out = {};
+  for (const [id, p] of Object.entries(passages || {})) {
+    const norm = one(p);
+    if (norm.text || norm.status === 'error') out[id] = norm;   // 빈 대목은 저장하지 않는다
+  }
+  return out;
 }
 
-export async function saveWork({ images, passages, memo }) {
+export async function saveWork({ images, passages, beats, memo }) {
   const db = await openDb();
   try {
     const wanted = images.map((i) => i.id);
@@ -87,6 +95,7 @@ export async function saveWork({ images, passages, memo }) {
     t.objectStore(META).put({
       order: wanted,
       passages: normalizePassages(passages),
+      beats: beats || {},
       memo: memo || '',
       updatedAt: Date.now()
     }, CURRENT);
@@ -107,7 +116,13 @@ export async function loadWork() {
       const row = await req(store.get(id));
       if (row?.blob) images.push(row);          // 중간에 지워진 사진은 건너뛴다
     }
-    return { images, passages: meta.passages || [], memo: meta.memo || '', updatedAt: meta.updatedAt || 0 };
+    return {
+      images,
+      passages: meta.passages || {},
+      beats: meta.beats || {},
+      memo: meta.memo || '',
+      updatedAt: meta.updatedAt || 0
+    };
   } finally {
     db.close();
   }

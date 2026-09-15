@@ -133,16 +133,17 @@
             <option value="inline">같은 요청에 함께 (추가 요청 없음)</option>
             <option value="separate">따로 요청 (요청 수 2배)</option>
           </select>
-          <p class="hint">인물·장소·문체 메모를 유지해 사진이 많아도 설정이 흐트러지지 않게 합니다.</p>
+          <p class="hint">구간마다 무슨 일이 있었는지(줄거리 한 줄)와 인물·장소·문체를 쌓아 두고 매 요청에 함께 보냅니다.</p>
         </div>
         <div class="field">
-          <label for="memoEvery">메모 갱신 주기</label>
+          <label for="memoEvery">설정 메모 갱신 주기</label>
           <select id="memoEvery">
             <option value="1">대목마다</option>
             <option value="2">2대목마다</option>
             <option value="3">3대목마다</option>
             <option value="5">5대목마다</option>
           </select>
+          <p class="hint">줄거리 한 줄은 늘 받고, 설정은 이 주기로만 갱신합니다.</p>
         </div>
         <div class="field">
           <label for="maxDim">이미지 최대 변 길이(px)</label>
@@ -152,7 +153,8 @@
       </div>
 
       <div class="checks">
-        <label class="check"><input type="checkbox" id="optOpening" checked> 첫 대목에 도입부 쓰기</label>
+        <label class="check"><input type="checkbox" id="optPrologue" checked> 1번 사진 앞에도 소설 쓰기(도입부)</label>
+        <label class="check"><input type="checkbox" id="optOpening" checked> 첫 대목에서 인물·배경 소개</label>
         <label class="check"><input type="checkbox" id="optEnding" checked> 마지막 사진 뒤에 마무리 쓰기</label>
         <label class="check"><input type="checkbox" id="optPrevImage" checked> 직전 사진도 함께 보여주기</label>
         <label class="check"><input type="checkbox" id="optAutosave" checked> 사진과 본문 자동 저장</label>
@@ -218,8 +220,12 @@
 
     <details class="memo" id="memoBox" hidden>
       <summary>이야기 메모 <span class="hint" id="memoLen"></span></summary>
-      <textarea id="memoText" rows="6" spellcheck="false" placeholder="인물·장소·문체 메모가 여기에 쌓입니다."></textarea>
-      <p class="hint">모델이 다음 대목을 쓸 때 참고하는 노트입니다. 틀린 곳은 직접 고쳐도 됩니다.</p>
+      <label class="memo-label" for="beatsText">줄거리 — 구간마다 무슨 일이 있었는지</label>
+      <textarea id="beatsText" rows="7" spellcheck="false" placeholder="1→2번 장면 사이: …"></textarea>
+      <label class="memo-label" for="memoText">설정 — 인물·장소·문체</label>
+      <textarea id="memoText" rows="5" spellcheck="false" placeholder="- 해원: 20대, 존댓말"></textarea>
+      <p class="hint">모델이 다음 대목을 쓸 때 참고하는 노트입니다. 틀린 곳은 직접 고쳐도 됩니다.
+        줄거리는 <code>1→2번 장면 사이:</code> 같은 앞머리를 지켜 주세요.</p>
     </details>
 
     <div class="row wrap-row saved-row">

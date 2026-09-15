@@ -85,16 +85,88 @@ export function splitMemo(text) {
   };
 }
 
-/* 같은 요청에서 메모까지 받아 올 때 덧붙이는 지시 */
-export function memoInstruction(memo) {
-  return [
+/* 같은 요청에서 메모까지 받아 올 때 덧붙이는 지시.
+   메모 전체를 다시 쓰게 하지 않고, 이번 대목의 줄거리 한 줄과 달라진 설정만 받는다. */
+export function memoInstruction(wantSettings) {
+  const lines = [
     '',
-    `본문을 다 쓴 뒤, 아래 표시줄을 그대로 한 줄에 적고 그 아래에 이야기 설정 메모를 ${memo ? '갱신해' : ''} 적어라.`,
+    '본문을 다 쓴 뒤 아래 표시줄을 그대로 한 줄에 적고, 그 아래에 작업 노트를 적어라.',
     MEMO_MARKER,
-    '메모에는 인물(이름·호칭·외모·말투), 관계, 장소, 시간의 흐름, 반복해서 나오는 소품, 문체와 어조만 담는다.',
-    '600자를 넘기지 말고 짧은 문장으로만 쓴다. 표시줄 위에는 소설 본문만 있어야 한다.',
-    '메모는 다음 대목을 쓸 때만 쓰는 작업 노트다. 이 요청에 한해 "본문만 출력" 규칙보다 이 지시가 우선한다.'
-  ].join('\n');
+    '줄거리: 이 대목에서 실제로 일어난 일을 한 줄(80자 이내)로 적는다.'
+  ];
+  if (wantSettings) {
+    lines.push('설정: 이번에 새로 생기거나 달라진 설정(인물 이름·호칭·외모·말투, 관계, 장소, 시간대, 소품, 문체)만 한두 줄로 적는다. 달라진 것이 없으면 "없음" 이라고만 적는다.');
+  }
+  lines.push('표시줄 위에는 소설 본문만 있어야 한다. 이 요청에 한해 "본문만 출력" 규칙보다 이 지시가 우선한다.');
+  return lines.join('\n');
+}
+
+/* 메모 블록을 줄거리 한 줄과 설정 변경으로 가른다. */
+export function parseMemoBlock(text) {
+  if (!text) return { beat: '', settings: '' };
+  const clean = text.replace(/^[\s*_#>-]+/gm, '');
+  const beatAt = clean.search(/^줄거리\s*[:：]/m);
+  const setAt = clean.search(/^설정\s*[:：]/m);
+
+  let beat = '';
+  let settings = '';
+  if (beatAt < 0 && setAt < 0) {
+    beat = clean.trim();                      // 형식을 안 지키면 통째로 줄거리로 본다
+  } else {
+    if (beatAt >= 0) {
+      const end = setAt > beatAt ? setAt : clean.length;
+      beat = clean.slice(beatAt, end).replace(/^줄거리\s*[:：]/, '').trim();
+    }
+    if (setAt >= 0) {
+      const end = beatAt > setAt ? beatAt : clean.length;
+      settings = clean.slice(setAt, end).replace(/^설정\s*[:：]/, '').trim();
+    }
+  }
+  if (/^(없음|없다|변화\s*없음|해당\s*없음)[.。]?$/.test(settings)) settings = '';
+  return { beat: beat.replace(/\s+/g, ' ').trim(), settings };
+}
+
+/* 설정 메모에 새 줄을 더한다. 같은 내용은 넣지 않고, 너무 길어지면 오래된 줄부터 버린다. */
+export function appendSettings(memo, add, cap = 3000) {
+  const clean = (add || '').trim();
+  if (!clean) return memo || '';
+  const incoming = clean.split('\n')
+    .map((l) => l.replace(/^[\s*_#>-]+/, '').trim())
+    .filter(Boolean)
+    .map((l) => `- ${l}`);
+  const out = [];
+  const seen = new Set();
+  for (const line of (memo ? memo.split('\n') : []).concat(incoming)) {
+    const key = line.replace(/\s+/g, '');
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(line);
+  }
+  while (out.join('\n').length > cap && out.length > 1) out.shift();
+  return out.join('\n');
+}
+
+/* 대목을 가리키는 고정 이름. 옵션을 바꿔도 이미 쓴 글과 어긋나지 않게 한다. */
+export function stepId(step) {
+  if (step.kind === 'prologue') return 'pro';
+  if (step.kind === 'ending') return 'end';
+  return `b${step.from}`;
+}
+
+export function stepTitle(step) {
+  if (step.kind === 'prologue') return '1번 장면 앞 · 도입부';
+  if (step.kind === 'ending') return `${step.from + 1}번 장면 뒤 · 마무리`;
+  return `${step.from + 1}→${step.to + 1}번 장면 사이`;
+}
+
+/* 지금까지의 줄거리를 구간별 한 줄로 늘어놓는다. */
+export function buildTimeline(steps, beats, upto = Infinity) {
+  const lines = [];
+  for (let i = 0; i < steps.length && i < upto; i++) {
+    const beat = beats?.[stepId(steps[i])];
+    if (beat) lines.push(`${stepTitle(steps[i])}: ${beat}`);
+  }
+  return lines.join('\n');
 }
 
 /* 메모를 갱신할 차례인지. 마지막 대목 뒤에는 쓸 곳이 없으니 건너뛴다. */
@@ -117,16 +189,34 @@ export function trimContext(story, limit) {
 }
 
 /*
-  step: { kind: 'bridge' | 'ending', from, to, opening }
+  step: { kind: 'prologue' | 'bridge' | 'ending', from, to, opening }
   images: 전체 이미지 배열 (index 로 접근)
 */
-export function buildStepParts({ step, images, story, memo, opts }) {
+export function buildStepParts({ step, images, story, memo, timeline, opts }) {
   const parts = [];
   const total = images.length;
   const context = trimContext(story, opts.contextChars ?? 4000);
 
   if (memo) parts.push({ text: `[이야기 메모 — 지금까지의 설정]\n${memo}` });
-  if (context) parts.push({ text: `[지금까지 쓴 소설 본문]\n${context}` });
+  if (timeline) parts.push({ text: `[지금까지의 줄거리 — 구간별로 무슨 일이 있었는지]\n${timeline}` });
+  if (context) parts.push({ text: `[바로 앞까지 쓴 소설 본문]\n${context}` });
+
+  if (step.kind === 'prologue') {
+    const first = images[0];
+    parts.push({ text: `[첫 장면 사진 · 1/${total} — 파일명 ${first.name}]` });
+    parts.push(imagePart(first));
+    parts.push({
+      text: [
+        '이 사진이 이야기의 첫 장면이다. 이 순간에 이르기까지의 도입부를 써라.',
+        '인물과 장소, 지금 어떤 상황인지를 자연스럽게 소개하고,',
+        '마지막 문장이 이 사진이 보여주는 바로 그 순간에 도착하면서 끝나야 한다.',
+        '앞 내용은 아직 없으니 되짚지 말고, 이야기를 여기서 연다.',
+        '본문만 출력한다.'
+      ].join('\n')
+    });
+    if (opts.askMemo) parts.push({ text: memoInstruction(opts.askSettings) });
+    return parts;
+  }
 
   if (step.kind === 'ending') {
     const last = images[step.from];
@@ -139,7 +229,7 @@ export function buildStepParts({ step, images, story, memo, opts }) {
         '본문만 출력한다.'
       ].join('\n')
     });
-    if (opts.askMemo) parts.push({ text: memoInstruction(memo) });
+    if (opts.askMemo) parts.push({ text: memoInstruction(opts.askSettings) });
     return parts;
   }
 
@@ -171,33 +261,41 @@ export function buildStepParts({ step, images, story, memo, opts }) {
     task.push('다음 사진이 마지막 장면이므로, 이 대목이 이야기의 끝으로 향하도록 마무리해라.');
   }
   task.push('설명 없이 소설 본문만 출력한다.');
-  if (opts.askMemo) task.push(memoInstruction(memo));
+  if (opts.askMemo) task.push(memoInstruction(opts.askSettings));
   parts.push({ text: task.join('\n') });
   return parts;
 }
 
-/* 장기 일관성용 메모를 갱신하는 별도 호출의 프롬프트 */
-export function buildMemoParts({ memo, passage }) {
-  return [{
-    text: [
-      '아래는 소설의 설정 메모와 방금 새로 쓴 본문이다.',
-      '메모를 갱신해 다시 출력해라. 인물(이름·호칭·외모·말투), 관계, 장소, 시간의 흐름, 반복되는 소품, 문체와 어조만 담는다.',
-      '600자를 넘기지 말고, 목록 형태의 짧은 문장으로만 쓴다. 메모 외의 말은 하지 마라.',
-      '',
-      `[기존 메모]\n${memo || '(없음)'}`,
-      '',
-      `[새로 쓴 본문]\n${passage}`
-    ].join('\n')
-  }];
+/* 메모를 따로 요청할 때의 프롬프트. 같은 요청 방식과 형식을 맞춘다. */
+export function buildMemoParts({ memo, passage, wantSettings }) {
+  const lines = [
+    '아래는 소설의 설정 메모와 방금 새로 쓴 대목이다. 작업 노트를 아래 형식 그대로 적어라.',
+    '',
+    '줄거리: 이 대목에서 실제로 일어난 일을 한 줄(80자 이내)로.'
+  ];
+  if (wantSettings) {
+    lines.push('설정: 이번에 새로 생기거나 달라진 설정만 한두 줄로. 달라진 것이 없으면 "없음".');
+  }
+  lines.push(
+    '두 줄 외의 말은 하지 마라.',
+    '',
+    `[기존 설정 메모]\n${memo || '(없음)'}`,
+    '',
+    `[새로 쓴 대목]\n${passage}`
+  );
+  return [{ text: lines.join('\n') }];
 }
 
 /* 이미지 배열로부터 생성 단계 목록을 만든다. */
 export function buildSteps(count, opts) {
   const steps = [];
+  if (count === 0) return steps;
+  if (opts.prologue) steps.push({ kind: 'prologue', to: 0 });
   for (let i = 0; i < count - 1; i++) {
-    steps.push({ kind: 'bridge', from: i, to: i + 1, opening: i === 0 && opts.opening });
+    // 앞에 도입부를 따로 쓰면 첫 대목이 다시 이야기를 열 필요가 없다.
+    steps.push({ kind: 'bridge', from: i, to: i + 1, opening: i === 0 && opts.opening && !opts.prologue });
   }
-  if (opts.ending && count > 0) steps.push({ kind: 'ending', from: count - 1 });
-  if (steps.length === 0 && count === 1) steps.push({ kind: 'ending', from: 0 });
+  if (opts.ending) steps.push({ kind: 'ending', from: count - 1 });
+  if (!steps.some((s) => s.kind !== 'prologue') && count === 1) steps.push({ kind: 'ending', from: 0 });
   return steps;
 }
