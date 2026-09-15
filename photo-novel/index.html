@@ -129,14 +129,15 @@
         <div class="field">
           <label for="retryRefusal">거부·빈 응답일 때</label>
           <select id="retryRefusal">
-            <option value="0">넘어가기 (실패로 표시)</option>
-            <option value="3">3번까지 다시 시도</option>
-            <option value="5">5번까지 다시 시도</option>
-            <option value="10">10번까지 다시 시도</option>
-            <option value="-1">될 때까지 (중단 누를 때까지)</option>
+            <option value="0">그냥 넘어가기 — 실패로 두고 다음 대목으로</option>
+            <option value="3">3번까지 다시 시도하고, 안 되면 넘어가기</option>
+            <option value="5">5번까지 다시 시도하고, 안 되면 넘어가기</option>
+            <option value="10">10번까지 다시 시도하고, 안 되면 넘어가기</option>
+            <option value="-1">될 때까지 — 이 대목이 나오기 전엔 다음으로 넘어가지 않음</option>
           </select>
-          <p class="hint">"정책상 거부", 안전 필터, 빈 응답으로 끝난 대목을 같은 자리에서 다시 씁니다.
-            설정값은 그대로 두고, 다른 문장으로 써 달라고만 덧붙입니다.</p>
+          <p class="hint">"정책상 거부", 안전 필터, 빈 응답으로 끝난 대목에 해당합니다.
+            "될 때까지" 는 중단을 누를 때까지 같은 자리에서 계속 씁니다.
+            설정값(temperature 등)은 그대로 두고, 다른 문장으로 써 달라고만 덧붙입니다.</p>
         </div>
         <div class="field">
           <label for="memoMode">장기 일관성 메모</label>
