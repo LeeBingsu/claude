@@ -719,16 +719,13 @@ async function attemptPassage({ si, o, signal, attempt, askMemo, askSettings, in
   });
 
   let raw = '';
-  const config = genConfig();
-  // 다시 걸 때는 표현이 달라지도록 temperature 를 조금씩 올린다.
-  if (attempt > 0) config.temperature = Math.min(2, (config.temperature || 1) + 0.1 * attempt);
 
   const res = await generate({
     apiKey: $('apiKey').value.trim(),
     model: modelName(),
     system: buildSystem(o),
     parts,
-    generationConfig: config,
+    generationConfig: genConfig(),
     thinkingBudget: thinkingBudget(),
     state: state.api,
     signal,
