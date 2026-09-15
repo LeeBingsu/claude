@@ -1,6 +1,0 @@
-{
-  "replace": false,
-  "values": [
-    { "id": "minecraft:mace_smash", "required": false }
-  ]
-}
