@@ -2,7 +2,7 @@
 
 import { collectImages, recordFromStored } from './lib/images.js';
 import { sortByName } from './lib/sort.js';
-import { generate, listModels, isRefusal, isWorthRetrying, SAFETY_LADDER } from './lib/gemini.js';
+import { generate, listModels, isRefusal, isWorthRetrying, describeFailure, SAFETY_LADDER } from './lib/gemini.js';
 import {
   buildSystem, buildSteps, buildStepParts, buildMemoParts, splitMemo, parseMemoBlock,
   appendSettings, buildTimeline, stepId, stepTitle, memoDue, retryNote, LENGTHS
@@ -43,7 +43,7 @@ const FIELDS = [
   ['contextChars', 'value'], ['delayMs', 'value'], ['maxDim', 'value'],
   ['optPrologue', 'checked'], ['optOpening', 'checked'], ['optEnding', 'checked'], ['optPrevImage', 'checked'],
   ['memoMode', 'value'], ['memoEvery', 'value'], ['retryRefusal', 'value'], ['optSoften', 'checked'],
-  ['optWakeLock', 'checked'], ['optAutoResume', 'checked'], ['optAutosave', 'checked'], ['saveKey', 'checked']
+  ['optWakeLock', 'checked'], ['optAutoResume', 'checked'], ['optLightRetry', 'checked'], ['optAutosave', 'checked'], ['saveKey', 'checked']
 ];
 
 function saveSettings() {
@@ -93,6 +93,7 @@ function opts() {
     prologue: $('optPrologue').checked,
     memoMode: $('memoMode').value,
     retryRefusal: Number($('retryRefusal').value),   // 0 안 함, -1 될 때까지
+    lightRetry: $('optLightRetry').checked,
     soften: $('optSoften').checked,
     memoEvery: Number($('memoEvery').value) || 1,
     contextChars: Math.max(0, Number($('contextChars').value) || 4000),
@@ -727,7 +728,7 @@ const FINISH_MESSAGE = {
 };
 
 /* 한 대목을 한 번 생성해 본다. 결과 판정은 부르는 쪽에서 한다. */
-async function attemptPassage({ si, o, signal, attempt, askMemo, askSettings, inlineMemo }) {
+async function attemptPassage({ si, o, signal, attempt, light, askMemo, askSettings, inlineMemo }) {
   const step = state.steps[si];
   const id = stepId(step);
   const p = passageAt(id);
@@ -736,15 +737,23 @@ async function attemptPassage({ si, o, signal, attempt, askMemo, askSettings, in
   p.status = 'busy';
   renderStory();
 
+  // 여러 번 막혔다면 딸려 가는 짐(앞 본문·줄거리·메모·직전 사진)이 원인일 수 있다.
+  // 마지막에는 사진 한 장과 지시사항만 남겨 가볍게 보내 본다.
   const parts = buildStepParts({
     step,
     images: state.images,
-    story: storyBefore(si),
-    memo: o.memoMode !== 'off' ? state.memo : '',
-    timeline: o.memoMode !== 'off' ? buildTimeline(state.steps, state.beats, si, gapIds()) : '',
-    nextText: storyAfter(si),
-    gapBefore: gapBefore(si),
-    opts: { ...o, askMemo: inlineMemo, askSettings, retryNote: retryNote(attempt, o.soften) }
+    story: light ? '' : storyBefore(si),
+    memo: light || o.memoMode === 'off' ? '' : state.memo,
+    timeline: light || o.memoMode === 'off' ? '' : buildTimeline(state.steps, state.beats, si, gapIds()),
+    nextText: light ? '' : storyAfter(si),
+    gapBefore: light ? '' : gapBefore(si),
+    opts: {
+      ...o,
+      includePrevImage: light ? false : o.includePrevImage,
+      askMemo: inlineMemo && !light,
+      askSettings,
+      retryNote: retryNote(attempt, o.soften)
+    }
   });
 
   let raw = '';
@@ -771,7 +780,7 @@ async function attemptPassage({ si, o, signal, attempt, askMemo, askSettings, in
   const cut = splitMemo(res.text || '');
   p.text = cut.passage.trim();
   // 부탁한 적 없는데 메모가 붙어 오기도 한다. 본문에서는 떼되, 받아 두는 건 부탁했을 때만.
-  if (inlineMemo && cut.memo) {
+  if (inlineMemo && !light && cut.memo) {
     const note = parseMemoBlock(cut.memo);
     if (note.beat) state.beats[id] = note.beat;
     if (note.settings) state.memo = appendSettings(state.memo, note.settings);
@@ -788,26 +797,36 @@ async function generateStep(si, o, signal) {
   const askSettings = askMemo && memoDue(si, state.steps.length, o.memoEvery);
   const inlineMemo = askMemo && o.memoMode === 'inline';
   const limit = Number(o.retryRefusal) || 0;      // 0 = 안 함, -1 = 될 때까지
+  // 고른 횟수를 다 쓰면 마지막으로 문맥을 덜어 한 번 더 보낸다(될 때까지면 4번째부터 계속).
+  // "그냥 넘어가기" 를 골랐으면 그 한 번도 하지 않는다.
+  const lightOn = o.lightRetry && limit !== 0;
+  const lightFrom = lightOn ? (limit < 0 ? 3 : limit + 1) : Infinity;
+  const maxAttempt = limit < 0 ? Infinity : limit + (lightOn ? 1 : 0);
   const label = stepTitle(step);
   const p = passageAt(id);
 
   let res = null;
   let attempt = 0;
+  let usedLight = false;
   for (;;) {
+    const light = attempt >= lightFrom;
     let failure = '';
     try {
       await waitForOnline(signal);
-      const out = await attemptPassage({ si, o, signal, attempt, askMemo, askSettings, inlineMemo });
+      const out = await attemptPassage({ si, o, signal, attempt, light, askMemo, askSettings, inlineMemo });
       res = out.res;
-      if (!isRefusal({ text: p.text, finishReason: res.finishReason, blockReason: res.blockReason })) break;
-      failure = FINISH_MESSAGE[res.blockReason] || FINISH_MESSAGE[res.finishReason] || '빈 응답을 받았습니다.';
+      if (!isRefusal({ text: p.text, finishReason: res.finishReason, blockReason: res.blockReason })) {
+        usedLight = light;
+        break;
+      }
+      failure = describeFailure({ text: p.text, finishReason: res.finishReason, blockReason: res.blockReason })?.message
+        || '빈 응답을 받았습니다.';
     } catch (err) {
       if (err.name === 'AbortError' || !isWorthRetrying(err) || limit === 0) throw err;
       failure = err.message;
     }
 
-    const more = limit < 0 || attempt < limit;
-    if (!more) {
+    if (attempt >= maxAttempt) {
       p.status = 'error';
       p.error = attempt ? `${attempt + 1}번 시도했지만 계속 막혔습니다 — ${failure}` : failure;
       renderStory();
@@ -817,16 +836,20 @@ async function generateStep(si, o, signal) {
 
     attempt++;
     const wait = Math.min(15000, 1000 * 2 ** (attempt - 1)) + (o.delayMs || 0);
+    const how = attempt >= lightFrom ? '문맥을 덜어내고 ' : '';
     p.status = 'error';
-    p.error = `${failure} · ${Math.round(wait / 1000)}초 뒤 ${attempt}번째 다시 시도합니다` + (limit > 0 ? ` (최대 ${limit}번)` : '');
+    p.error = `${failure} · ${Math.round(wait / 1000)}초 뒤 ${how}${attempt}번째 다시 시도합니다`;
     renderStory();
-    setStatus(`${label} — ${failure} 다시 시도 ${attempt}${limit > 0 ? `/${limit}` : ''}회째…`);
+    setStatus(`${label} — ${failure} ${how}다시 시도 ${attempt}${limit > 0 ? `/${limit}` : ''}회째…`);
     await sleep(wait, signal);
   }
 
   p.status = 'done';
   p.error = res.finishReason === 'MAX_TOKENS' ? FINISH_MESSAGE.MAX_TOKENS : '';
-  if (attempt) setStatus(`${label} — ${attempt}번 다시 시도해서 받았습니다.`);
+  if (usedLight) {
+    p.error = `앞 내용을 빼고 사진만 보고 쓴 대목입니다. 앞뒤가 맞는지 확인해 주세요.${p.error ? ` ${p.error}` : ''}`;
+  }
+  if (attempt) setStatus(`${label} — ${attempt}번 다시 시도해서 받았습니다.${usedLight ? ' (문맥을 덜어낸 시도)' : ''}`);
   renderStory();
   scheduleSave(0);
 
