@@ -326,7 +326,7 @@ await check('이미 저장한 사진은 다시 쓰지 않고, 빠진 사진만 �
   eq(planImageSync(['a', 'b'], ['b', 'a']), { put: [], del: [] });   // 순서만 바뀐 경우
 });
 
-await check('저장할 때 생성 중(busy) 상태는 남기지 않는다', () => {
+await check('쓰다 만 대목은 저장하지 않는다', () => {
   eq(normalizePassages([
     { text: '쓰다 만 글', status: 'busy' },
     { text: '', status: 'busy' },
@@ -334,7 +334,7 @@ await check('저장할 때 생성 중(busy) 상태는 남기지 않는다', () =
     { text: '', status: 'error', error: '차단됨' },
     null
   ]), [
-    { text: '쓰다 만 글', status: 'done', error: '' },
+    { text: '', status: 'empty', error: '' },
     { text: '', status: 'empty', error: '' },
     { text: '완성', status: 'done', error: '' },
     { text: '', status: 'error', error: '차단됨' },
@@ -343,13 +343,14 @@ await check('저장할 때 생성 중(busy) 상태는 남기지 않는다', () =
   eq(normalizePassages(undefined), {});
 });
 
-await check('이름표로 저장할 때 빈 대목은 빼고 담는다', () => {
+await check('이름표로 저장할 때 빈 대목과 쓰다 만 대목은 빼고 담는다', () => {
   eq(normalizePassages({
-    pro: { text: '도입부', status: 'busy' },
+    pro: { text: '완성된 도입부', status: 'done' },
+    half: { text: '쓰다 만', status: 'busy' },
     b0: { text: '', status: 'empty' },
     b1: { text: '', status: 'error', error: '차단됨' }
   }), {
-    pro: { text: '도입부', status: 'done', error: '' },
+    pro: { text: '완성된 도입부', status: 'done', error: '' },
     b1: { text: '', status: 'error', error: '차단됨' }
   });
 });

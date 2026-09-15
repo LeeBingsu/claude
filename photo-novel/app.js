@@ -42,7 +42,8 @@ const FIELDS = [
   ['temperature', 'value'], ['topP', 'value'], ['maxTokens', 'value'],
   ['contextChars', 'value'], ['delayMs', 'value'], ['maxDim', 'value'],
   ['optPrologue', 'checked'], ['optOpening', 'checked'], ['optEnding', 'checked'], ['optPrevImage', 'checked'],
-  ['memoMode', 'value'], ['memoEvery', 'value'], ['retryRefusal', 'value'], ['optSoften', 'checked'], ['optAutosave', 'checked'], ['saveKey', 'checked']
+  ['memoMode', 'value'], ['memoEvery', 'value'], ['retryRefusal', 'value'], ['optSoften', 'checked'],
+  ['optWakeLock', 'checked'], ['optAutoResume', 'checked'], ['optAutosave', 'checked'], ['saveKey', 'checked']
 ];
 
 function saveSettings() {
@@ -202,6 +203,34 @@ async function restoreWork() {
   renderStory();
   showSaved(work.updatedAt || Date.now());
   setStatus(`지난 작업을 불러왔습니다 · 사진 ${state.images.length}장 · ${storyChars().toLocaleString('ko-KR')}자 (${clockOf(work.updatedAt || Date.now())} 저장)`);
+  maybeAutoResume();
+}
+
+/* 쓰다 만 작업이 남아 있고 키가 저장돼 있으면, 다시 열었을 때 이어서 쓴다. */
+function unfinishedCount() {
+  if (!state.images.length) return 0;
+  return state.steps.filter((st) => {
+    const p = state.passages[stepId(st)];
+    return !(p && p.status === 'done' && p.text.trim());
+  }).length;
+}
+
+function maybeAutoResume() {
+  const left = unfinishedCount();
+  const written = Object.values(state.passages).some((p) => p?.status === 'done' && p.text.trim());
+  if (!left || !written) return;                      // 아직 시작도 안 한 작업은 건드리지 않는다
+  if (!$('apiKey').value.trim()) {
+    setStatus(`남은 대목이 ${left}개 있습니다. API 키를 넣고 "빈 대목만 이어서" 를 누르세요.`);
+    return;
+  }
+  if (!$('optAutoResume').checked) {
+    setStatus(`남은 대목이 ${left}개 있습니다. "빈 대목만 이어서" 로 이어 쓸 수 있습니다.`);
+    return;
+  }
+  setStatus(`나갔던 자리에서 이어 씁니다 · 남은 대목 ${left}개 (멈추려면 중단)`);
+  setTimeout(() => {
+    if (!state.running && unfinishedCount()) runAll({ onlyEmpty: true });
+  }, 1500);
 }
 
 /* ------------------------------------------------------------- 초기 UI */
@@ -594,6 +623,46 @@ function setProgress(done, total) {
   $('barIn').style.width = total ? `${Math.round((done / total) * 100)}%` : '0%';
 }
 
+/* ------------------------------------------------------------- 자리 비움 대비 */
+
+let wakeLock = null;
+
+/* 휴대폰에서 화면이 꺼지면 페이지가 얼어붙어 생성이 멈춘다. 그동안만 잡아 둔다. */
+async function holdScreen() {
+  if (!$('optWakeLock').checked || !navigator.wakeLock) return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener?.('release', () => { wakeLock = null; });
+  } catch { /* 배터리 절약 모드 등에서는 거절된다 */ }
+}
+
+function releaseScreen() {
+  try { wakeLock?.release(); } catch { /* 이미 풀렸으면 그만 */ }
+  wakeLock = null;
+}
+
+// 탭을 다시 보면 브라우저가 풀어 둔 잠금을 다시 잡는다.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && state.running && !wakeLock) holdScreen();
+});
+
+/* 연결이 끊겼으면 다시 붙을 때까지 기다린다(재시도 횟수를 축내지 않는다). */
+function waitForOnline(signal) {
+  if (navigator.onLine !== false) return Promise.resolve();
+  setStatus('인터넷 연결이 끊겼습니다. 다시 연결되면 이어서 씁니다…');
+  return new Promise((resolve, reject) => {
+    const done = () => {
+      window.removeEventListener('online', done);
+      resolve();
+    };
+    window.addEventListener('online', done);
+    signal?.addEventListener('abort', () => {
+      window.removeEventListener('online', done);
+      reject(new DOMException('중단됨', 'AbortError'));
+    }, { once: true });
+  });
+}
+
 /* ------------------------------------------------------------- 생성 */
 
 /* 바로 앞까지 쓴 본문. 줄거리 메모가 앞쪽을 대신하므로 길이는 옵션으로 자른다. */
@@ -704,6 +773,7 @@ async function generateStep(si, o, signal) {
   for (;;) {
     let failure = '';
     try {
+      await waitForOnline(signal);
       const out = await attemptPassage({ si, o, signal, attempt, askMemo, askSettings, inlineMemo });
       res = out.res;
       if (!isRefusal({ text: p.text, finishReason: res.finishReason, blockReason: res.blockReason })) break;
@@ -770,6 +840,14 @@ function preflight() {
   return true;
 }
 
+/* 쓰다 만 대목은 조각을 남기지 않는다. 이어쓰기가 이 대목을 다시 쓴다. */
+function dropHalfWritten(note) {
+  for (const [id, p] of Object.entries(state.passages)) {
+    if (p?.status !== 'busy') continue;
+    state.passages[id] = { text: '', status: 'error', error: note };
+  }
+}
+
 function setRunning(on) {
   state.running = on;
   $('runBtn').disabled = on;
@@ -793,6 +871,7 @@ async function runAll({ onlyEmpty }) {
   const ac = new AbortController();
   state.abort = ac;
   setRunning(true);
+  holdScreen();
   saveSettings();
 
   const total = state.steps.length;
@@ -813,15 +892,17 @@ async function runAll({ onlyEmpty }) {
     setStatus(failed ? `완료 (실패한 대목 ${failed}개 — 다시 쓰기를 눌러 보세요)` : '완료되었습니다.', Boolean(failed));
   } catch (err) {
     if (err.name === 'AbortError') {
+      dropHalfWritten('중단했습니다. "빈 대목만 이어서" 로 이 대목부터 다시 씁니다.');
       setStatus('중단했습니다. "빈 대목만 이어서" 로 이어서 쓸 수 있습니다.');
     } else {
-      const p = Object.values(state.passages).find((x) => x && x.status === 'busy');
-      if (p) { p.status = 'error'; p.error = err.message; }
+      dropHalfWritten(err.message);
       setStatus(`오류: ${err.message}`, true);
-      renderStory();
     }
+    renderStory();
+    scheduleSave(0);
   } finally {
     setRunning(false);
+    releaseScreen();
     state.abort = null;
   }
 }
@@ -834,6 +915,7 @@ async function runOne(si) {
   const ac = new AbortController();
   state.abort = ac;
   setRunning(true);
+  holdScreen();
   state.api.safetyStep = Number($('safety').value) || 0;
   setStatus(`${stepTitle(state.steps[si])} 다시 쓰는 중…`);
   try {
@@ -841,16 +923,22 @@ async function runOne(si) {
     setStatus('완료되었습니다.');
   } catch (err) {
     if (err.name === 'AbortError') {
+      dropHalfWritten('중단했습니다.');
+      renderStory();
+      scheduleSave(0);
       setStatus('중단했습니다.');
     } else {
       const p = passageAt(stepId(state.steps[si]));
+      p.text = '';
       p.status = 'error';
       p.error = err.message;
       setStatus(`오류: ${err.message}`, true);
       renderStory();
+      scheduleSave(0);
     }
   } finally {
     setRunning(false);
+    releaseScreen();
     state.abort = null;
   }
 }
