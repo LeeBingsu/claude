@@ -665,6 +665,33 @@ function waitForOnline(signal) {
 
 /* ------------------------------------------------------------- 생성 */
 
+/* 아직 글이 없는 구간들의 이름표 */
+function gapIds() {
+  const out = new Set();
+  for (const st of state.steps) {
+    const p = state.passages[stepId(st)];
+    if (!(p && p.status === 'done' && p.text.trim())) out.add(stepId(st));
+  }
+  return out;
+}
+
+/* 바로 앞 구간이 비어 있으면 그 이름. 없으면 빈 문자열. */
+function gapBefore(si) {
+  const prev = state.steps[si - 1];
+  if (!prev) return '';
+  const p = state.passages[stepId(prev)];
+  return p && p.status === 'done' && p.text.trim() ? '' : stepTitle(prev);
+}
+
+/* 이 대목 뒤에 이미 쓰여 있는 본문. 구멍을 메우거나 다시 쓸 때 거기에 닿게 한다. */
+function storyAfter(si) {
+  for (let i = si + 1; i < state.steps.length; i++) {
+    const p = state.passages[stepId(state.steps[i])];
+    if (p && p.status === 'done' && p.text.trim()) return p.text;
+  }
+  return '';
+}
+
 /* 바로 앞까지 쓴 본문. 줄거리 메모가 앞쪽을 대신하므로 길이는 옵션으로 자른다. */
 function storyBefore(si) {
   return state.steps
@@ -714,7 +741,9 @@ async function attemptPassage({ si, o, signal, attempt, askMemo, askSettings, in
     images: state.images,
     story: storyBefore(si),
     memo: o.memoMode !== 'off' ? state.memo : '',
-    timeline: o.memoMode !== 'off' ? buildTimeline(state.steps, state.beats, si) : '',
+    timeline: o.memoMode !== 'off' ? buildTimeline(state.steps, state.beats, si, gapIds()) : '',
+    nextText: storyAfter(si),
+    gapBefore: gapBefore(si),
     opts: { ...o, askMemo: inlineMemo, askSettings, retryNote: retryNote(attempt, o.soften) }
   });
 
@@ -732,23 +761,20 @@ async function attemptPassage({ si, o, signal, attempt, askMemo, askSettings, in
     onDelta: (t) => {
       raw += t;
       // 메모를 같이 받는 중이면 표시줄 뒤쪽은 화면에 내보내지 않는다.
-      p.text = inlineMemo ? splitMemo(raw).passage : raw;
+      p.text = splitMemo(raw).passage;          // 표시줄이 없으면 그대로 본문이다
       const node = proseEl(id);
       if (node) node.textContent = p.text;
       updateCharCount();
     }
   });
 
-  if (inlineMemo) {
-    const cut = splitMemo(res.text || '');
-    p.text = cut.passage.trim();
-    if (cut.memo) {                           // 표시줄이 없으면 이전 메모를 그대로 둔다
-      const note = parseMemoBlock(cut.memo);
-      if (note.beat) state.beats[id] = note.beat;
-      if (note.settings) state.memo = appendSettings(state.memo, note.settings);
-    }
-  } else {
-    p.text = (res.text || '').trim();
+  const cut = splitMemo(res.text || '');
+  p.text = cut.passage.trim();
+  // 부탁한 적 없는데 메모가 붙어 오기도 한다. 본문에서는 떼되, 받아 두는 건 부탁했을 때만.
+  if (inlineMemo && cut.memo) {
+    const note = parseMemoBlock(cut.memo);
+    if (note.beat) state.beats[id] = note.beat;
+    if (note.settings) state.memo = appendSettings(state.memo, note.settings);
   }
   return { res, id, p };
 }

@@ -159,12 +159,19 @@ export function stepTitle(step) {
   return `${step.from + 1}→${step.to + 1}번 장면 사이`;
 }
 
-/* 지금까지의 줄거리를 구간별 한 줄로 늘어놓는다. */
-export function buildTimeline(steps, beats, upto = Infinity) {
+/*
+  지금까지의 줄거리를 구간별 한 줄로 늘어놓는다.
+  gaps 에 든 구간(아직 글이 없는 자리)은 비었다고 적어 준다.
+  그래야 뒤 대목이 그 자리를 없는 셈 치지 않는다.
+*/
+export function buildTimeline(steps, beats, upto = Infinity, gaps = null) {
+  const end = Math.min(steps.length, upto);
   const lines = [];
-  for (let i = 0; i < steps.length && i < upto; i++) {
-    const beat = beats?.[stepId(steps[i])];
+  for (let i = 0; i < end; i++) {
+    const id = stepId(steps[i]);
+    const beat = beats?.[id];
     if (beat) lines.push(`${stepTitle(steps[i])}: ${beat}`);
+    else if (gaps?.has(id)) lines.push(`${stepTitle(steps[i])}: (비어 있음 — 아직 쓰지 않은 구간)`);
   }
   return lines.join('\n');
 }
@@ -202,7 +209,7 @@ export function retryNote(attempt, soften) {
   return lines.join('\n');
 }
 
-export function buildStepParts({ step, images, story, memo, timeline, opts }) {
+export function buildStepParts({ step, images, story, memo, timeline, nextText, gapBefore, opts }) {
   const parts = [];
   // 재시도 안내는 어느 갈래든 맨 끝에 붙인다.
   const finish = (list) => (opts.retryNote ? [...list, { text: opts.retryNote }] : list);
@@ -212,6 +219,23 @@ export function buildStepParts({ step, images, story, memo, timeline, opts }) {
   if (memo) parts.push({ text: `[이야기 메모 — 지금까지의 설정]\n${memo}` });
   if (timeline) parts.push({ text: `[지금까지의 줄거리 — 구간별로 무슨 일이 있었는지]\n${timeline}` });
   if (context) parts.push({ text: `[바로 앞까지 쓴 소설 본문]\n${context}` });
+  if (nextText) parts.push({ text: `[이 대목 바로 뒤에 이어질 본문 — 이미 쓰여 있다]\n${trimContext(nextText, 1200)}` });
+
+  // 앞이 비어 있거나 뒤가 이미 쓰여 있으면, 그 사이를 메우는 것이 이 대목의 일이다.
+  const seam = [];
+  if (gapBefore) {
+    seam.push(
+      `직전 구간(${gapBefore})은 아직 쓰이지 않아 비어 있다.`,
+      '이 대목을 시작할 때, 그 사이에 있었던 일을 한두 문장으로 자연스럽게 흘려 넣어 이야기가 끊기지 않게 해라.'
+    );
+  }
+  if (nextText) {
+    seam.push(
+      '이 대목이 끝나면 위의 "뒤에 이어질 본문" 이 곧바로 이어진다.',
+      '그 첫 문장에 자연스럽게 닿도록 끝내고, 거기 이미 쓰인 내용을 되풀이하지 마라.'
+    );
+  }
+  if (seam.length) parts.push({ text: seam.join('\n') });
 
   if (step.kind === 'prologue') {
     const first = images[0];

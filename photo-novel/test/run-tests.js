@@ -355,6 +355,48 @@ await check('이름표로 저장할 때 빈 대목과 쓰다 만 대목은 빼�
   });
 });
 
+/* ------------------------------------------------------------- 구멍 메우기 */
+
+await check('건너뛴 구간은 줄거리에 비었다고 적힌다', () => {
+  const steps = buildSteps(4, { prologue: true, ending: false });
+  const beats = { pro: '집을 나섰다', b1: '바다에 닿았다' };
+  eq(buildTimeline(steps, beats, Infinity, new Set(['b0'])),
+    '1번 장면 앞 · 도입부: 집을 나섰다\n1→2번 장면 사이: (비어 있음 — 아직 쓰지 않은 구간)\n2→3번 장면 사이: 바다에 닿았다');
+  // 아직 차례가 오지 않은 뒷구간은 알리지 않는다
+  eq(buildTimeline(steps, beats, 2, new Set(['b0'])),
+    '1번 장면 앞 · 도입부: 집을 나섰다\n1→2번 장면 사이: (비어 있음 — 아직 쓰지 않은 구간)');
+  // 글은 있는데 줄거리 한 줄만 없는 구간은 조용히 건너뛴다
+  eq(buildTimeline(steps, beats, Infinity, new Set()),
+    '1번 장면 앞 · 도입부: 집을 나섰다\n2→3번 장면 사이: 바다에 닿았다');
+});
+
+await check('앞이 비면 그 사이를 메우라고 시킨다', () => {
+  const images = [0, 1, 2].map((i) => ({ name: `${i + 1}.jpg`, mimeType: 'image/jpeg', base64: 'X' }));
+  const base = { includePrevImage: true, contextChars: 4000 };
+  const parts = buildStepParts({
+    step: { kind: 'bridge', from: 1, to: 2 }, images, story: '앞 본문', memo: '', timeline: '',
+    gapBefore: '1→2번 장면 사이', opts: base
+  });
+  const all = parts.map((x) => x.text || '').join('\n');
+  ok(all.includes('비어 있다'), '빈 구간을 알려 준다');
+  ok(all.includes('흘려 넣어'), '메우라고 시킨다');
+
+  const clean = buildStepParts({ step: { kind: 'bridge', from: 1, to: 2 }, images, story: '', memo: '', timeline: '', opts: base });
+  ok(!clean.map((x) => x.text || '').join('\n').includes('비어 있다'), '구멍이 없으면 붙지 않는다');
+});
+
+await check('뒤에 이미 쓴 글이 있으면 거기에 닿게 시킨다', () => {
+  const images = [0, 1, 2].map((i) => ({ name: `${i + 1}.jpg`, mimeType: 'image/jpeg', base64: 'X' }));
+  const parts = buildStepParts({
+    step: { kind: 'bridge', from: 0, to: 1 }, images, story: '', memo: '', timeline: '',
+    nextText: '그는 방파제에 서 있었다.', opts: { includePrevImage: true, contextChars: 4000 }
+  });
+  const all = parts.map((x) => x.text || '').join('\n');
+  ok(all.includes('그는 방파제에 서 있었다.'), '뒷글을 보여 준다');
+  ok(all.includes('되풀이하지 마라'), '겹치지 않게');
+  ok(all.includes('자연스럽게 닿도록'), '이어지게');
+});
+
 /* ------------------------------------------------------------- 거부 재시도 */
 
 await check('거부·빈 응답을 가려낸다', () => {
