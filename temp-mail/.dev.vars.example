@@ -1,0 +1,11 @@
+# 로컬 개발용 변수. 이 파일을 `.dev.vars` 로 복사하면 `wrangler dev` 가 자동으로 읽어
+# wrangler.jsonc 의 vars 를 덮어씁니다. `.dev.vars` 는 커밋하지 마세요.
+
+MAIL_DOMAINS=example.com,test.local
+INBOX_TTL_MINUTES=60
+MAX_MESSAGES_PER_INBOX=50
+MAX_ATTACHMENT_BYTES=512000
+
+# 로컬에서 scripts/send-test-email.mjs 로 메일을 밀어 넣으려면 1 이어야 합니다.
+# 배포 환경에서는 절대 켜지 마세요 — 누구나 임의의 메일을 주입할 수 있게 됩니다.
+ALLOW_DEV_INGEST=1
