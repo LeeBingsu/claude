@@ -43,7 +43,9 @@ const FIELDS = [
   ['contextChars', 'value'], ['delayMs', 'value'], ['maxDim', 'value'],
   ['optPrologue', 'checked'], ['optOpening', 'checked'], ['optEnding', 'checked'], ['optPrevImage', 'checked'],
   ['memoMode', 'value'], ['memoEvery', 'value'], ['retryRefusal', 'value'], ['optSoften', 'checked'],
-  ['optWakeLock', 'checked'], ['optAutoResume', 'checked'], ['optLightRetry', 'checked'], ['optAutosave', 'checked'], ['saveKey', 'checked']
+  ['optWakeLock', 'checked'], ['optAutoResume', 'checked'], ['optLightRetry', 'checked'],
+  ['dropMemo', 'checked'], ['dropTimeline', 'checked'], ['dropStory', 'checked'],
+  ['dropPrevImage', 'checked'], ['dropInstructions', 'checked'], ['imagesBox', 'open'], ['optAutosave', 'checked'], ['saveKey', 'checked']
 ];
 
 function saveSettings() {
@@ -94,6 +96,13 @@ function opts() {
     memoMode: $('memoMode').value,
     retryRefusal: Number($('retryRefusal').value),   // 0 안 함, -1 될 때까지
     lightRetry: $('optLightRetry').checked,
+    drop: {
+      memo: $('dropMemo').checked,
+      timeline: $('dropTimeline').checked,
+      story: $('dropStory').checked,
+      prevImage: $('dropPrevImage').checked,
+      instructions: $('dropInstructions').checked
+    },
     soften: $('optSoften').checked,
     memoEvery: Number($('memoEvery').value) || 1,
     contextChars: Math.max(0, Number($('contextChars').value) || 4000),
@@ -294,6 +303,7 @@ function renderImages() {
   const list = $('imageList');
   list.textContent = '';
   $('countVal').textContent = String(state.images.length);
+  $('listHint').textContent = state.images.length ? `(${state.images.length}장 · 누르면 접기/펴기)` : '(0장)';
 
   state.images.forEach((img, i) => {
     const li = document.createElement('li');
@@ -416,7 +426,13 @@ async function addFiles(files) {
       onProgress: (done, total, name) => setStatus(`사진 처리 중 ${done}/${total} ${name}`)
     });
     // 새로 넣은 묶음은 이름순으로 들어오고, 이미 손으로 맞춰 둔 순서는 건드리지 않는다.
+    const before = state.images.length;
     state.images = state.images.concat(images);
+    // 사진이 많아지는 순간 목록을 한 번 접어 준다. 매번 스크롤하지 않도록.
+    if (before <= 8 && state.images.length > 8 && $('imagesBox').open) {
+      $('imagesBox').open = false;
+      saveSettings();
+    }
     renderImages();
     renderStory();
     if (errors.length) {
@@ -718,6 +734,14 @@ const sleep = (ms, signal) => new Promise((resolve, reject) => {
   }, { once: true });
 });
 
+const DROP_LABEL = {
+  memo: '설정 메모',
+  timeline: '줄거리',
+  story: '앞뒤 본문',
+  prevImage: '직전 사진',
+  instructions: '맞춤 지시사항'
+};
+
 const FINISH_MESSAGE = {
   SAFETY: '안전 필터에 막혔습니다. 고급 옵션에서 안전 필터 단계를 바꾸거나 지시사항을 조정해 보세요.',
   PROHIBITED_CONTENT: '모델이 정책상 생성을 거부했습니다.',
@@ -737,17 +761,24 @@ async function attemptPassage({ si, o, signal, attempt, light, askMemo, askSetti
   p.status = 'busy';
   renderStory();
 
-  // 여러 번 막혔다면 쌓아 온 메모와 줄거리가 원인일 수 있다.
-  // 가벼운 시도에서는 그 둘만 덜어내고, 사진과 바로 앞 본문은 그대로 보낸다.
+  // 여러 번 막혔다면 딸려 가는 것 중 무언가가 원인이다. 무엇을 뺄지는 사용자가 고른다.
+  const drop = light ? o.drop : {};
+  const memoOn = o.memoMode !== 'off';
   const parts = buildStepParts({
     step,
     images: state.images,
-    story: storyBefore(si),
-    memo: light || o.memoMode === 'off' ? '' : state.memo,
-    timeline: light || o.memoMode === 'off' ? '' : buildTimeline(state.steps, state.beats, si, gapIds()),
-    nextText: storyAfter(si),
-    gapBefore: gapBefore(si),
-    opts: { ...o, askMemo: inlineMemo, askSettings, retryNote: retryNote(attempt, o.soften) }
+    story: drop.story ? '' : storyBefore(si),
+    memo: !memoOn || drop.memo ? '' : state.memo,
+    timeline: !memoOn || drop.timeline ? '' : buildTimeline(state.steps, state.beats, si, gapIds()),
+    nextText: drop.story ? '' : storyAfter(si),
+    gapBefore: drop.story ? '' : gapBefore(si),
+    opts: {
+      ...o,
+      includePrevImage: drop.prevImage ? false : o.includePrevImage,
+      askMemo: inlineMemo,
+      askSettings,
+      retryNote: retryNote(attempt, o.soften)
+    }
   });
 
   let raw = '';
@@ -755,7 +786,7 @@ async function attemptPassage({ si, o, signal, attempt, light, askMemo, askSetti
   const res = await generate({
     apiKey: $('apiKey').value.trim(),
     model: modelName(),
-    system: buildSystem(o),
+    system: buildSystem(drop.instructions ? { ...o, instructions: '' } : o),
     parts,
     generationConfig: genConfig(),
     thinkingBudget: thinkingBudget(),
@@ -793,7 +824,8 @@ async function generateStep(si, o, signal) {
   const limit = Number(o.retryRefusal) || 0;      // 0 = 안 함, -1 = 될 때까지
   // 고른 횟수를 다 쓰면 마지막으로 문맥을 덜어 한 번 더 보낸다(될 때까지면 4번째부터 계속).
   // "그냥 넘어가기" 를 골랐으면 그 한 번도 하지 않는다.
-  const lightOn = o.lightRetry && limit !== 0;
+  const dropped = Object.entries(DROP_LABEL).filter(([key]) => o.drop[key]).map(([, label]) => label);
+  const lightOn = o.lightRetry && limit !== 0 && dropped.length > 0;
   const lightFrom = lightOn ? (limit < 0 ? 3 : limit + 1) : Infinity;
   const maxAttempt = limit < 0 ? Infinity : limit + (lightOn ? 1 : 0);
   const label = stepTitle(step);
@@ -830,7 +862,7 @@ async function generateStep(si, o, signal) {
 
     attempt++;
     const wait = Math.min(15000, 1000 * 2 ** (attempt - 1)) + (o.delayMs || 0);
-    const how = attempt >= lightFrom ? '메모·줄거리를 빼고 ' : '';
+    const how = attempt >= lightFrom ? `${dropped.join('·')} 없이 ` : '';
     p.status = 'error';
     p.error = `${failure} · ${Math.round(wait / 1000)}초 뒤 ${how}${attempt}번째 다시 시도합니다`;
     renderStory();
@@ -841,9 +873,9 @@ async function generateStep(si, o, signal) {
   p.status = 'done';
   p.error = res.finishReason === 'MAX_TOKENS' ? FINISH_MESSAGE.MAX_TOKENS : '';
   if (usedLight) {
-    p.error = `설정 메모와 줄거리를 빼고 쓴 대목입니다. 설정이 어긋나지 않았는지 확인해 주세요.${p.error ? ` ${p.error}` : ''}`;
+    p.error = `${dropped.join('·')} 없이 쓴 대목입니다. 앞뒤가 맞는지 확인해 주세요.${p.error ? ` ${p.error}` : ''}`;
   }
-  if (attempt) setStatus(`${label} — ${attempt}번 다시 시도해서 받았습니다.${usedLight ? ' (메모·줄거리를 덜어낸 시도)' : ''}`);
+  if (attempt) setStatus(`${label} — ${attempt}번 다시 시도해서 받았습니다.${usedLight ? ` (${dropped.join('·')} 없이 시도)` : ''}`);
   renderStory();
   scheduleSave(0);
 
@@ -1220,6 +1252,15 @@ $('loadModels').addEventListener('click', fetchModels);
 
 $('memoMode').addEventListener('change', renderMemo);
 
+function syncDropBox() {
+  $('dropBox').classList.toggle('off', !$('optLightRetry').checked);
+  for (const id of ['dropMemo', 'dropTimeline', 'dropStory', 'dropPrevImage', 'dropInstructions']) {
+    $(id).disabled = !$('optLightRetry').checked;
+  }
+}
+$('optLightRetry').addEventListener('change', syncDropBox);
+$('imagesBox').addEventListener('toggle', saveSettings);
+
 $('memoText').addEventListener('input', () => {
   state.memo = $('memoText').value;
   scheduleSave(1200);
@@ -1279,6 +1320,7 @@ $('customModel').hidden = !$('customModelOn').checked;
 $('model').disabled = $('customModelOn').checked;
 $('temperatureVal').textContent = Number($('temperature').value).toFixed(2);
 $('topPVal').textContent = Number($('topP').value).toFixed(2);
+syncDropBox();
 renderImages();
 renderStory();
 if (!storageAvailable()) {

@@ -171,10 +171,19 @@
         <label class="check"><input type="checkbox" id="optEnding" checked> 마지막 사진 뒤에 마무리 쓰기</label>
         <label class="check"><input type="checkbox" id="optPrevImage" checked> 직전 사진도 함께 보여주기</label>
         <label class="check"><input type="checkbox" id="optSoften"> 여러 번 막히면 더 우회적으로 쓰도록 요청</label>
-        <label class="check"><input type="checkbox" id="optLightRetry" checked> 재시도를 다 쓰면 메모·줄거리를 빼고 한 번 더</label>
+        <label class="check"><input type="checkbox" id="optLightRetry" checked> 재시도를 다 쓰면 아래 항목을 빼고 한 번 더</label>
         <label class="check"><input type="checkbox" id="optWakeLock" checked> 생성 중 화면 꺼짐 방지</label>
         <label class="check"><input type="checkbox" id="optAutoResume" checked> 다시 열면 남은 대목 이어 쓰기</label>
         <label class="check"><input type="checkbox" id="optAutosave" checked> 사진과 본문 자동 저장</label>
+      </div>
+
+      <div class="drops" id="dropBox">
+        <span class="drops-label">뺄 항목</span>
+        <label class="check"><input type="checkbox" id="dropMemo" checked> 설정 메모</label>
+        <label class="check"><input type="checkbox" id="dropTimeline" checked> 줄거리</label>
+        <label class="check"><input type="checkbox" id="dropStory"> 앞뒤 본문</label>
+        <label class="check"><input type="checkbox" id="dropPrevImage"> 직전 사진</label>
+        <label class="check"><input type="checkbox" id="dropInstructions"> 맞춤 지시사항</label>
       </div>
 
     </details>
@@ -205,7 +214,11 @@
     </div>
 
     <p class="note" id="loadNote" hidden></p>
-    <ul class="thumbs" id="imageList"></ul>
+
+    <details class="thumbs-box" id="imagesBox" open>
+      <summary>사진 목록 <span class="hint" id="listHint">(0장)</span></summary>
+      <ul class="thumbs" id="imageList"></ul>
+    </details>
   </section>
 
   <!-- ------------------------------------------------------- 3. 생성 -->
