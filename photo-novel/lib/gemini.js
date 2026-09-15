@@ -35,6 +35,45 @@ const REFUSAL_REASONS = new Set([
   'SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'RECITATION', 'SPII', 'OTHER', 'IMAGE_SAFETY'
 ]);
 
+const REASON_TEXT = {
+  SAFETY: '안전 필터',
+  PROHIBITED_CONTENT: '금지 콘텐츠 정책(안전 설정으로는 끌 수 없는 층)',
+  BLOCKLIST: '차단 목록',
+  RECITATION: '학습 데이터 인용',
+  SPII: '개인정보',
+  IMAGE_SAFETY: '이미지 안전 필터',
+  OTHER: '알 수 없는 이유'
+};
+
+/*
+  왜 실패했는지, 그리고 무엇이 막힌 것인지 알려 준다.
+  promptFeedback.blockReason 은 "보낸 것" 이 막힌 경우,
+  candidates[].finishReason 은 "쓰다가" 막힌 경우로 뜻이 다르다.
+*/
+export function describeFailure(result) {
+  const text = String(result?.text || '').trim();
+  if (result?.blockReason) {
+    const why = REASON_TEXT[result.blockReason] || result.blockReason;
+    return {
+      where: 'input',
+      code: result.blockReason,
+      message: `보낸 내용이 ${why}에 걸렸습니다 (${result.blockReason}). 사진·지시사항·앞 본문 중 하나가 원인입니다.`
+    };
+  }
+  const finish = result?.finishReason;
+  if (finish && REASON_TEXT[finish]) {
+    return {
+      where: 'output',
+      code: finish,
+      message: `쓰던 중 ${REASON_TEXT[finish]}에 걸려 중단됐습니다 (${finish}).`
+    };
+  }
+  if (!text) {
+    return { where: 'empty', code: finish || '', message: '빈 응답을 받았습니다.' };
+  }
+  return null;
+}
+
 export function isRefusal(result) {
   if (!result) return true;
   if (result.blockReason) return true;

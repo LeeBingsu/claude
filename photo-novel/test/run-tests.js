@@ -7,7 +7,9 @@ import {
   buildSteps, buildSystem, buildStepParts, trimContext, splitMemo, memoDue, MEMO_MARKER,
   parseMemoBlock, appendSettings, buildTimeline, stepId, stepTitle, retryNote
 } from '../lib/prompt.js';
-import { generate, safetySettingsFor, isRefusal, isWorthRetrying, GeminiError, SAFETY_LADDER } from '../lib/gemini.js';
+import {
+  generate, safetySettingsFor, isRefusal, isWorthRetrying, describeFailure, GeminiError, SAFETY_LADDER
+} from '../lib/gemini.js';
 import { planImageSync, normalizePassages } from '../lib/store.js';
 import { buildProject, readProject, readManifest, imageEntryName, safeFileName, PROJECT_FILE } from '../lib/project.js';
 
@@ -408,6 +410,26 @@ await check('거부·빈 응답을 가려낸다', () => {
   eq(isRefusal({ text: '본문', finishReason: 'SAFETY' }), true);
   eq(isRefusal({ text: '본문', finishReason: 'STOP', blockReason: 'SAFETY' }), true, '프롬프트가 막힌 경우');
   eq(isRefusal(null), true);
+});
+
+await check('보낸 것이 막힌 건지 쓰다가 막힌 건지 구분해 알려 준다', () => {
+  const sent = describeFailure({ text: '', blockReason: 'PROHIBITED_CONTENT' });
+  eq(sent.where, 'input');
+  ok(sent.message.includes('보낸 내용'), '입력이 원인');
+  ok(sent.message.includes('사진·지시사항·앞 본문'), '어디를 볼지 알려 준다');
+  ok(sent.message.includes('PROHIBITED_CONTENT'), '코드도 남긴다');
+
+  const wrote = describeFailure({ text: '', finishReason: 'PROHIBITED_CONTENT' });
+  eq(wrote.where, 'output');
+  ok(wrote.message.includes('쓰던 중'), '출력이 원인');
+
+  const safety = describeFailure({ text: '', finishReason: 'SAFETY' });
+  ok(safety.message.includes('안전 필터'), '안전 필터');
+
+  eq(describeFailure({ text: '', finishReason: 'STOP' }).where, 'empty');
+  eq(describeFailure({ text: '본문', finishReason: 'STOP' }), null, '성공은 아무 말 없음');
+  ok(describeFailure({ text: '', blockReason: 'PROHIBITED_CONTENT' }).message.includes('끌 수 없는'),
+    '안전 설정으로 못 끄는 층이라고 알려 준다');
 });
 
 await check('다시 걸어 볼 오류와 그렇지 않은 오류를 가른다', () => {
