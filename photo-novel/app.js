@@ -33,6 +33,7 @@ const state = {
   steps: [],
   memo: '',
   running: false,
+  proseScale: 1,         // 화면 본문 글자 크기 배율
   abort: null,
   api: { safetyStep: 0 } // 안전 옵션 자동 완화 기록
 };
@@ -56,7 +57,7 @@ const FIELDS = [
 ];
 
 function saveSettings() {
-  const out = { theme: document.documentElement.dataset.theme, tab: state.tab };
+  const out = { theme: document.documentElement.dataset.theme, tab: state.tab, proseScale: state.proseScale };
   for (const [id, prop] of FIELDS) {
     const el = $(id);
     if (el) out[id] = el[prop];
@@ -73,6 +74,7 @@ function loadSettings() {
   try { s = JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); } catch { s = {}; }
   if (s.theme) document.documentElement.dataset.theme = s.theme;
   if (s.tab) state.tab = s.tab;
+  setProseScale(s.proseScale ?? 1, { save: false });
   // 예전 버전의 체크박스 설정을 새 선택값으로 옮긴다.
   if (s.memoMode === undefined && s.optMemo !== undefined) s.memoMode = s.optMemo ? 'separate' : 'off';
   for (const [id, prop] of FIELDS) {
@@ -1311,6 +1313,35 @@ $('clearStory').addEventListener('click', () => {
 });
 
 /* ------------------------------------------------------------- 기타 UI */
+
+/*
+  화면 본문(연작 대목·단편 글·제목) 글자 크기.
+  CSS 의 --prose-scale 배율만 바꾸므로 줄 간격과 여백이 같이 따라간다.
+  그림으로 저장할 때의 글자 크기는 따로 있다(4번 칸의 "글자 크기").
+*/
+const PROSE_STEPS = [0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.4, 1.6, 1.8, 2];
+
+function setProseScale(next, { save = true } = {}) {
+  const near = PROSE_STEPS.reduce((a, b) => (Math.abs(b - next) < Math.abs(a - next) ? b : a), PROSE_STEPS[0]);
+  state.proseScale = near;
+  document.documentElement.style.setProperty('--prose-scale', String(near));
+  const pct = Math.round(near * 100);
+  $('fontVal').textContent = `\uAC00 ${pct}%`;
+  $('fontVal').disabled = near === 1;
+  $('fontDown').disabled = near === PROSE_STEPS[0];
+  $('fontUp').disabled = near === PROSE_STEPS[PROSE_STEPS.length - 1];
+  if (save) saveSettings();
+}
+
+function stepProseScale(dir) {
+  const i = PROSE_STEPS.indexOf(state.proseScale);
+  const at = i === -1 ? PROSE_STEPS.indexOf(1) : i;
+  setProseScale(PROSE_STEPS[Math.min(PROSE_STEPS.length - 1, Math.max(0, at + dir))]);
+}
+
+$('fontDown').addEventListener('click', () => stepProseScale(-1));
+$('fontUp').addEventListener('click', () => stepProseScale(1));
+$('fontVal').addEventListener('click', () => setProseScale(1));
 
 $('themeBtn').addEventListener('click', () => {
   const root = document.documentElement;
