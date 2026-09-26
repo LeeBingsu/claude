@@ -12,6 +12,7 @@ import { saveWork, loadWork, clearWork, storageAvailable } from './lib/store.js'
 import { createZip, unzip } from './lib/zip.js';
 import { buildProject, readProject, safeFileName } from './lib/project.js';
 import { renderPoster, POSTER_DEFAULTS } from './lib/poster.js';
+import { translateText, ENGINES, DEFAULT_ENDPOINT } from './lib/translate.js';
 
 const $ = (id) => document.getElementById(id);
 const STORE_KEY = 'photoNovel.settings.v1';
@@ -33,6 +34,7 @@ const state = {
   steps: [],
   memo: '',
   running: false,
+  proseScale: 1,         // 화면 본문 글자 크기 배율
   abort: null,
   api: { safetyStep: 0 } // 안전 옵션 자동 완화 기록
 };
@@ -51,12 +53,13 @@ const FIELDS = [
   ['dropMemo', 'checked'], ['dropTimeline', 'checked'], ['dropStory', 'checked'],
   ['dropPrevImage', 'checked'], ['dropInstructions', 'checked'], ['imagesBox', 'open'],
   ['shortLang', 'value'], ['shortInstructions', 'value'], ['sImagesBox', 'open'],
+  ['transEngine', 'value'], ['transEndpoint', 'value'], ['transEmail', 'value'],
   ['posterDark', 'value'], ['posterFont', 'value'], ['posterPos', 'value'],
   ['posterAlign', 'value'], ['posterFormat', 'value'], ['posterTitle', 'checked'], ['optAutosave', 'checked'], ['saveKey', 'checked']
 ];
 
 function saveSettings() {
-  const out = { theme: document.documentElement.dataset.theme, tab: state.tab };
+  const out = { theme: document.documentElement.dataset.theme, tab: state.tab, proseScale: state.proseScale };
   for (const [id, prop] of FIELDS) {
     const el = $(id);
     if (el) out[id] = el[prop];
@@ -73,6 +76,7 @@ function loadSettings() {
   try { s = JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); } catch { s = {}; }
   if (s.theme) document.documentElement.dataset.theme = s.theme;
   if (s.tab) state.tab = s.tab;
+  setProseScale(s.proseScale ?? 1, { save: false });
   // 예전 버전의 체크박스 설정을 새 선택값으로 옮긴다.
   if (s.memoMode === undefined && s.optMemo !== undefined) s.memoMode = s.optMemo ? 'separate' : 'off';
   for (const [id, prop] of FIELDS) {
@@ -1312,6 +1316,47 @@ $('clearStory').addEventListener('click', () => {
 
 /* ------------------------------------------------------------- 기타 UI */
 
+/*
+  화면 본문(연작 대목·단편 글·제목) 글자 크기.
+  CSS 의 --prose-scale 배율만 바꾸므로 줄 간격과 여백이 같이 따라간다.
+  그림으로 저장할 때의 글자 크기는 따로 있다(4번 칸의 "글자 크기").
+*/
+const PROSE_STEPS = [0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.4, 1.6, 1.8, 2];
+
+function setProseScale(next, { save = true } = {}) {
+  const near = PROSE_STEPS.reduce((a, b) => (Math.abs(b - next) < Math.abs(a - next) ? b : a), PROSE_STEPS[0]);
+  state.proseScale = near;
+  document.documentElement.style.setProperty('--prose-scale', String(near));
+  const pct = Math.round(near * 100);
+  $('fontVal').textContent = `\uAC00 ${pct}%`;
+  $('fontVal').disabled = near === 1;
+  $('fontDown').disabled = near === PROSE_STEPS[0];
+  $('fontUp').disabled = near === PROSE_STEPS[PROSE_STEPS.length - 1];
+  if (save) saveSettings();
+}
+
+function stepProseScale(dir) {
+  const i = PROSE_STEPS.indexOf(state.proseScale);
+  const at = i === -1 ? PROSE_STEPS.indexOf(1) : i;
+  setProseScale(PROSE_STEPS[Math.min(PROSE_STEPS.length - 1, Math.max(0, at + dir))]);
+}
+
+$('fontDown').addEventListener('click', () => stepProseScale(-1));
+$('fontUp').addEventListener('click', () => stepProseScale(1));
+$('fontVal').addEventListener('click', () => setProseScale(1));
+
+function syncTransBox() {
+  const engine = $('transEngine').value;
+  const auto = engine === 'auto';
+  $('transEndpointBox').hidden = !(auto || ENGINES[engine]?.endpoint);
+  $('transEmailBox').hidden = !(auto || ENGINES[engine]?.email);
+  $('transHint').textContent = engine === 'gemini'
+    ? '문체는 가장 잘 살지만, 내용에 따라 모델이 번역을 거부할 수 있습니다. 위 설정의 API 키와 모델을 씁니다.'
+    : '키가 필요 없고 글을 검열하지 않습니다. 원문 그대로 옮깁니다.';
+}
+
+$('transEngine').addEventListener('change', () => { syncTransBox(); saveSettings(); });
+
 $('themeBtn').addEventListener('click', () => {
   const root = document.documentElement;
   root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
@@ -1721,7 +1766,13 @@ async function pickLang(id, code) {
     scheduleSave(0);
     return;
   }
-  if (item.status !== 'done' || state.running || !shortPreflight()) return;
+  if (item.status !== 'done' || state.running) return;
+  const engine = $('transEngine').value;
+  // 무료 번역기는 키도 모델도 필요 없다. 사진만 있으면 된다.
+  if (engine === 'gemini' ? !shortPreflight() : !state.shorts.images.length) {
+    if (engine !== 'gemini') sStatus('사진을 먼저 올려 주세요.', true);
+    return;
+  }
 
   const source = item.texts[item.base];
   if (!source) return;
@@ -1729,6 +1780,14 @@ async function pickLang(id, code) {
   state.abort = ac;
   setShortsRunning(true);
   sStatus(`${LANGS[code].label}로 옮기는 중…`);
+  if (engine !== 'gemini') {
+    await translateByApi(item, code, source, engine, ac);
+    setShortsRunning(false);
+    state.abort = null;
+    renderShorts();
+    scheduleSave(0);
+    return;
+  }
   try {
     const res = await generate({
       apiKey: $('apiKey').value.trim(),
@@ -1759,6 +1818,55 @@ async function pickLang(id, code) {
     renderShorts();
     scheduleSave(0);
   }
+}
+
+/*
+  무료 번역 API 로 옮긴다. 제목과 본문을 따로 보내고, 본문이 길면 나눠 보낸다.
+  검열이 없어 모델이 거부하던 글도 그대로 옮겨진다.
+*/
+async function translateByApi(item, code, source, engine, ac) {
+  const common = {
+    from: item.base,
+    to: code,
+    endpoint: $('transEndpoint').value.trim() || DEFAULT_ENDPOINT,
+    email: $('transEmail').value.trim(),
+    signal: ac.signal
+  };
+
+  async function runWith(eng) {
+    const label = LANGS[code].label;
+    const body = await translateText({
+      ...common,
+      engine: eng,
+      text: source.body,
+      onStep: (done, total) => {
+        if (total > 1) sStatus(`${label}로 옮기는 중… ${done}/${total} · ${ENGINES[eng].label}`);
+      }
+    });
+    if (!body.trim()) throw new Error('번역이 비어 있습니다.');
+    const title = source.title ? await translateText({ ...common, engine: eng, text: source.title }) : '';
+    return { title: title.trim() || source.title, body: body.trim() };
+  }
+
+  // 자동이면 공개 서버가 막혔을 때 다른 번역기로 한 번 더 해 본다.
+  const chain = engine === 'auto' ? ['libre', 'mymemory'] : [engine];
+  const failed = [];
+  for (const eng of chain) {
+    try {
+      const text = await runWith(eng);
+      item.texts[code] = text;
+      item.lang = code;
+      item.error = '';
+      sStatus(`${LANGS[code].label}로 옮겼습니다 (${ENGINES[eng].label}).`);
+      return;
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      failed.push(`${ENGINES[eng].label}: ${err.message}`);
+      if (eng !== chain[chain.length - 1]) sStatus(`${ENGINES[eng].label} 가 막혔습니다. 다른 번역기로 다시 해 봅니다…`);
+    }
+  }
+  item.error = `옮기지 못했습니다 — ${failed.join(' / ')}`;
+  sStatus(item.error, true);
 }
 
 /* ------------------------------------------------------- 그림으로 저장 */
@@ -1945,6 +2053,8 @@ $('model').disabled = $('customModelOn').checked;
 $('temperatureVal').textContent = Number($('temperature').value).toFixed(2);
 $('topPVal').textContent = Number($('topP').value).toFixed(2);
 syncDropBox();
+if (!$('transEndpoint').value.trim()) $('transEndpoint').value = DEFAULT_ENDPOINT;
+syncTransBox();
 showTab(state.tab);
 $('posterDarkVal').textContent = `${$('posterDark').value}%`;
 $('posterFontVal').textContent = `${(Number($('posterFont').value) / 10).toFixed(1)}%`;

@@ -19,7 +19,14 @@
         <div class="tag">사진 사이사이를 Gemini 가 소설로 이어 줍니다</div>
       </div>
     </div>
-    <button class="icon-btn" id="themeBtn" title="테마 전환" aria-label="테마 전환">&#9681;</button>
+    <div class="head-tools">
+      <div class="fontctl" role="group" aria-label="화면 글자 크기">
+        <button class="icon-btn" id="fontDown" type="button" title="글자 작게" aria-label="글자 작게">&minus;</button>
+        <button class="icon-btn wide" id="fontVal" type="button" title="기본 크기로 되돌리기" aria-label="글자 크기, 기본으로 되돌리기">&#44032; 100%</button>
+        <button class="icon-btn" id="fontUp" type="button" title="글자 크게" aria-label="글자 크게">&plus;</button>
+      </div>
+      <button class="icon-btn" id="themeBtn" title="테마 전환" aria-label="테마 전환">&#9681;</button>
+    </div>
   </header>
 
   <!-- ------------------------------------------------------- 1. 설정 -->
@@ -326,6 +333,29 @@
           <label for="shortLang">쓸 언어 (원문)</label>
           <select id="shortLang"></select>
           <p class="hint">쓴 뒤에 다른 언어로 옮길 수 있습니다.</p>
+        </div>
+
+        <div class="field">
+          <label for="transEngine">번역 방식</label>
+          <select id="transEngine">
+            <option value="auto">자동 &mdash; LibreTranslate, 막히면 MyMemory</option>
+            <option value="libre">LibreTranslate &mdash; 무료 &middot; 키 없음</option>
+            <option value="mymemory">MyMemory &mdash; 무료 &middot; 키 없음</option>
+            <option value="gemini">고른 Gemini 모델로 번역</option>
+          </select>
+          <p class="hint" id="transHint"></p>
+        </div>
+
+        <div class="field" id="transEndpointBox">
+          <label for="transEndpoint">LibreTranslate 서버</label>
+          <input type="url" id="transEndpoint" placeholder="https://translate.disroot.org" spellcheck="false">
+          <p class="hint">공개 서버가 느리거나 막히면 다른 주소를 넣으세요. 직접 띄운 서버도 됩니다.</p>
+        </div>
+
+        <div class="field" id="transEmailBox">
+          <label for="transEmail">MyMemory 이메일 <span class="hint" style="display:inline">(선택)</span></label>
+          <input type="email" id="transEmail" placeholder="비워 두어도 됩니다" spellcheck="false" autocomplete="off">
+          <p class="hint">적어 두면 하루 번역 한도가 늘어납니다. 번역 서버에만 전해집니다.</p>
         </div>
 
       </div>
