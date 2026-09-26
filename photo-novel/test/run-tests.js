@@ -14,6 +14,9 @@ import {
 import { planImageSync, normalizePassages, normalizeShorts } from '../lib/store.js';
 import { wrapLines } from '../lib/poster.js';
 import { buildProject, readProject, readManifest, imageEntryName, safeFileName, PROJECT_FILE } from '../lib/project.js';
+import {
+  planChunks, byteLen, libreRequest, parseLibre, myMemoryRequest, parseMyMemory, translateText, DEFAULT_ENDPOINT
+} from '../lib/translate.js';
 
 let passed = 0;
 const failures = [];
@@ -703,6 +706,88 @@ await check('고칠 수 없는 오류는 메시지를 그대로 올린다', asyn
     await generate({ apiKey: 'bad', model: 'm', parts: [{ text: 'p' }], state: {} });
   } catch (e) { msg = e.message; }
   ok(msg.includes('API key not valid'), `오류 전달 (${msg})`);
+});
+
+/* ------------------------------------------------------------- 번역 */
+
+await check('나눈 조각을 도로 이으면 원문이 된다', () => {
+  const text = '첫 문단입니다. 꽤 길게 이어집니다.\n\n둘째 문단. 여기도 문장이 여럿이다. 셋째 문장까지.\n마지막 줄';
+  const chunks = planChunks(text, 30);
+  eq(chunks.map((c) => c.text + c.sep).join(''), text, '원문 복원');
+});
+
+await check('한 조각은 한도를 넘지 않는다', () => {
+  const text = '비가 내리는 저녁이었다. 그는 문을 열었다. 아무도 없었다. 먼지 냄새가 났다.';
+  for (const c of planChunks(text, 40)) {
+    ok(byteLen(c.text) <= 40 || [...c.text].length === 1, `조각 길이 ${byteLen(c.text)}`);
+  }
+});
+
+await check('띄어쓰기 없는 긴 덩어리도 잘린다', () => {
+  const text = '가'.repeat(100);                       // 한글 한 글자 = 3바이트
+  const chunks = planChunks(text, 30);
+  ok(chunks.length >= 10, `조각 수 ${chunks.length}`);
+  for (const c of chunks) ok(byteLen(c.text) <= 30, `조각 길이 ${byteLen(c.text)}`);
+  eq(chunks.map((c) => c.text + c.sep).join(''), text, '원문 복원');
+});
+
+await check('빈 줄은 번역하지 않고 그대로 둔다', () => {
+  const chunks = planChunks('한 줄\n\n다른 줄', 100);
+  eq(chunks.map((c) => c.text), ['한 줄', '', '다른 줄'], '조각');
+});
+
+await check('LibreTranslate 요청 모양', () => {
+  const { url, init } = libreRequest('https://example.org/', { text: '밤', from: 'ko', to: 'ja' });
+  eq(url, 'https://example.org/translate', '주소');
+  eq(JSON.parse(init.body), { q: '밤', source: 'ko', target: 'ja', format: 'text' }, '본문');
+  eq(parseLibre({ translatedText: '夜' }), '夜', '응답');
+});
+
+await check('MyMemory 요청과 한도 경고', () => {
+  const { url } = myMemoryRequest({ text: '밤', from: 'ko', to: 'en', email: ' me@example.com ' });
+  ok(url.includes('langpair=ko%7Cen'), `언어쌍 (${url})`);
+  ok(url.includes('de=me%40example.com'), `이메일 (${url})`);
+  eq(parseMyMemory({ responseStatus: 200, responseData: { translatedText: 'night' } }), 'night', '응답');
+  let msg = '';
+  try {
+    parseMyMemory({ responseStatus: 200, responseData: { translatedText: 'MYMEMORY WARNING: YOU USED ALL AVAILABLE FREE TRANSLATIONS' } });
+  } catch (e) { msg = e.message; }
+  ok(msg.includes('한도'), `한도 안내 (${msg})`);
+});
+
+await check('긴 글은 나눠 보내고 줄 모양 그대로 돌아온다', async () => {
+  const seen = [];
+  const fake = async (url, init) => {
+    seen.push(JSON.parse(init.body).q);
+    return new Response(JSON.stringify({ translatedText: `[${JSON.parse(init.body).q}]` }), { status: 200 });
+  };
+  const out = await translateText({
+    engine: 'libre', text: '첫 줄이다. 조금 더 길게 쓴다.\n\n둘째 줄', from: 'ko', to: 'ja',
+    endpoint: DEFAULT_ENDPOINT, fetch: fake
+  });
+  ok(seen.length >= 2, `나눠 보냄 (${seen.length}조각)`);
+  ok(!seen.includes(''), '빈 줄은 보내지 않는다');
+  eq(out.split('\n').length, 3, '줄 수');
+  ok(out.includes('[둘째 줄]'), `번역 결과 (${out})`);
+});
+
+await check('번역 서버가 실패하면 그 사실을 올린다', async () => {
+  const fake = async () => new Response('nope', { status: 429 });
+  let msg = '';
+  try {
+    await translateText({ engine: 'libre', text: '밤', from: 'ko', to: 'ja', fetch: fake });
+  } catch (e) { msg = e.message; }
+  ok(msg.includes('429'), `오류 전달 (${msg})`);
+});
+
+await check('같은 언어면 부르지 않는다', async () => {
+  let called = 0;
+  const out = await translateText({
+    engine: 'libre', text: '밤', from: 'ko', to: 'ko',
+    fetch: async () => { called++; return new Response('{}', { status: 200 }); }
+  });
+  eq(called, 0, '요청 수');
+  eq(out, '밤', '원문 그대로');
 });
 
 /* ------------------------------------------------------------- 결과 */
