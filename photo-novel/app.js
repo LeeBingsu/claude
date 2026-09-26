@@ -50,7 +50,7 @@ const FIELDS = [
   ['optWakeLock', 'checked'], ['optAutoResume', 'checked'], ['optLightRetry', 'checked'],
   ['dropMemo', 'checked'], ['dropTimeline', 'checked'], ['dropStory', 'checked'],
   ['dropPrevImage', 'checked'], ['dropInstructions', 'checked'], ['imagesBox', 'open'],
-  ['shortLang', 'value'], ['sImagesBox', 'open'],
+  ['shortLang', 'value'], ['shortInstructions', 'value'], ['sImagesBox', 'open'],
   ['posterDark', 'value'], ['posterFont', 'value'], ['posterPos', 'value'],
   ['posterAlign', 'value'], ['posterFormat', 'value'], ['posterTitle', 'checked'], ['optAutosave', 'checked'], ['saveKey', 'checked']
 ];
@@ -93,6 +93,7 @@ function loadSettings() {
 function opts() {
   return {
     shortLang: $('shortLang').value,
+    shortInstructions: $('shortInstructions').value,
     instructions: $('instructions').value,
     language: $('language').value.trim(),
     pov: $('pov').value,

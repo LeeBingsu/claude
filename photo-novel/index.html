@@ -314,17 +314,20 @@
     <section class="card">
       <div class="card-head"><h2><span class="num">3</span> 단편 쓰기</h2></div>
 
+      <div class="field">
+        <label for="shortInstructions">맞춤 지시사항 (단편 전용)</label>
+        <textarea id="shortInstructions" rows="4" placeholder="예) 300자 안팎 한 문단. 담담하고 건조한 문체. 첫 줄에 제목 한 줄. 인물 이름은 쓰지 말 것."></textarea>
+        <p class="hint">이 탭에서만 쓰는 지시사항입니다. 위 연작용 지시사항과 섞이지 않습니다.
+          분량·형식·문체·시점을 여기서 정하세요.</p>
+      </div>
+
       <div class="grid">
         <div class="field">
           <label for="shortLang">쓸 언어 (원문)</label>
           <select id="shortLang"></select>
           <p class="hint">쓴 뒤에 다른 언어로 옮길 수 있습니다.</p>
         </div>
-        <div class="field">
-          <label>분량과 형식</label>
-          <p class="hint" style="margin-top:9px">위 <b>맞춤 지시사항</b>이 정합니다.
-            예) "300자 안팎, 두 문단", "제목 한 줄과 본문", "제목 없이 세 문장만".</p>
-        </div>
+
       </div>
 
       <div class="row wrap-row tools">
@@ -333,7 +336,7 @@
         <button class="btn danger" id="sStopBtn" type="button" hidden>중단</button>
       </div>
       <div class="bar"><div class="bar-in" id="sBarIn"></div></div>
-      <p class="status" id="sStatus">사진을 올리고 시작하세요. 맞춤 지시사항과 모델은 위 설정을 함께 씁니다.</p>
+      <p class="status" id="sStatus">사진을 올리고 시작하세요. API 키와 모델은 위 설정을 함께 씁니다.</p>
     </section>
 
     <section class="card">

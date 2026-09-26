@@ -373,11 +373,10 @@ export function buildShortSystem(opts) {
   ];
   const lang = LANGS[opts.shortLang]?.name || '한국어';
   lines.push(`- ${lang}로 쓴다.`);
-  const pov = POVS[opts.pov] || '';
-  if (pov) lines.push(`- 시점은 ${pov}으로 고정한다.`);
 
-  if (opts.instructions && opts.instructions.trim()) {
-    lines.push('', '사용자 맞춤 지시사항 (분량·형식·문체는 이쪽이 정한다):', opts.instructions.trim());
+  // 연작 쪽 설정(대목 분량·시점 등)은 여기에 끌어오지 않는다. 이 탭은 아래 지시사항이 전부다.
+  if (opts.shortInstructions && opts.shortInstructions.trim()) {
+    lines.push('', '사용자 맞춤 지시사항 (분량·형식·문체·시점은 이쪽이 정한다):', opts.shortInstructions.trim());
   }
   lines.push(
     '',
