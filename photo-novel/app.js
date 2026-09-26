@@ -248,21 +248,55 @@ function unfinishedCount() {
   }).length;
 }
 
+/* 단편 쪽에서 아직 글이 없는 사진 수 */
+function shortsUnfinishedCount() {
+  return state.shorts.images.filter((img) => state.shorts.items[img.id]?.status !== 'done').length;
+}
+
+/*
+  다시 열었을 때 이어 쓰기.
+  지금 보고 있는 탭만 스스로 이어 쓴다. 다른 탭 것은 알려만 주고 건드리지 않는다
+  (단편을 쓰려는데 연작이 혼자 돌아가면 안 된다).
+*/
 function maybeAutoResume() {
-  const left = unfinishedCount();
-  const written = Object.values(state.passages).some((p) => p?.status === 'done' && p.text.trim());
-  if (!left || !written) return;                      // 아직 시작도 안 한 작업은 건드리지 않는다
+  const series = {
+    left: unfinishedCount(),
+    written: Object.values(state.passages).some((p) => p?.status === 'done' && p.text.trim()),
+    unit: '대목',
+    button: '빈 대목만 이어서',
+    note: setStatus,
+    run: () => runAll({ onlyEmpty: true }),
+    remaining: unfinishedCount
+  };
+  const shorts = {
+    left: shortsUnfinishedCount(),
+    written: Object.values(state.shorts.items).some((x) => x?.status === 'done'),
+    unit: '사진',
+    button: '빈 사진만 이어서',
+    note: sStatus,
+    run: () => runShorts({ onlyEmpty: true }),
+    remaining: shortsUnfinishedCount
+  };
+  const here = state.tab === 'shorts' ? shorts : series;
+  const there = state.tab === 'shorts' ? series : shorts;
+
+  // 보고 있지 않은 탭은 알려만 준다
+  if (there.left && there.written) {
+    there.note(`남은 ${there.unit}이 ${there.left}개 있습니다. 그 탭에서 "${there.button}" 로 이어 쓸 수 있습니다.`);
+  }
+
+  if (!here.left || !here.written) return;            // 아직 시작도 안 한 작업은 건드리지 않는다
   if (!$('apiKey').value.trim()) {
-    setStatus(`남은 대목이 ${left}개 있습니다. API 키를 넣고 "빈 대목만 이어서" 를 누르세요.`);
+    here.note(`남은 ${here.unit}이 ${here.left}개 있습니다. API 키를 넣고 "${here.button}" 를 누르세요.`);
     return;
   }
   if (!$('optAutoResume').checked) {
-    setStatus(`남은 대목이 ${left}개 있습니다. "빈 대목만 이어서" 로 이어 쓸 수 있습니다.`);
+    here.note(`남은 ${here.unit}이 ${here.left}개 있습니다. "${here.button}" 로 이어 쓸 수 있습니다.`);
     return;
   }
-  setStatus(`나갔던 자리에서 이어 씁니다 · 남은 대목 ${left}개 (멈추려면 중단)`);
+  here.note(`나갔던 자리에서 이어 씁니다 · 남은 ${here.unit} ${here.left}개 (멈추려면 중단)`);
   setTimeout(() => {
-    if (!state.running && unfinishedCount()) runAll({ onlyEmpty: true });
+    if (!state.running && here.remaining()) here.run();
   }, 1500);
 }
 
