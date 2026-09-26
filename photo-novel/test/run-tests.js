@@ -481,12 +481,13 @@ await check('단편은 한 장만 보고 쓰라고 시킨다', () => {
   ok(parts[0].text.includes('1/3'), '몇 번째인지');
   ok(parts.at(-1).text.includes('한 장만'), '이 사진만');
 
-  const sys = buildShortSystem({ shortLength: 'short', shortLang: 'ja', instructions: '담담하게' });
+  const sys = buildShortSystem({ shortLang: 'ja', instructions: '300자 안팎, 제목 없이' });
   ok(sys.includes('일본어'), '쓸 언어');
-  ok(sys.includes('300자'), '분량');
-  ok(sys.includes('담담하게'), '맞춤 지시사항');
+  ok(sys.includes('300자 안팎, 제목 없이'), '맞춤 지시사항');
   ok(sys.includes('이어질 필요가 없다'), '독립된 한 편');
-  ok(sys.includes('제목:'), '출력 형식');
+  ok(sys.includes('분량과 형식은 아래 맞춤 지시사항을 따른다'), '분량·형식은 지시사항이 정한다');
+  ok(sys.includes('제목이 필요 없으면'), '제목은 선택');
+  ok(!/\d+자 안팎으로 맞춘다|분량은 .*정도로/.test(sys), '앱이 분량을 정하지 않는다');
 });
 
 await check('번역은 원문을 싣고 형식을 맞춘다', () => {

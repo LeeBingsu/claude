@@ -6,7 +6,7 @@ import { generate, listModels, isRefusal, isWorthRetrying, describeFailure, SAFE
 import {
   buildSystem, buildSteps, buildStepParts, buildMemoParts, splitMemo, parseMemoBlock,
   appendSettings, buildTimeline, stepId, stepTitle, memoDue, retryNote, LENGTHS,
-  buildShortSystem, buildShortParts, buildTranslateParts, splitTitle, SHORT_LENGTHS, LANGS
+  buildShortSystem, buildShortParts, buildTranslateParts, splitTitle, LANGS
 } from './lib/prompt.js';
 import { saveWork, loadWork, clearWork, storageAvailable } from './lib/store.js';
 import { createZip, unzip } from './lib/zip.js';
@@ -50,7 +50,7 @@ const FIELDS = [
   ['optWakeLock', 'checked'], ['optAutoResume', 'checked'], ['optLightRetry', 'checked'],
   ['dropMemo', 'checked'], ['dropTimeline', 'checked'], ['dropStory', 'checked'],
   ['dropPrevImage', 'checked'], ['dropInstructions', 'checked'], ['imagesBox', 'open'],
-  ['shortLength', 'value'], ['shortLang', 'value'], ['sImagesBox', 'open'],
+  ['shortLang', 'value'], ['sImagesBox', 'open'],
   ['posterDark', 'value'], ['posterFont', 'value'], ['posterPos', 'value'],
   ['posterAlign', 'value'], ['posterFormat', 'value'], ['posterTitle', 'checked'], ['optAutosave', 'checked'], ['saveKey', 'checked']
 ];
@@ -92,7 +92,6 @@ function loadSettings() {
 
 function opts() {
   return {
-    shortLength: $('shortLength').value,
     shortLang: $('shortLang').value,
     instructions: $('instructions').value,
     language: $('language').value.trim(),
@@ -274,10 +273,6 @@ function fillSelects() {
     len.append(new Option(v.label, id));
   }
   len.value = 'medium';
-
-  const shortLen = $('shortLength');
-  for (const [id, v] of Object.entries(SHORT_LENGTHS)) shortLen.append(new Option(v.label, id));
-  shortLen.value = 'medium';
 
   const shortLang = $('shortLang');
   for (const [code, v] of Object.entries(LANGS)) shortLang.append(new Option(v.label, code));
