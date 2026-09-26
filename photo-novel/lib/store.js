@@ -71,10 +71,34 @@ export function normalizePassages(passages) {
   return out;
 }
 
-export async function saveWork({ images, passages, beats, memo }) {
+/* 쓰다 만 단편은 저장하지 않는다. 대목과 같은 규칙. */
+export function normalizeShorts(items) {
+  const out = {};
+  for (const [id, item] of Object.entries(items || {})) {
+    if (!item || item.status === 'busy') continue;
+    const texts = {};
+    for (const [lang, t] of Object.entries(item.texts || {})) {
+      if (t && (t.title || t.body)) texts[lang] = { title: t.title || '', body: t.body || '' };
+    }
+    if (!Object.keys(texts).length && item.status !== 'error') continue;
+    out[id] = {
+      base: item.base || '',
+      lang: item.lang || item.base || '',
+      texts,
+      status: Object.keys(texts).length ? 'done' : 'error',
+      error: item.status === 'error' ? item.error || '' : ''
+    };
+  }
+  return out;
+}
+
+export async function saveWork({ images, passages, beats, memo, shorts }) {
   const db = await openDb();
+  const shortImages = shorts?.images || [];
   try {
-    const wanted = images.map((i) => i.id);
+    // 두 탭이 같은 사진 창고를 쓰므로, 둘을 합친 것이 "남길 사진" 이다.
+    const all = [...images, ...shortImages];
+    const wanted = [...new Set(all.map((i) => i.id))];
     const existing = await req(db.transaction(IMAGES, 'readonly').objectStore(IMAGES).getAllKeys());
     const plan = planImageSync(existing.map(String), wanted);
 
@@ -82,7 +106,7 @@ export async function saveWork({ images, passages, beats, memo }) {
     const imageStore = t.objectStore(IMAGES);
     for (const id of plan.del) imageStore.delete(id);
     for (const id of plan.put) {
-      const img = images.find((x) => x.id === id);
+      const img = all.find((x) => x.id === id);
       if (!img?.blob) continue;
       imageStore.put({
         id: img.id,
@@ -91,14 +115,16 @@ export async function saveWork({ images, passages, beats, memo }) {
         width: img.width,
         height: img.height,
         converted: img.converted,
-        blob: img.blob
+        blob: img.blob,
+        original: img.original || null   // 그림으로 저장할 때 쓰는 원본
       });
     }
     t.objectStore(META).put({
-      order: wanted,
+      order: images.map((i) => i.id),
       passages: normalizePassages(passages),
       beats: beats || {},
       memo: memo || '',
+      shorts: { order: shortImages.map((i) => i.id), items: normalizeShorts(shorts?.items) },
       updatedAt: Date.now()
     }, CURRENT);
     await done(t);
@@ -113,16 +139,20 @@ export async function loadWork() {
     const meta = await req(db.transaction(META, 'readonly').objectStore(META).get(CURRENT));
     if (!meta) return null;
     const store = db.transaction(IMAGES, 'readonly').objectStore(IMAGES);
-    const images = [];
-    for (const id of meta.order || []) {
-      const row = await req(store.get(id));
-      if (row?.blob) images.push(row);          // 중간에 지워진 사진은 건너뛴다
-    }
+    const pick = async (order) => {
+      const out = [];
+      for (const id of order || []) {
+        const row = await req(store.get(id));
+        if (row?.blob) out.push(row);           // 중간에 지워진 사진은 건너뛴다
+      }
+      return out;
+    };
     return {
-      images,
+      images: await pick(meta.order),
       passages: meta.passages || {},
       beats: meta.beats || {},
       memo: meta.memo || '',
+      shorts: { images: await pick(meta.shorts?.order), items: meta.shorts?.items || {} },
       updatedAt: meta.updatedAt || 0
     };
   } finally {

@@ -69,7 +69,9 @@ function nextId() {
 
 /*
   하나의 이미지 blob → 레코드
-  opts: { maxDim, quality }  maxDim = 0 이면 원본 그대로 보낸다.
+  opts: { maxDim, quality, keepOriginal }
+  maxDim = 0 이면 원본 그대로 보낸다. keepOriginal 을 켜면 줄이기 전 원본도 함께 들고 있는다
+  (그림으로 저장할 때 원본 위에 글을 얹기 위해서다).
 */
 export async function makeImageRecord(name, blob, opts = {}) {
   const maxDim = opts.maxDim ?? 1568;
@@ -111,6 +113,7 @@ export async function makeImageRecord(name, blob, opts = {}) {
     bytes: data.size,
     converted,
     blob: data,                    // 자동 저장(IndexedDB)에 그대로 넣는다
+    original: opts.keepOriginal && converted ? blob : null,
     base64: await blobToBase64(data),
     url: URL.createObjectURL(data)
   };
@@ -119,6 +122,7 @@ export async function makeImageRecord(name, blob, opts = {}) {
 /* IndexedDB 에 저장해 둔 사진을 다시 화면에 쓸 수 있는 레코드로 되돌린다. */
 export async function recordFromStored(row) {
   return {
+    original: row.original || null,
     id: row.id,
     name: row.name,
     mimeType: row.mimeType,
@@ -136,7 +140,7 @@ export async function recordFromStored(row) {
   파일 목록(이미지 + zip 섞여도 됨)을 이미지 레코드 배열로 편다.
   onProgress(done, total, name) 로 진행 상황을 알려준다.
 */
-export async function collectImages(files, { maxDim, quality, onProgress } = {}) {
+export async function collectImages(files, { maxDim, quality, keepOriginal, onProgress } = {}) {
   const raw = [];
   const errors = [];
 
@@ -164,7 +168,7 @@ export async function collectImages(files, { maxDim, quality, onProgress } = {})
   for (let i = 0; i < ordered.length; i++) {
     onProgress?.(i, ordered.length, ordered[i].name);
     try {
-      out.push(await makeImageRecord(ordered[i].name, ordered[i].blob, { maxDim, quality }));
+      out.push(await makeImageRecord(ordered[i].name, ordered[i].blob, { maxDim, quality, keepOriginal }));
     } catch (err) {
       errors.push(err.message);
     }

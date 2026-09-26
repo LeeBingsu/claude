@@ -1,15 +1,17 @@
 /* app.js - 화면 로직. 설정은 localStorage 에만 저장한다. */
 
-import { collectImages, recordFromStored } from './lib/images.js';
+import { collectImages, recordFromStored, makeImageRecord } from './lib/images.js';
 import { sortByName } from './lib/sort.js';
 import { generate, listModels, isRefusal, isWorthRetrying, describeFailure, SAFETY_LADDER } from './lib/gemini.js';
 import {
   buildSystem, buildSteps, buildStepParts, buildMemoParts, splitMemo, parseMemoBlock,
-  appendSettings, buildTimeline, stepId, stepTitle, memoDue, retryNote, LENGTHS
+  appendSettings, buildTimeline, stepId, stepTitle, memoDue, retryNote, LENGTHS,
+  buildShortSystem, buildShortParts, buildTranslateParts, splitTitle, SHORT_LENGTHS, LANGS
 } from './lib/prompt.js';
 import { saveWork, loadWork, clearWork, storageAvailable } from './lib/store.js';
 import { createZip, unzip } from './lib/zip.js';
-import { buildProject, readProject } from './lib/project.js';
+import { buildProject, readProject, safeFileName } from './lib/project.js';
+import { renderPoster, POSTER_DEFAULTS } from './lib/poster.js';
 
 const $ = (id) => document.getElementById(id);
 const STORE_KEY = 'photoNovel.settings.v1';
@@ -23,6 +25,8 @@ const DEFAULT_MODELS = [
 ];
 
 const state = {
+  tab: 'series',
+  shorts: { images: [], items: {} },   // items: 사진 id → { base, lang, texts, status, error }
   images: [],
   passages: {},          // 대목 이름 → { text, status: 'empty' | 'busy' | 'done' | 'error', error }
   beats: {},             // 대목 이름 → 그 구간에서 일어난 일 한 줄
@@ -45,11 +49,14 @@ const FIELDS = [
   ['memoMode', 'value'], ['memoEvery', 'value'], ['retryRefusal', 'value'], ['optSoften', 'checked'],
   ['optWakeLock', 'checked'], ['optAutoResume', 'checked'], ['optLightRetry', 'checked'],
   ['dropMemo', 'checked'], ['dropTimeline', 'checked'], ['dropStory', 'checked'],
-  ['dropPrevImage', 'checked'], ['dropInstructions', 'checked'], ['imagesBox', 'open'], ['optAutosave', 'checked'], ['saveKey', 'checked']
+  ['dropPrevImage', 'checked'], ['dropInstructions', 'checked'], ['imagesBox', 'open'],
+  ['shortLength', 'value'], ['shortLang', 'value'], ['sImagesBox', 'open'],
+  ['posterDark', 'value'], ['posterFont', 'value'], ['posterPos', 'value'],
+  ['posterAlign', 'value'], ['posterFormat', 'value'], ['posterTitle', 'checked'], ['optAutosave', 'checked'], ['saveKey', 'checked']
 ];
 
 function saveSettings() {
-  const out = { theme: document.documentElement.dataset.theme };
+  const out = { theme: document.documentElement.dataset.theme, tab: state.tab };
   for (const [id, prop] of FIELDS) {
     const el = $(id);
     if (el) out[id] = el[prop];
@@ -65,6 +72,7 @@ function loadSettings() {
   let s = {};
   try { s = JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); } catch { s = {}; }
   if (s.theme) document.documentElement.dataset.theme = s.theme;
+  if (s.tab) state.tab = s.tab;
   // 예전 버전의 체크박스 설정을 새 선택값으로 옮긴다.
   if (s.memoMode === undefined && s.optMemo !== undefined) s.memoMode = s.optMemo ? 'separate' : 'off';
   for (const [id, prop] of FIELDS) {
@@ -84,6 +92,8 @@ function loadSettings() {
 
 function opts() {
   return {
+    shortLength: $('shortLength').value,
+    shortLang: $('shortLang').value,
     instructions: $('instructions').value,
     language: $('language').value.trim(),
     pov: $('pov').value,
@@ -143,7 +153,13 @@ async function flushSave() {
   if (!autosaveOn()) return;
   clearTimeout(saveTimer);
   try {
-    await saveWork({ images: state.images, passages: state.passages, beats: state.beats, memo: state.memo });
+    await saveWork({
+      images: state.images,
+      passages: state.passages,
+      beats: state.beats,
+      memo: state.memo,
+      shorts: state.shorts
+    });
     showSaved(Date.now());
   } catch (err) {
     saveStopped = err.name === 'QuotaExceededError'
@@ -165,7 +181,7 @@ function clockOf(ts) {
 }
 
 function showSaved(ts) {
-  $('savedInfo').textContent = state.images.length || storyChars()
+  $('savedInfo').textContent = state.images.length || storyChars() || state.shorts.images.length
     ? `자동 저장됨 · 사진 ${state.images.length}장 · ${storyChars().toLocaleString('ko-KR')}자 · ${clockOf(ts)}`
     : '저장된 작업이 없습니다.';
 }
@@ -195,7 +211,8 @@ async function restoreWork() {
   if (!work) return;
   const passages = migratePassages(work.passages, work.images.length);
   const hasText = Object.values(passages).some((p) => p?.text);
-  if (!work.images.length && !hasText) return;
+  const hasShorts = (work.shorts?.images || []).length > 0;
+  if (!work.images.length && !hasText && !hasShorts) return;
 
   try {
     const images = [];
@@ -204,6 +221,10 @@ async function restoreWork() {
     state.passages = passages;
     state.beats = work.beats || {};
     state.memo = work.memo;
+
+    const shortImages = [];
+    for (const row of work.shorts?.images || []) shortImages.push(await recordFromStored(row));
+    state.shorts = { images: shortImages, items: work.shorts?.items || {} };
   } catch (err) {
     setStatus(`저장된 사진을 여는 데 실패했습니다: ${err.message}`, true);
     return;
@@ -211,6 +232,8 @@ async function restoreWork() {
 
   renderImages();
   renderStory();
+  renderShortImages();
+  renderShorts();
   showSaved(work.updatedAt || Date.now());
   setStatus(`지난 작업을 불러왔습니다 · 사진 ${state.images.length}장 · ${storyChars().toLocaleString('ko-KR')}자 (${clockOf(work.updatedAt || Date.now())} 저장)`);
   maybeAutoResume();
@@ -251,6 +274,14 @@ function fillSelects() {
     len.append(new Option(v.label, id));
   }
   len.value = 'medium';
+
+  const shortLen = $('shortLength');
+  for (const [id, v] of Object.entries(SHORT_LENGTHS)) shortLen.append(new Option(v.label, id));
+  shortLen.value = 'medium';
+
+  const shortLang = $('shortLang');
+  for (const [code, v] of Object.entries(LANGS)) shortLang.append(new Option(v.label, code));
+  shortLang.value = 'ko';
 
   $('memoMode').value = 'inline';      // 추가 요청 없이 일관성을 지킬 수 있으므로 기본값
   $('retryRefusal').value = '3';       // 그냥 넘어가면 이야기에 구멍이 생긴다
@@ -1128,7 +1159,7 @@ function exportableSettings() {
 }
 
 $('exportProject').addEventListener('click', async () => {
-  if (!state.images.length && !Object.keys(state.passages).length) {
+  if (!state.images.length && !Object.keys(state.passages).length && !state.shorts.images.length) {
     setStatus('내보낼 것이 없습니다.', true);
     return;
   }
@@ -1141,8 +1172,10 @@ $('exportProject').addEventListener('click', async () => {
       passages: state.passages,
       beats: state.beats,
       memo: state.memo,
+      shorts: state.shorts,
       settings: exportableSettings(),
-      story: plainText()
+      story: plainText(),
+      shortsText: shortsPlainText()
     });
     const blob = await createZip(files);
     download(`photo-novel-${stamp()}.zip`, blob);
@@ -1176,18 +1209,34 @@ $('importInput').addEventListener('change', async (e) => {
     const has = state.images.length || Object.values(state.passages).some((p) => p?.text);
     if (has && !confirm('지금 작업을 덮어쓰고 파일의 내용을 불러올까요?')) { setStatus('불러오기를 취소했습니다.'); return; }
 
-    const images = [];
-    for (const [i, meta] of project.images.entries()) {
+    const toRecords = async (list, tag) => {
+      const out = [];
+      for (const [i, meta] of (list || []).entries()) {
+        const blob = new Blob([meta.bytes], { type: meta.mimeType || 'image/jpeg' });
+        // 예전 파일에는 id 가 없을 수 있어 그때는 새로 붙인다.
+        out.push(await recordFromStored({ ...meta, id: meta.id || `imp${Date.now().toString(36)}${tag}${i}`, blob }));
+      }
+      return out;
+    };
+    const images = await toRecords(project.images, 's');
+    // 단편 사진은 원본으로 담겨 오므로, 보낼 크기는 지금 설정대로 다시 만든다.
+    const shortImages = [];
+    for (const meta of project.shortImages || []) {
       const blob = new Blob([meta.bytes], { type: meta.mimeType || 'image/jpeg' });
-      // 예전 파일에는 id 가 없을 수 있어 그때는 새로 붙인다.
-      images.push(await recordFromStored({ ...meta, id: meta.id || `imp${Date.now().toString(36)}${i}`, blob }));
+      const rec = await makeImageRecord(meta.name, blob, {
+        maxDim: Math.max(0, Number($('maxDim').value) || 0),
+        keepOriginal: true
+      });
+      shortImages.push({ ...rec, id: meta.id || rec.id });
     }
 
     state.images.forEach((img) => URL.revokeObjectURL(img.url));
+    state.shorts.images.forEach((img) => URL.revokeObjectURL(img.url));
     state.images = images;
     state.passages = project.manifest.passages;
     state.beats = project.manifest.beats;
     state.memo = project.manifest.memo;
+    state.shorts = { images: shortImages, items: project.manifest.shorts?.items || {} };
 
     // 설정도 함께 복원한다. 키는 파일에 없으니 화면의 것을 그대로 둔다.
     for (const [id, prop] of FIELDS) {
@@ -1206,12 +1255,15 @@ $('importInput').addEventListener('change', async (e) => {
 
     renderImages();
     renderStory();
+    renderShortImages();
+    renderShorts();
     saveSettings();
     scheduleSave(0);
 
     const when = project.manifest.exportedAt ? ` (${clockOf(Date.parse(project.manifest.exportedAt))} 내보낸 파일)` : '';
     const lost = project.missing?.length ? ` · 사진 ${project.missing.length}장은 파일에 없어 빠졌습니다` : '';
-    setStatus(`불러왔습니다 · 사진 ${images.length}장 · ${storyChars().toLocaleString('ko-KR')}자${when}${lost}`, Boolean(lost));
+    const shortsNote = shortImages.length ? ` · 단편 사진 ${shortImages.length}장` : '';
+    setStatus(`불러왔습니다 · 사진 ${images.length}장${shortsNote} · ${storyChars().toLocaleString('ko-KR')}자${when}${lost}`, Boolean(lost));
   } catch (err) {
     setStatus(`불러오지 못했습니다: ${err.message}`, true);
   }
@@ -1312,6 +1364,548 @@ window.addEventListener('beforeunload', (e) => {
   if (state.running) { e.preventDefault(); e.returnValue = ''; }
 });
 
+/* =========================================================== 한 장씩 단편 */
+
+const LANG_ORDER = ['ko', 'en', 'ja'];
+
+function shortAt(id) {
+  if (!state.shorts.items[id]) {
+    state.shorts.items[id] = { base: '', lang: '', texts: {}, status: 'empty', error: '' };
+  }
+  return state.shorts.items[id];
+}
+
+function shortText(item) {
+  return item.texts[item.lang || item.base] || { title: '', body: '' };
+}
+
+function sStatus(text, bad) {
+  const el = $('sStatus');
+  el.textContent = text;
+  el.classList.toggle('err', Boolean(bad));
+}
+
+function renderShortImages() {
+  const list = $('sImageList');
+  list.textContent = '';
+  $('sCountVal').textContent = String(state.shorts.images.length);
+  $('sListHint').textContent = state.shorts.images.length
+    ? `(${state.shorts.images.length}장 · 누르면 접기/펴기)` : '(0장)';
+
+  state.shorts.images.forEach((img, i) => {
+    const li = document.createElement('li');
+    li.className = 'thumb';
+    const idx = document.createElement('span');
+    idx.className = 'idx';
+    idx.textContent = String(i + 1);
+    const thumb = document.createElement('img');
+    thumb.src = img.url;
+    thumb.alt = img.name;
+    thumb.loading = 'lazy';
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const name = document.createElement('div');
+    name.className = 'name';
+    name.textContent = img.name;
+    const sub = document.createElement('div');
+    sub.className = 'sub';
+    const done = state.shorts.items[img.id]?.status === 'done';
+    sub.textContent = `${img.width ? `${img.width}×${img.height} · ` : ''}${done ? '단편 있음' : '아직 없음'}`;
+    meta.append(name, sub);
+    const acts = document.createElement('div');
+    acts.className = 'acts';
+    acts.append(
+      actBtn('▲', '위로', () => moveShort(i, -1)),
+      actBtn('▼', '아래로', () => moveShort(i, 1)),
+      actBtn('✕', '삭제', () => removeShort(i))
+    );
+    li.append(idx, thumb, meta, acts);
+    list.append(li);
+  });
+}
+
+function moveShort(i, d) {
+  const j = i + d;
+  if (j < 0 || j >= state.shorts.images.length) return;
+  const [x] = state.shorts.images.splice(i, 1);
+  state.shorts.images.splice(j, 0, x);
+  renderShortImages();
+  renderShorts();
+  scheduleSave();
+}
+
+function removeShort(i) {
+  const [x] = state.shorts.images.splice(i, 1);
+  URL.revokeObjectURL(x.url);
+  delete state.shorts.items[x.id];
+  renderShortImages();
+  renderShorts();
+  scheduleSave(0);
+}
+
+function renderShorts() {
+  const box = $('shortList');
+  const keep = window.scrollY;
+  box.textContent = '';
+  $('sDoneVal').textContent = String(
+    Object.values(state.shorts.items).filter((x) => x.status === 'done').length
+  );
+
+  if (!state.shorts.images.length) {
+    const p = document.createElement('p');
+    p.className = 'empty';
+    p.textContent = '아직 쓴 단편이 없습니다.';
+    box.append(p);
+    window.scrollTo(0, keep);
+    return;
+  }
+
+  state.shorts.images.forEach((img, i) => box.append(shortNode(img, i)));
+  window.scrollTo(0, keep);
+}
+
+function shortNode(img, index) {
+  const item = shortAt(img.id);
+  const text = shortText(item);
+
+  const card = document.createElement('article');
+  card.className = `short ${item.status === 'busy' ? 'busy' : ''} ${item.status === 'error' ? 'fail' : ''}`;
+  card.dataset.s = img.id;
+
+  const photo = document.createElement('img');
+  photo.src = img.url;
+  photo.alt = img.name;
+  photo.loading = 'lazy';
+
+  const body = document.createElement('div');
+  body.className = 'short-body';
+
+  const head = document.createElement('div');
+  head.className = 'short-head';
+  const label = document.createElement('span');
+  label.textContent = `${index + 1} · ${img.name}`;
+  head.append(label);
+
+  // 언어 단추 — 아직 없는 언어를 누르면 그때 옮긴다
+  for (const code of LANG_ORDER) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    const has = Boolean(item.texts[code]);
+    btn.textContent = LANGS[code].label + (code === item.base ? ' (원문)' : has ? '' : ' +');
+    btn.setAttribute('aria-pressed', String((item.lang || item.base) === code));
+    btn.disabled = item.status !== 'done' && !has;
+    btn.addEventListener('click', () => pickLang(img.id, code));
+    head.append(btn);
+  }
+
+  const spacer = document.createElement('span');
+  spacer.className = 'spacer';
+  const again = document.createElement('button');
+  again.type = 'button';
+  again.textContent = item.status === 'done' ? '다시 쓰기' : '이 사진 쓰기';
+  again.addEventListener('click', () => runShorts({ only: img.id }));
+  const save = document.createElement('button');
+  save.type = 'button';
+  save.textContent = '그림으로 저장';
+  save.disabled = item.status !== 'done';
+  save.addEventListener('click', () => savePoster(img.id));
+  head.append(spacer, again, save);
+
+  const title = document.createElement('h3');
+  title.className = 'short-title';
+  title.contentEditable = state.running ? 'false' : 'true';
+  title.spellcheck = false;
+  title.textContent = text.title;
+  title.addEventListener('input', () => {
+    const cur = item.texts[item.lang || item.base];
+    if (cur) { cur.title = title.innerText.trim(); scheduleSave(1200); }
+  });
+
+  const prose = document.createElement('div');
+  prose.className = 'prose';
+  prose.contentEditable = state.running ? 'false' : 'true';
+  prose.spellcheck = false;
+  prose.textContent = text.body;
+  prose.addEventListener('input', () => {
+    const cur = item.texts[item.lang || item.base];
+    if (cur) { cur.body = prose.innerText; scheduleSave(1200); }
+  });
+
+  body.append(head, title, prose);
+  if (item.error) {
+    const e = document.createElement('p');
+    e.className = 'err';
+    e.textContent = item.error;
+    body.append(e);
+  }
+  card.append(photo, body);
+  return card;
+}
+
+function shortProse(id) {
+  return document.querySelector(`.short[data-s="${id}"] .prose`);
+}
+
+/* ------------------------------------------------------------- 생성 */
+
+function shortPreflight() {
+  if (!$('apiKey').value.trim()) { sStatus('API 키를 입력해 주세요.', true); return false; }
+  if (!modelName()) { sStatus('모델을 선택하거나 이름을 입력해 주세요.', true); return false; }
+  if (!state.shorts.images.length) { sStatus('사진을 먼저 올려 주세요.', true); return false; }
+  return true;
+}
+
+function setShortsRunning(on) {
+  state.running = on;
+  for (const id of ['sRunBtn', 'sResumeBtn', 'runBtn', 'resumeBtn']) $(id).disabled = on;
+  $('sStopBtn').hidden = !on;
+  document.querySelectorAll('.short .prose, .short-title').forEach((el) => {
+    el.contentEditable = on ? 'false' : 'true';
+  });
+}
+
+async function writeShort(img, o, signal) {
+  const item = shortAt(img.id);
+  const index = state.shorts.images.indexOf(img);
+  item.status = 'busy';
+  item.error = '';
+  renderShorts();
+
+  const limit = Number(o.retryRefusal) || 0;
+  let attempt = 0;
+  for (;;) {
+    let failure = '';
+    try {
+      await waitForOnline(signal);
+      let raw = '';
+      const res = await generate({
+        apiKey: $('apiKey').value.trim(),
+        model: modelName(),
+        system: buildShortSystem(o),
+        parts: buildShortParts({
+          image: img,
+          index,
+          total: state.shorts.images.length,
+          opts: { retryNote: retryNote(attempt, o.soften) }
+        }),
+        generationConfig: genConfig(),
+        thinkingBudget: thinkingBudget(),
+        state: state.api,
+        signal,
+        onDelta: (t) => {
+          raw += t;
+          const node = shortProse(img.id);
+          if (node) node.textContent = splitTitle(raw).body;
+        }
+      });
+      const cut = splitTitle(res.text || '');
+      if (cut.body.trim()) {
+        item.base = o.shortLang;
+        item.lang = o.shortLang;
+        item.texts = { [o.shortLang]: { title: cut.title, body: cut.body.trim() } };
+        item.status = 'done';
+        item.error = res.finishReason === 'MAX_TOKENS' ? FINISH_MESSAGE.MAX_TOKENS : '';
+        renderShorts();
+        scheduleSave(0);
+        return item;
+      }
+      failure = describeFailure({ text: cut.body, finishReason: res.finishReason, blockReason: res.blockReason })?.message
+        || '빈 응답을 받았습니다.';
+    } catch (err) {
+      if (err.name === 'AbortError' || !isWorthRetrying(err) || limit === 0) throw err;
+      failure = err.message;
+    }
+
+    if (limit >= 0 && attempt >= limit) {
+      item.status = 'error';
+      item.error = attempt ? `${attempt + 1}번 시도했지만 계속 막혔습니다 — ${failure}` : failure;
+      renderShorts();
+      scheduleSave(0);
+      return item;
+    }
+    attempt++;
+    const wait = Math.min(15000, 1000 * 2 ** (attempt - 1)) + (o.delayMs || 0);
+    item.status = 'error';
+    item.error = `${failure} · ${Math.round(wait / 1000)}초 뒤 ${attempt}번째 다시 시도합니다`;
+    renderShorts();
+    sStatus(`${index + 1}번 사진 — ${failure} 다시 시도 ${attempt}회째…`);
+    await sleep(wait, signal);
+  }
+}
+
+async function runShorts({ onlyEmpty = false, only = null } = {}) {
+  if (state.running || !shortPreflight()) return;
+  const o = opts();
+  state.api.safetyStep = Number($('safety').value) || 0;
+
+  const targets = state.shorts.images.filter((img) => {
+    if (only) return img.id === only;
+    if (!onlyEmpty) return true;
+    return state.shorts.items[img.id]?.status !== 'done';
+  });
+  if (!targets.length) { sStatus('쓸 사진이 없습니다.'); return; }
+
+  const ac = new AbortController();
+  state.abort = ac;
+  setShortsRunning(true);
+  holdScreen();
+  saveSettings();
+
+  let done = 0;
+  $('sBarIn').style.width = '0%';
+  try {
+    for (const img of targets) {
+      sStatus(`(${done + 1}/${targets.length}) ${img.name} 쓰는 중…`);
+      await writeShort(img, o, ac.signal);
+      done++;
+      $('sBarIn').style.width = `${Math.round((done / targets.length) * 100)}%`;
+      if (o.delayMs && done < targets.length) await sleep(o.delayMs, ac.signal);
+    }
+    const failed = targets.filter((img) => state.shorts.items[img.id]?.status === 'error').length;
+    sStatus(failed ? `완료 (실패 ${failed}편 — 다시 쓰기를 눌러 보세요)` : '완료되었습니다.', Boolean(failed));
+  } catch (err) {
+    for (const img of targets) {
+      const item = state.shorts.items[img.id];
+      if (item?.status === 'busy') {
+        item.status = 'error';
+        item.error = err.name === 'AbortError' ? '중단했습니다.' : err.message;
+      }
+    }
+    sStatus(err.name === 'AbortError' ? '중단했습니다.' : `오류: ${err.message}`, err.name !== 'AbortError');
+    renderShorts();
+    scheduleSave(0);
+  } finally {
+    setShortsRunning(false);
+    releaseScreen();
+    state.abort = null;
+  }
+}
+
+/* ------------------------------------------------------------- 번역 */
+
+async function pickLang(id, code) {
+  const item = shortAt(id);
+  if (item.texts[code]) {                       // 이미 있으면 보여 주기만
+    item.lang = code;
+    renderShorts();
+    scheduleSave(0);
+    return;
+  }
+  if (item.status !== 'done' || state.running || !shortPreflight()) return;
+
+  const source = item.texts[item.base];
+  if (!source) return;
+  const ac = new AbortController();
+  state.abort = ac;
+  setShortsRunning(true);
+  sStatus(`${LANGS[code].label}로 옮기는 중…`);
+  try {
+    const res = await generate({
+      apiKey: $('apiKey').value.trim(),
+      model: modelName(),
+      system: '너는 소설을 옮기는 번역가다. 요청한 형식의 번역문만 출력한다.',
+      parts: buildTranslateParts({ title: source.title, body: source.body, target: code }),
+      generationConfig: { ...genConfig(), temperature: Math.min(1, Number($('temperature').value) || 1) },
+      thinkingBudget: thinkingBudget(),
+      state: state.api,
+      signal: ac.signal
+    });
+    const cut = splitTitle(res.text || '');
+    if (!cut.body.trim()) {
+      item.error = describeFailure({ text: cut.body, finishReason: res.finishReason, blockReason: res.blockReason })?.message
+        || '번역이 비어 있습니다.';
+      sStatus(item.error, true);
+    } else {
+      item.texts[code] = { title: cut.title || source.title, body: cut.body.trim() };
+      item.lang = code;
+      item.error = '';
+      sStatus(`${LANGS[code].label}로 옮겼습니다.`);
+    }
+  } catch (err) {
+    if (err.name !== 'AbortError') sStatus(`옮기지 못했습니다: ${err.message}`, true);
+  } finally {
+    setShortsRunning(false);
+    state.abort = null;
+    renderShorts();
+    scheduleSave(0);
+  }
+}
+
+/* ------------------------------------------------------- 그림으로 저장 */
+
+function posterOpts() {
+  return {
+    ...POSTER_DEFAULTS,
+    darken: Number($('posterDark').value) / 100,
+    fontScale: Number($('posterFont').value) / 1000,
+    position: $('posterPos').value,
+    align: $('posterAlign').value,
+    format: $('posterFormat').value,
+    showTitle: $('posterTitle').checked
+  };
+}
+
+function posterName(img, item, index, ext) {
+  const text = shortText(item);
+  const base = text.title ? safeFileName(text.title) : safeFileName(img.name).replace(/\.[^.]+$/, '');
+  return `${String(index + 1).padStart(2, '0')}-${base}.${ext}`;
+}
+
+async function savePoster(id) {
+  const img = state.shorts.images.find((x) => x.id === id);
+  const item = state.shorts.items[id];
+  if (!img || item?.status !== 'done') return;
+  const o = posterOpts();
+  try {
+    sStatus('그림을 만드는 중…');
+    const blob = await renderPoster(img, shortText(item), o);
+    download(posterName(img, item, state.shorts.images.indexOf(img), o.format === 'image/png' ? 'png' : 'jpg'), blob);
+    sStatus(`그림으로 저장했습니다 · ${Math.max(1, Math.round(blob.size / 1024))}KB`);
+  } catch (err) {
+    sStatus(`그림을 만들지 못했습니다: ${err.message}`, true);
+  }
+}
+
+async function saveAllPosters() {
+  const ready = state.shorts.images.filter((img) => state.shorts.items[img.id]?.status === 'done');
+  if (!ready.length) { sStatus('저장할 단편이 없습니다.', true); return; }
+  const o = posterOpts();
+  const ext = o.format === 'image/png' ? 'png' : 'jpg';
+  $('sSaveAll').disabled = true;
+  try {
+    const files = [];
+    for (const [i, img] of ready.entries()) {
+      sStatus(`그림 만드는 중 ${i + 1}/${ready.length}…`);
+      const item = state.shorts.items[img.id];
+      files.push({ name: posterName(img, item, state.shorts.images.indexOf(img), ext), data: await renderPoster(img, shortText(item), o) });
+    }
+    const blob = await createZip(files);
+    download(`photo-shorts-${stamp()}.zip`, blob);
+    sStatus(`${ready.length}장을 zip 으로 저장했습니다 · ${(blob.size / 1048576).toFixed(1)}MB`);
+  } catch (err) {
+    sStatus(`저장하지 못했습니다: ${err.message}`, true);
+  } finally {
+    $('sSaveAll').disabled = false;
+  }
+}
+
+function shortsPlainText() {
+  const out = [];
+  state.shorts.images.forEach((img, i) => {
+    const item = state.shorts.items[img.id];
+    if (item?.status !== 'done') return;
+    const text = shortText(item);
+    out.push(`[${i + 1}. ${img.name}]`, text.title ? `제목: ${text.title}` : '', '', text.body, '', '');
+  });
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/* ------------------------------------------------------------- 이벤트 */
+
+async function addShortFiles(files) {
+  const arr = Array.from(files || []);
+  if (!arr.length) return;
+  const note = $('sLoadNote');
+  note.hidden = true;
+  sStatus('사진을 읽는 중…');
+  try {
+    const { images, errors } = await collectImages(arr, {
+      maxDim: Math.max(0, Number($('maxDim').value) || 0),
+      keepOriginal: true,                  // 그림으로 저장할 때 원본 위에 글을 얹는다
+      onProgress: (d, t, name) => sStatus(`사진 처리 중 ${d}/${t} ${name}`)
+    });
+    const before = state.shorts.images.length;
+    state.shorts.images = state.shorts.images.concat(images);
+    if (before <= 8 && state.shorts.images.length > 8 && $('sImagesBox').open) {
+      $('sImagesBox').open = false;
+      saveSettings();
+    }
+    renderShortImages();
+    renderShorts();
+    scheduleSave(0);
+    if (errors.length) { note.hidden = false; note.textContent = errors.join('\n'); }
+    sStatus(state.shorts.images.length ? `${state.shorts.images.length}장 준비됨.` : '읽어들인 사진이 없습니다.');
+  } catch (err) {
+    note.hidden = false;
+    note.textContent = err.message;
+    sStatus('사진을 읽지 못했습니다.', true);
+  }
+}
+
+$('sFileInput').addEventListener('change', (e) => { addShortFiles(e.target.files); e.target.value = ''; });
+$('sPickFiles').addEventListener('click', () => $('sFileInput').click());
+$('sDrop').addEventListener('click', () => $('sFileInput').click());
+$('sDrop').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('sFileInput').click(); }
+});
+['dragenter', 'dragover'].forEach((t) => $('sDrop').addEventListener(t, (e) => {
+  e.preventDefault();
+  $('sDrop').classList.add('over');
+}));
+['dragleave', 'drop'].forEach((t) => $('sDrop').addEventListener(t, (e) => {
+  e.preventDefault();
+  $('sDrop').classList.remove('over');
+}));
+$('sDrop').addEventListener('drop', (e) => {
+  if (e.dataTransfer?.files?.length) addShortFiles(e.dataTransfer.files);
+});
+
+$('sSortNow').addEventListener('click', () => {
+  state.shorts.images = sortByName(state.shorts.images);
+  renderShortImages();
+  renderShorts();
+  scheduleSave();
+});
+$('sClearImages').addEventListener('click', () => {
+  if (state.shorts.images.length && !confirm('사진과 단편을 모두 지울까요?')) return;
+  state.shorts.images.forEach((i) => URL.revokeObjectURL(i.url));
+  state.shorts.images = [];
+  state.shorts.items = {};
+  renderShortImages();
+  renderShorts();
+  scheduleSave(0);
+});
+$('sClearAll').addEventListener('click', () => {
+  if (Object.keys(state.shorts.items).length && !confirm('쓴 단편을 모두 지울까요? 사진은 남습니다.')) return;
+  state.shorts.items = {};
+  renderShortImages();
+  renderShorts();
+  scheduleSave(0);
+});
+
+$('sRunBtn').addEventListener('click', () => {
+  const written = Object.values(state.shorts.items).some((x) => x.status === 'done');
+  if (written && !confirm('이미 쓴 단편을 지우고 처음부터 다시 쓸까요?')) return;
+  runShorts({});
+});
+$('sResumeBtn').addEventListener('click', () => runShorts({ onlyEmpty: true }));
+$('sStopBtn').addEventListener('click', () => state.abort?.abort());
+$('sSaveAll').addEventListener('click', saveAllPosters);
+$('sSaveTxt').addEventListener('click', () => {
+  const text = shortsPlainText();
+  if (!text) { sStatus('저장할 단편이 없습니다.', true); return; }
+  download(`photo-shorts-${stamp()}.txt`, new Blob([text], { type: 'text/plain;charset=utf-8' }));
+});
+
+$('posterDark').addEventListener('input', () => { $('posterDarkVal').textContent = `${$('posterDark').value}%`; });
+$('posterFont').addEventListener('input', () => { $('posterFontVal').textContent = `${(Number($('posterFont').value) / 10).toFixed(1)}%`; });
+
+/* ------------------------------------------------------------- 탭 */
+
+function showTab(name) {
+  state.tab = name === 'shorts' ? 'shorts' : 'series';
+  $('viewSeries').hidden = state.tab !== 'series';
+  $('viewShorts').hidden = state.tab !== 'shorts';
+  document.querySelectorAll('.tabs button').forEach((b) => {
+    b.setAttribute('aria-selected', String(b.dataset.view === state.tab));
+  });
+  saveSettings();
+}
+
+document.querySelectorAll('.tabs button').forEach((b) => {
+  b.addEventListener('click', () => showTab(b.dataset.view));
+});
+
 /* ------------------------------------------------------------- 시작 */
 
 fillSelects();
@@ -1321,8 +1915,13 @@ $('model').disabled = $('customModelOn').checked;
 $('temperatureVal').textContent = Number($('temperature').value).toFixed(2);
 $('topPVal').textContent = Number($('topP').value).toFixed(2);
 syncDropBox();
+showTab(state.tab);
+$('posterDarkVal').textContent = `${$('posterDark').value}%`;
+$('posterFontVal').textContent = `${(Number($('posterFont').value) / 10).toFixed(1)}%`;
 renderImages();
 renderStory();
+renderShortImages();
+renderShorts();
 if (!storageAvailable()) {
   $('optAutosave').checked = false;
   $('optAutosave').disabled = true;
