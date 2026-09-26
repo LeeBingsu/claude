@@ -60,6 +60,51 @@ body {
 }
 .icon-btn:hover { color: var(--ink); border-color: var(--accent); }
 
+/* ---------------------------------------------------------------- 탭 */
+.tabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+.tabs button {
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink-3);
+  padding: 8px 14px; border-radius: 10px; font: inherit; font-size: 13px; cursor: pointer;
+}
+.tabs button:hover { color: var(--ink-2); }
+.tabs button[aria-selected="true"] {
+  background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600;
+}
+
+/* -------------------------------------------------------------- 단편 카드 */
+.shorts { margin-top: 14px; display: flex; flex-direction: column; gap: 16px; }
+.shorts .empty { color: var(--ink-3); font-size: 13px; text-align: center; padding: 20px 0; margin: 0; }
+
+.short {
+  border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--panel-2);
+}
+.short.busy { border-color: var(--accent); }
+.short.fail { border-color: var(--bad); }
+.short > img {
+  width: 100%; max-height: 42vh; object-fit: cover; display: block; background: var(--line);
+}
+.short-body { padding: 12px 14px 14px; }
+.short-head {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+  font-size: 12px; color: var(--ink-3); margin-bottom: 8px;
+}
+.short-head .spacer { flex: 1; }
+.short-head button {
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink-2);
+  border-radius: 8px; padding: 3px 9px; font-size: 11px; cursor: pointer;
+}
+.short-head button:hover { color: var(--ink); border-color: var(--accent); }
+.short-head button[aria-pressed="true"] {
+  background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600;
+}
+.short-title {
+  font-family: var(--serif); font-size: 18px; font-weight: 700; margin: 0 0 6px;
+  outline: none; border-radius: 6px;
+}
+.short-title:focus, .short .prose:focus { background: var(--panel); }
+.short .prose { padding: 4px 2px; font-size: 15.5px; line-height: 1.85; }
+.short .err { font-size: 12px; color: var(--bad); margin: 6px 0 0; }
+
 /* ---------------------------------------------------------------- 카드 */
 .card {
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);

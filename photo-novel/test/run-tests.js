@@ -5,12 +5,14 @@ import { naturalCompare, naturalPathCompare, sortByName } from '../lib/sort.js';
 import { listZipEntries, unzip, createZip } from '../lib/zip.js';
 import {
   buildSteps, buildSystem, buildStepParts, trimContext, splitMemo, memoDue, MEMO_MARKER,
-  parseMemoBlock, appendSettings, buildTimeline, stepId, stepTitle, retryNote
+  parseMemoBlock, appendSettings, buildTimeline, stepId, stepTitle, retryNote,
+  splitTitle, buildShortSystem, buildShortParts, buildTranslateParts, LANGS
 } from '../lib/prompt.js';
 import {
   generate, safetySettingsFor, isRefusal, isWorthRetrying, describeFailure, GeminiError, SAFETY_LADDER
 } from '../lib/gemini.js';
-import { planImageSync, normalizePassages } from '../lib/store.js';
+import { planImageSync, normalizePassages, normalizeShorts } from '../lib/store.js';
+import { wrapLines } from '../lib/poster.js';
 import { buildProject, readProject, readManifest, imageEntryName, safeFileName, PROJECT_FILE } from '../lib/project.js';
 
 let passed = 0;
@@ -462,6 +464,65 @@ await check('다시 보낼 때만 재시도 안내가 붙는다', () => {
   ok(!plain.some((x) => x.text && x.text.includes('앞선 시도')), '기본은 없음');
 });
 
+/* ------------------------------------------------------------- 한 장씩 단편 */
+
+await check('제목 줄과 본문을 가른다', () => {
+  eq(splitTitle('제목: 여름의 끝\n\n바다가 보였다.'), { title: '여름의 끝', body: '바다가 보였다.' });
+  eq(splitTitle('**제목: 여름**\n본문'), { title: '여름', body: '본문' });
+  eq(splitTitle('タイトル: 夏\n\n海が見えた。'), { title: '夏', body: '海が見えた。' });
+  eq(splitTitle('제목 없이 시작하는 글'), { title: '', body: '제목 없이 시작하는 글' });
+  eq(splitTitle(''), { title: '', body: '' });
+});
+
+await check('단편은 한 장만 보고 쓰라고 시킨다', () => {
+  const image = { name: '1.jpg', mimeType: 'image/jpeg', base64: 'B' };
+  const parts = buildShortParts({ image, index: 0, total: 3, opts: {} });
+  eq(parts.filter((p) => p.inline_data).length, 1, '사진 한 장만');
+  ok(parts[0].text.includes('1/3'), '몇 번째인지');
+  ok(parts.at(-1).text.includes('한 장만'), '이 사진만');
+
+  const sys = buildShortSystem({ shortLang: 'ja', instructions: '300자 안팎, 제목 없이' });
+  ok(sys.includes('일본어'), '쓸 언어');
+  ok(sys.includes('300자 안팎, 제목 없이'), '맞춤 지시사항');
+  ok(sys.includes('이어질 필요가 없다'), '독립된 한 편');
+  ok(sys.includes('분량과 형식은 아래 맞춤 지시사항을 따른다'), '분량·형식은 지시사항이 정한다');
+  ok(sys.includes('제목이 필요 없으면'), '제목은 선택');
+  ok(!/\d+자 안팎으로 맞춘다|분량은 .*정도로/.test(sys), '앱이 분량을 정하지 않는다');
+});
+
+await check('번역은 원문을 싣고 형식을 맞춘다', () => {
+  const parts = buildTranslateParts({ title: '여름의 끝', body: '바다가 보였다.', target: 'en' });
+  const text = parts[0].text;
+  ok(text.includes('영어로 옮겨라'), '대상 언어');
+  ok(text.includes('여름의 끝') && text.includes('바다가 보였다.'), '원문 전달');
+  ok(text.includes('제목:'), '형식');
+  ok(text.includes('더하거나 빼지 마라'), '덧붙이지 말라고');
+  eq(Object.keys(LANGS), ['ko', 'en', 'ja']);
+});
+
+await check('글줄은 폭에 맞춰 나뉜다', () => {
+  // 한글 16px, 영문 8px, 공백 5px 로 재는 셈 치고
+  const m = (s) => [...s].reduce((a, c) => a + (/\s/.test(c) ? 5 : /[A-Za-z0-9]/.test(c) ? 8 : 16), 0);
+  eq(wrapLines(m, '바다가 보였다. 그는 말이 없었다.', 100),
+    ['바다가 보였', '다. 그는 말', '이 없었다.']);
+  eq(wrapLines(m, 'The quick brown fox', 100), ['The quick', 'brown fox']);
+  eq(wrapLines(m, '첫 문단.\n\n둘째 문단.', 200), ['첫 문단.', '', '둘째 문단.'], '빈 줄은 살린다');
+  eq(wrapLines(m, 'supercalifragilistic', 40).length, 4, '긴 낱말은 글자 단위로 자른다');
+  eq(wrapLines(m, '', 100), ['']);
+});
+
+await check('쓰다 만 단편은 저장하지 않는다', () => {
+  eq(normalizeShorts({
+    a: { base: 'ko', lang: 'en', texts: { ko: { title: '제목', body: '본문' }, en: { title: 'T', body: 'B' } }, status: 'done' },
+    b: { base: 'ko', texts: {}, status: 'busy' },
+    c: { base: 'ko', lang: 'ko', texts: {}, status: 'error', error: '막힘' }
+  }), {
+    a: { base: 'ko', lang: 'en', texts: { ko: { title: '제목', body: '본문' }, en: { title: 'T', body: 'B' } }, status: 'done', error: '' },
+    c: { base: 'ko', lang: 'ko', texts: {}, status: 'error', error: '막힘' }
+  });
+  eq(normalizeShorts(undefined), {});
+});
+
 /* ------------------------------------------------------------- 전체 내보내기 */
 
 await check('zip 을 써서 다시 읽으면 그대로 나온다', async () => {
@@ -500,12 +561,36 @@ await check('프로젝트를 담고 되읽는다', async () => {
   const back = readProject(await unzip(await (await createZip(files)).arrayBuffer()));
   eq(back.error, undefined);
   eq(back.images.map((m) => m.name), ['1.jpg', '2.jpg']);
+  eq(back.shortImages, []);
   eq(Array.from(back.images[0].bytes), [9, 9]);
   eq(back.manifest.passages.pro.text, '도입부');
   eq(back.manifest.beats.pro, '집을 나섰다');
   eq(back.manifest.memo, '- 해원: 20대');
   eq(back.manifest.settings.instructions, '담담하게');
   ok(files.some((f) => f.name === 'story.txt'), '읽을거리도 함께');
+});
+
+await check('단편도 한 zip 에 함께 담긴다', async () => {
+  const shortImg = { id: 'h1', name: '바다.jpg', mimeType: 'image/jpeg', blob: new Blob([new Uint8Array([5, 5])]) };
+  const { files } = buildProject({
+    images: [], passages: {}, beats: {}, memo: '', settings: {},
+    shorts: { images: [shortImg], items: { h1: { base: 'ko', lang: 'ko', texts: { ko: { title: '여름', body: '바다.' } }, status: 'done' } } },
+    shortsText: '사람이 읽는 단편'
+  });
+  ok(files.some((f) => f.name === 'shorts/001-바다.jpg'), '단편 사진은 따로 담는다');
+  ok(files.some((f) => f.name === 'shorts.txt'), '읽을거리도');
+
+  const back = readProject(await unzip(await (await createZip(files)).arrayBuffer()));
+  eq(back.shortImages.map((m) => m.name), ['바다.jpg']);
+  eq(Array.from(back.shortImages[0].bytes), [5, 5]);
+  eq(back.manifest.shorts.items.h1.texts.ko.title, '여름');
+  eq(back.images, [], '연작 사진은 비어 있다');
+});
+
+await check('단편이 없던 예전 파일도 그대로 읽힌다', () => {
+  const old = readManifest(JSON.stringify({ app: 'photo-novel', version: 1, images: [], passages: {} }));
+  eq(old.error, undefined);
+  eq(old.manifest.shorts, { images: [], items: {} });
 });
 
 await check('API 키는 파일에 담기지 않는다', async () => {

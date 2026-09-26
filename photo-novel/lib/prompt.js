@@ -335,3 +335,79 @@ export function buildSteps(count, opts) {
   if (!steps.some((s) => s.kind !== 'prologue') && count === 1) steps.push({ kind: 'ending', from: 0 });
   return steps;
 }
+
+
+/* ------------------------------------------------------- 한 장씩 단편 */
+
+export const LANGS = {
+  ko: { label: '한국어', name: '한국어' },
+  en: { label: 'English', name: '영어' },
+  ja: { label: '日本語', name: '일본어' }
+};
+
+/* 제목 한 줄과 본문을 가른다. "제목:" 이 없으면 전부 본문으로 본다. */
+export function splitTitle(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return { title: '', body: '' };
+  const m = /^[\s*_#>-]*(?:제목|타이틀|title|タイトル)\s*[:：]\s*(.+)$/im.exec(raw);
+  if (!m) return { title: '', body: raw };
+  const title = m[1].replace(/[*_#"'「」『』]/g, '').trim();
+  const body = (raw.slice(0, m.index) + raw.slice(m.index + m[0].length)).trim();
+  return { title, body };
+}
+
+/*
+  분량과 형식은 앱이 정하지 않는다. 사용자의 맞춤 지시사항이 결정한다.
+  제목은 붙여도 되고 안 붙여도 되며, 붙일 때의 표기만 알려 준다(그림으로 구울 때 쓰기 위해서다).
+*/
+export function buildShortSystem(opts) {
+  const lines = [
+    '너는 사진 한 장을 보고 그 사진만의 글을 쓰는 작가다.',
+    '',
+    '원칙:',
+    '- 사진을 설명하거나 해설하지 말고, 그 순간이 담긴 이야기를 써라.',
+    '- "사진 속에는", "이 이미지는" 같은 메타 표현을 쓰지 마라.',
+    '- 다른 사진과 이어질 필요가 없다. 이 한 편으로 시작하고 끝난다.',
+    '- 마크다운 기호나 목록은 쓰지 마라.',
+    '- 분량과 형식은 아래 맞춤 지시사항을 따른다. 지시가 없으면 사진에 어울리게 알아서 정한다.'
+  ];
+  const lang = LANGS[opts.shortLang]?.name || '한국어';
+  lines.push(`- ${lang}로 쓴다.`);
+  const pov = POVS[opts.pov] || '';
+  if (pov) lines.push(`- 시점은 ${pov}으로 고정한다.`);
+
+  if (opts.instructions && opts.instructions.trim()) {
+    lines.push('', '사용자 맞춤 지시사항 (분량·형식·문체는 이쪽이 정한다):', opts.instructions.trim());
+  }
+  lines.push(
+    '',
+    '제목을 붙일 때는 첫 줄에 "제목: (제목)" 한 줄로 적고 한 줄 띄운 뒤 본문을 이어 쓴다.',
+    '제목이 필요 없으면 그 줄을 생략하고 본문만 쓴다.'
+  );
+  return lines.join('\n');
+}
+
+export function buildShortParts({ image, index, total, opts }) {
+  const parts = [{ text: `[사진 ${index + 1}/${total} — 파일명 ${image.name}]` }, imagePart(image)];
+  const task = ['이 사진 한 장만 보고 짧은 단편 소설을 써라.'];
+  if (opts?.retryNote) task.push(opts.retryNote);
+  parts.push({ text: task.join('\n') });
+  return parts;
+}
+
+/* 이미 쓴 단편을 다른 언어로 옮긴다. */
+export function buildTranslateParts({ title, body, target }) {
+  const name = LANGS[target]?.name || target;
+  return [{
+    text: [
+      `아래 단편 소설을 ${name}로 옮겨라.`,
+      '뜻과 분위기, 문장의 호흡을 살리고, 설명이나 주석을 덧붙이지 마라.',
+      '원문에 없는 내용을 더하거나 빼지 마라.',
+      `출력 형식: 첫 줄에 "제목: (옮긴 제목)" 을 적고, 한 줄 띄운 뒤 본문만 이어 쓴다.`,
+      '',
+      `[원문 제목] ${title || '(없음)'}`,
+      '',
+      `[원문 본문]\n${body}`
+    ].join('\n')
+  }];
+}

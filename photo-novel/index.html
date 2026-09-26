@@ -189,6 +189,13 @@
     </details>
   </section>
 
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-view="series" aria-selected="true">연작 소설 — 사진 사이를 잇기</button>
+    <button role="tab" data-view="shorts" aria-selected="false">한 장씩 단편 — 사진마다 따로</button>
+  </nav>
+
+  <div id="viewSeries">
+
   <!-- ------------------------------------------------------- 2. 사진 -->
   <section class="card">
     <div class="card-head">
@@ -270,6 +277,120 @@
       <button class="btn ghost danger" id="clearSaved" type="button">저장된 작업 지우기</button>
     </div>
   </section>
+
+  </div><!-- /viewSeries -->
+
+  <!-- ------------------------------------------------------ 한 장씩 단편 -->
+  <div id="viewShorts" hidden>
+
+    <section class="card">
+      <div class="card-head">
+        <h2><span class="num">2</span> 사진 올리기</h2>
+        <span class="pill"><b id="sCountVal">0</b>장</span>
+      </div>
+
+      <div id="sDrop" class="drop" tabindex="0" role="button" aria-label="사진 올리기">
+        <div class="drop-in">
+          <div class="drop-sym">&#128444;</div>
+          <div><b>여기로 끌어다 놓거나 눌러서 선택</b></div>
+          <div class="hint">사진 한 장마다 따로 단편을 씁니다 · zip 도 됩니다</div>
+        </div>
+        <input type="file" id="sFileInput" multiple accept="image/*,.zip,application/zip" hidden>
+      </div>
+
+      <div class="row wrap-row tools">
+        <button class="btn ghost" id="sPickFiles" type="button">파일 선택</button>
+        <button class="btn ghost" id="sSortNow" type="button">이름순 재정렬</button>
+        <button class="btn ghost danger" id="sClearImages" type="button">모두 지우기</button>
+      </div>
+      <p class="note" id="sLoadNote" hidden></p>
+
+      <details class="thumbs-box" id="sImagesBox" open>
+        <summary>사진 목록 <span class="hint" id="sListHint">(0장)</span></summary>
+        <ul class="thumbs" id="sImageList"></ul>
+      </details>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2><span class="num">3</span> 단편 쓰기</h2></div>
+
+      <div class="grid">
+        <div class="field">
+          <label for="shortLang">쓸 언어 (원문)</label>
+          <select id="shortLang"></select>
+          <p class="hint">쓴 뒤에 다른 언어로 옮길 수 있습니다.</p>
+        </div>
+        <div class="field">
+          <label>분량과 형식</label>
+          <p class="hint" style="margin-top:9px">위 <b>맞춤 지시사항</b>이 정합니다.
+            예) "300자 안팎, 두 문단", "제목 한 줄과 본문", "제목 없이 세 문장만".</p>
+        </div>
+      </div>
+
+      <div class="row wrap-row tools">
+        <button class="btn primary" id="sRunBtn" type="button">단편 쓰기</button>
+        <button class="btn" id="sResumeBtn" type="button">빈 사진만 이어서</button>
+        <button class="btn danger" id="sStopBtn" type="button" hidden>중단</button>
+      </div>
+      <div class="bar"><div class="bar-in" id="sBarIn"></div></div>
+      <p class="status" id="sStatus">사진을 올리고 시작하세요. 맞춤 지시사항과 모델은 위 설정을 함께 씁니다.</p>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2><span class="num">4</span> 결과</h2>
+        <span class="pill"><b id="sDoneVal">0</b>편</span>
+      </div>
+
+      <details class="adv" id="posterBox">
+        <summary>그림으로 저장할 때 모양</summary>
+        <div class="grid">
+          <div class="field">
+            <label for="posterDark">사진 어둡게 <b class="val" id="posterDarkVal">55%</b></label>
+            <input type="range" id="posterDark" min="0" max="90" step="5" value="55">
+          </div>
+          <div class="field">
+            <label for="posterFont">글자 크기 <b class="val" id="posterFontVal">3.2%</b></label>
+            <input type="range" id="posterFont" min="18" max="60" step="1" value="32">
+          </div>
+          <div class="field">
+            <label for="posterPos">글 위치</label>
+            <select id="posterPos">
+              <option value="bottom">아래</option>
+              <option value="center">가운데</option>
+              <option value="top">위</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="posterAlign">정렬</label>
+            <select id="posterAlign">
+              <option value="left">왼쪽</option>
+              <option value="center">가운데</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="posterFormat">파일 형식</label>
+            <select id="posterFormat">
+              <option value="image/jpeg">JPEG (작음)</option>
+              <option value="image/png">PNG (선명)</option>
+            </select>
+          </div>
+        </div>
+        <div class="checks">
+          <label class="check"><input type="checkbox" id="posterTitle" checked> 제목도 함께 그리기</label>
+        </div>
+      </details>
+
+      <div class="row wrap-row tools">
+        <button class="btn ghost" id="sSaveAll" type="button">전체 그림으로 저장 (.zip)</button>
+        <button class="btn ghost" id="sSaveTxt" type="button">.txt 저장</button>
+        <button class="btn ghost danger" id="sClearAll" type="button">단편 모두 지우기</button>
+      </div>
+
+      <div id="shortList" class="shorts"><p class="empty">아직 쓴 단편이 없습니다.</p></div>
+    </section>
+
+  </div><!-- /viewShorts -->
 
   <footer class="foot">
     브라우저에서만 동작하는 정적 페이지입니다 · 사진과 API 키는 서버로 보내지 않습니다
