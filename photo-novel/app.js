@@ -13,6 +13,7 @@ import { createZip, unzip } from './lib/zip.js';
 import { buildProject, readProject, safeFileName } from './lib/project.js';
 import { renderPoster, POSTER_DEFAULTS } from './lib/poster.js';
 import { translateText, ENGINES, DEFAULT_ENDPOINT } from './lib/translate.js';
+import { humanize, MODES as HUMAN_MODES } from './lib/humanize.js';
 
 const $ = (id) => document.getElementById(id);
 const STORE_KEY = 'photoNovel.settings.v1';
@@ -54,6 +55,8 @@ const FIELDS = [
   ['dropPrevImage', 'checked'], ['dropInstructions', 'checked'], ['imagesBox', 'open'],
   ['shortLang', 'value'], ['shortInstructions', 'value'], ['sImagesBox', 'open'],
   ['transEngine', 'value'], ['transEndpoint', 'value'], ['transEmail', 'value'],
+  ['humanProxy', 'value'], ['humanMode', 'value'], ['humanWhen', 'value'],
+  ['humanSanitize', 'checked'], ['humanBox', 'open'],
   ['posterDark', 'value'], ['posterFont', 'value'], ['posterPos', 'value'],
   ['posterAlign', 'value'], ['posterFormat', 'value'], ['posterTitle', 'checked'], ['optAutosave', 'checked'], ['saveKey', 'checked']
 ];
@@ -628,7 +631,13 @@ function passageNode(step) {
     renderStory();
     scheduleSave(0);
   });
-  head.append(label, spacer, again, clear);
+  const human = document.createElement('button');
+  human.type = 'button';
+  human.textContent = 'AI 티 빼기';
+  human.hidden = !humanReady();
+  human.disabled = !p.text.trim();
+  human.addEventListener('click', () => humanizePassages([id]));
+  head.append(label, spacer, human, again, clear);
 
   const prose = document.createElement('div');
   prose.className = 'prose';
@@ -943,6 +952,11 @@ async function generateStep(si, o, signal) {
   if (attempt) setStatus(`${label} — ${attempt}번 다시 시도해서 받았습니다.${usedLight ? ` (${dropped.join('·')} 없이 시도)` : ''}`);
   renderStory();
   scheduleSave(0);
+
+  // 자동 AI 티 빼기 — 뒤 대목이 참고하는 앞 글도 다듬어진 글이 된다.
+  if (humanReady() && $('humanWhen').value === 'auto' && p.status === 'done') {
+    await humanizePassages([id], { signal, note: setStatus });
+  }
 
   if (askMemo && o.memoMode === 'separate' && p.status === 'done') {
     try {
@@ -1357,6 +1371,17 @@ function syncTransBox() {
 
 $('transEngine').addEventListener('change', () => { syncTransBox(); saveSettings(); });
 
+$('humanTest').addEventListener('click', testHumanProxy);
+$('humanProxy').addEventListener('change', () => { renderStory(); renderShorts(); saveSettings(); });
+$('humanAll').addEventListener('click', () => {
+  if (!humanReady()) { setStatus('AI 티 빼기 프록시 주소를 먼저 적어 주세요 (설정 → AI 티 빼기).', true); return; }
+  humanizePassages(state.steps.map(stepId).filter((id) => passageAt(id).text.trim()));
+});
+$('sHumanAll').addEventListener('click', () => {
+  if (!humanReady()) { sStatus('AI 티 빼기 프록시 주소를 먼저 적어 주세요 (설정 → AI 티 빼기).', true); return; }
+  humanizeShorts(state.shorts.images.filter((img) => shortAt(img.id).status === 'done').map((img) => img.id));
+});
+
 $('themeBtn').addEventListener('click', () => {
   const root = document.documentElement;
   root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
@@ -1584,7 +1609,13 @@ function shortNode(img, index) {
   save.textContent = '그림으로 저장';
   save.disabled = item.status !== 'done';
   save.addEventListener('click', () => savePoster(img.id));
-  head.append(spacer, again, save);
+  const human = document.createElement('button');
+  human.type = 'button';
+  human.textContent = 'AI 티 빼기';
+  human.hidden = !humanReady();
+  human.disabled = item.status !== 'done';
+  human.addEventListener('click', () => humanizeShorts([img.id]));
+  head.append(spacer, human, again, save);
 
   const title = document.createElement('h3');
   title.className = 'short-title';
@@ -1682,6 +1713,9 @@ async function writeShort(img, o, signal) {
         item.error = res.finishReason === 'MAX_TOKENS' ? FINISH_MESSAGE.MAX_TOKENS : '';
         renderShorts();
         scheduleSave(0);
+        if (humanReady() && $('humanWhen').value === 'auto') {
+          await humanizeShorts([img.id], { signal, note: sStatus });
+        }
         return item;
       }
       failure = describeFailure({ text: cut.body, finishReason: res.finishReason, blockReason: res.blockReason })?.message
@@ -1753,6 +1787,130 @@ async function runShorts({ onlyEmpty = false, only = null } = {}) {
     setShortsRunning(false);
     releaseScreen();
     state.abort = null;
+  }
+}
+
+/* --------------------------------------------------------- AI 티 빼기 */
+
+/*
+  imnotai.kr 의 윤문을 불러 쓴다. 그 API 는 자기 웹앱용이라 CORS 가 열려 있지 않아서
+  사용자가 띄운 중계(프록시)를 한 단계 거친다. 주소가 비어 있으면 기능 자체가 꺼진다.
+*/
+function humanReady() {
+  return Boolean($('humanProxy').value.trim());
+}
+
+function humanOpts() {
+  return {
+    proxy: $('humanProxy').value.trim(),
+    mode: $('humanMode').value,
+    sanitize: $('humanSanitize').checked
+  };
+}
+
+/* 한 편을 돌린다. 실패는 부르는 쪽에서 받는다. */
+async function humanizeOne(text, signal, note) {
+  const res = await humanize({
+    ...humanOpts(),
+    text,
+    signal,
+    onProgress: (label) => note(label)
+  });
+  return res;
+}
+
+async function humanizePassages(ids, { signal, note = setStatus } = {}) {
+  if (!humanReady() || !ids.length) return;
+  const own = !signal;
+  const ac = own ? new AbortController() : null;
+  if (own) {
+    if (state.running) return;
+    state.abort = ac;
+    setRunning(true);
+  }
+  let moved = 0;
+  try {
+    for (const id of ids) {
+      const p = passageAt(id);
+      if (!p.text.trim()) continue;
+      const st = state.steps.find((step) => stepId(step) === id);
+      const label = st ? stepTitle(st) : id;
+      try {
+        const res = await humanizeOne(p.text, own ? ac.signal : signal, (step) => note(`${label} — AI 티 빼는 중… ${step}`));
+        p.text = res.text;
+        p.status = 'done';
+        p.error = res.degraded ? 'AI 티 빼기가 일부만 적용됐습니다.' : '';
+        moved++;
+        renderStory();
+        updateCharCount();
+        scheduleSave(0);
+      } catch (err) {
+        if (err.name === 'AbortError') throw err;
+        // 윤문 실패가 본문을 지우면 안 된다. 원문을 그대로 두고 알리기만 한다.
+        p.error = `AI 티 빼기 실패 — ${err.message}`;
+        renderStory();
+        note(p.error, true);
+      }
+    }
+    if (moved) note(`AI 티 빼기를 ${moved}개 대목에 적용했습니다.`);
+  } catch (err) {
+    if (err.name !== 'AbortError') note(`AI 티 빼기를 멈췄습니다: ${err.message}`, true);
+  } finally {
+    if (own) { setRunning(false); state.abort = null; }
+  }
+}
+
+async function humanizeShorts(ids, { signal, note = sStatus } = {}) {
+  if (!humanReady() || !ids.length) return;
+  const own = !signal;
+  const ac = own ? new AbortController() : null;
+  if (own) {
+    if (state.running) return;
+    state.abort = ac;
+    setShortsRunning(true);
+  }
+  let moved = 0;
+  try {
+    for (const id of ids) {
+      const item = shortAt(id);
+      const lang = item.lang || item.base;
+      const cur = item.texts[lang];
+      if (!cur || !cur.body.trim()) continue;
+      const img = state.shorts.images.find((i) => i.id === id);
+      const label = `${state.shorts.images.indexOf(img) + 1}번 사진`;
+      try {
+        const res = await humanizeOne(cur.body, own ? ac.signal : signal, (step) => note(`${label} — AI 티 빼는 중… ${step}`));
+        cur.body = res.text;
+        item.error = res.degraded ? 'AI 티 빼기가 일부만 적용됐습니다.' : '';
+        moved++;
+        renderShorts();
+        scheduleSave(0);
+      } catch (err) {
+        if (err.name === 'AbortError') throw err;
+        item.error = `AI 티 빼기 실패 — ${err.message}`;
+        renderShorts();
+        note(item.error, true);
+      }
+    }
+    if (moved) note(`AI 티 빼기를 단편 ${moved}편에 적용했습니다.`);
+  } catch (err) {
+    if (err.name !== 'AbortError') note(`AI 티 빼기를 멈췄습니다: ${err.message}`, true);
+  } finally {
+    if (own) { setShortsRunning(false); state.abort = null; }
+  }
+}
+
+/* 연결 확인 — 짧은 한 문장만 보내 본다. */
+async function testHumanProxy() {
+  const note = $('humanNote');
+  note.hidden = false;
+  note.textContent = '확인하는 중…';
+  if (!humanReady()) { note.textContent = '프록시 주소를 먼저 적어 주세요.'; return; }
+  try {
+    const res = await humanize({ ...humanOpts(), text: '비가 내리는 저녁이었다. 그는 문을 열고 들어갔다.' });
+    note.textContent = `연결됐습니다. 돌려받은 글: ${res.text.trim().slice(0, 60)}`;
+  } catch (err) {
+    note.textContent = `연결하지 못했습니다: ${err.message}`;
   }
 }
 
