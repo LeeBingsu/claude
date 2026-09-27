@@ -289,6 +289,58 @@ images/002-2.jpg
 
 생성 중에 화면이 저절로 움직이지 않습니다. 글이 써지는 동안에도 보던 자리에 그대로 머뭅니다.
 
+## AI 티 빼기 (imnotai.kr)
+
+쓴 글을 [imnotai.kr](https://imnotai.kr/app) 의 한국어 윤문(`POST /api/humanize`)에 넣어 AI 티를 뺍니다.
+연작 대목과 단편 모두, **대목/단편마다 단추**로 돌리거나 **쓰자마자 자동으로** 돌릴 수 있습니다.
+설정 → **AI 티 빼기** 칸에서 정합니다.
+
+- 윤문 방식은 `fast` / `precision`, "보이지 않는 문자 정리"(sanitize)도 그대로 넘깁니다.
+- 한 번에 2만 자까지 받으므로, 더 긴 글은 문단 경계에서 나눠 보냅니다.
+- 진행 상황(`윤문하는 중`, `이음매·리듬 점검 중` …)이 상태줄에 그대로 나옵니다.
+- **실패해도 원문은 지우지 않습니다.** 그 대목에 실패 사유만 적어 두고 다음으로 갑니다.
+- 자동으로 돌리면 뒤 대목이 참고하는 앞 글도 다듬어진 글이 됩니다.
+
+### 프록시가 필요한 이유
+
+imnotai.kr 의 API 는 자기 웹앱에서만 쓰라고 만든 것이라 **CORS 가 열려 있지 않습니다**
+(`OPTIONS` 는 204 를 주지만 `Access-Control-Allow-Origin` 이 없습니다).
+그래서 브라우저에서 곧장 부르면 응답을 읽지 못하고, **직접 띄운 중계 서버 주소**를 적어야 합니다.
+주소를 비워 두면 이 기능은 꺼진 채로 단추도 보이지 않습니다.
+
+적어 준 주소는 이렇게 씁니다.
+
+| 적은 주소 | 실제로 부르는 곳 |
+| --- | --- |
+| `https://내서버/humanize` | 그대로 (직접 띄운 중계 서버) |
+| `https://프록시/?url={url}` | `{url}` 자리에 대상 주소를 넣어서 |
+| `https://프록시/?url=` | 끝에 대상 주소를 붙여서 |
+| `https://프록시/` | 끝에 대상 주소를 그대로 이어 붙여서 |
+
+Cloudflare Workers 로 띄운다면 이 정도면 됩니다.
+
+```js
+export default {
+  async fetch(req) {
+    const cors = {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'content-type',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS'
+    };
+    if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+    const res = await fetch('https://imnotai.kr/api/humanize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: await req.text()
+    });
+    return new Response(res.body, { status: res.status, headers: { ...cors, 'content-type': 'application/x-ndjson' } });
+  }
+};
+```
+
+> imnotai.kr 은 남의 서비스이고 시범운영 중입니다. 많은 양을 한꺼번에 돌리지 말고,
+> 상대가 막으면 그 뜻을 따르세요. 설정 → AI 티 빼기의 **연결 확인**으로 먼저 한 문장만 시험해 볼 수 있습니다.
+
 ## 화면 글자 크기
 
 머리말의 **가 −  /  가 100%  /  가 ＋** 로 읽는 글자 크기를 70%~200% 사이에서 조절합니다.
@@ -323,6 +375,7 @@ photo-novel/
 │   ├── project.js      전체 내보내기·불러오기(zip) 꾸리기와 검사
 │   ├── poster.js       사진 위에 글을 얹어 그림으로 굽기 (줄바꿈 계산 포함)
 │   ├── translate.js    무료 번역 API (LibreTranslate·MyMemory) 호출과 조각 나누기
+│   ├── humanize.js     imnotai.kr "AI 티 빼기" 윤문 호출 (NDJSON 스트림 읽기)
 │   ├── gemini.js       REST 호출, SSE 스트리밍, 안전 옵션 단계적 완화, 재시도
 │   └── prompt.js       시스템 지시문과 구간별 프롬프트
 └── test/run-tests.js   node 로 도는 단위 테스트

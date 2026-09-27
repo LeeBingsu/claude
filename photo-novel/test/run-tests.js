@@ -17,6 +17,7 @@ import { buildProject, readProject, readManifest, imageEntryName, safeFileName, 
 import {
   planChunks, byteLen, libreRequest, parseLibre, myMemoryRequest, parseMyMemory, translateText, DEFAULT_ENDPOINT
 } from '../lib/translate.js';
+import { proxyUrl, humanizeRequest, takeLines, splitLong, humanize, TARGET } from '../lib/humanize.js';
 
 let passed = 0;
 const failures = [];
@@ -788,6 +789,87 @@ await check('같은 언어면 부르지 않는다', async () => {
   });
   eq(called, 0, '요청 수');
   eq(out, '밤', '원문 그대로');
+});
+
+/* --------------------------------------------------------- AI 티 빼기 */
+
+await check('프록시 주소 모양을 모두 받는다', () => {
+  eq(proxyUrl('https://내서버/humanize'), 'https://내서버/humanize', '직접 중계');
+  eq(proxyUrl('https://p/?url={url}'), `https://p/?url=${encodeURIComponent(TARGET)}`, '{url} 자리');
+  eq(proxyUrl('https://p/?url='), `https://p/?url=${encodeURIComponent(TARGET)}`, '= 로 끝남');
+  eq(proxyUrl('https://p/'), `https://p/${TARGET}`, '/ 로 끝남');
+  let msg = '';
+  try { proxyUrl('  '); } catch (e) { msg = e.message; }
+  ok(msg.includes('비어'), `빈 주소 (${msg})`);
+});
+
+await check('보내는 본문은 사이트가 받는 모양 그대로', () => {
+  const { init } = humanizeRequest({ proxy: 'https://p/x', text: '밤', mode: 'precision', sanitize: false });
+  eq(JSON.parse(init.body), { text: '밤', mode: 'precision', sanitize: false }, '본문');
+  eq(init.method, 'POST', '메서드');
+});
+
+await check('NDJSON 은 줄 단위로 읽고 덜 온 줄은 남긴다', () => {
+  const { lines, rest } = takeLines('{"type":"progress","step":"fast"}\n{"type":"do');
+  eq(lines.length, 1, '완성된 줄');
+  eq(lines[0].step, 'fast', '내용');
+  eq(rest, '{"type":"do', '남은 조각');
+  eq(takeLines('깨진 줄\n{"a":1}\n').lines, [{ a: 1 }], '깨진 줄은 버린다');
+});
+
+await check('2만 자가 넘으면 문단에서 나눈다', () => {
+  const para = `${'가'.repeat(500)}\n\n`;
+  const text = para.repeat(60);                     // 3만 자 남짓
+  const parts = splitLong(text, 20000);
+  ok(parts.length > 1, `조각 수 ${parts.length}`);
+  for (const p of parts) ok(p.length <= 20000, `조각 길이 ${p.length}`);
+  eq(parts.join('').replace(/\s/g, ''), text.replace(/\s/g, ''), '글자는 그대로');
+});
+
+await check('스트림에서 결과를 뽑아낸다', async () => {
+  const body = [
+    '{"type":"progress","step":"fast","detail":"윤문하는 중"}',
+    '{"type":"progress","step":"audit"}',
+    '{"type":"done","result":"다듬은 글","degraded":false}'
+  ].join('\n') + '\n';
+  const steps = [];
+  const res = await humanize({
+    proxy: 'https://p/x', text: '원래 글',
+    fetch: async () => new Response(body, { status: 200 }),
+    onProgress: (label) => steps.push(label)
+  });
+  eq(res.text, '다듬은 글', '결과');
+  eq(steps, ['윤문하는 중', '다듬는 중'], '진행 단계 이름');
+});
+
+await check('서버가 error 를 보내면 그대로 올린다', async () => {
+  let msg = '';
+  try {
+    await humanize({
+      proxy: 'https://p/x', text: '글',
+      fetch: async () => new Response('{"type":"error","message":"너무 깁니다"}\n', { status: 200 })
+    });
+  } catch (e) { msg = e.message; }
+  eq(msg, '너무 깁니다', '오류 전달');
+});
+
+await check('결과가 없으면 성공으로 보지 않는다', async () => {
+  let msg = '';
+  try {
+    await humanize({
+      proxy: 'https://p/x', text: '글',
+      fetch: async () => new Response('{"type":"progress","step":"fast"}\n', { status: 200 })
+    });
+  } catch (e) { msg = e.message; }
+  ok(msg.includes('비어'), `빈 결과 (${msg})`);
+});
+
+await check('프록시가 막으면 그렇게 알려 준다', async () => {
+  let msg = '';
+  try {
+    await humanize({ proxy: 'https://p/x', text: '글', fetch: async () => new Response('no', { status: 403 }) });
+  } catch (e) { msg = e.message; }
+  ok(msg.includes('403') && msg.includes('프록시'), `403 안내 (${msg})`);
 });
 
 /* ------------------------------------------------------------- 결과 */

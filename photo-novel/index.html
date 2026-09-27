@@ -65,6 +65,46 @@
       <p class="hint">문체·시점·인물 설정·금지사항 등 원하는 것을 자유롭게 적으세요. 매 요청에 그대로 전달됩니다.</p>
     </div>
 
+    <details class="adv" id="humanBox">
+      <summary>AI 티 빼기 (imnotai.kr)</summary>
+
+      <p class="hint">쓴 글을 <a class="link" href="https://imnotai.kr/app" target="_blank" rel="noopener">imnotai.kr</a> 의
+        한국어 윤문에 넣어 AI 티를 뺍니다. 그 API 는 자기 웹앱용이라 다른 사이트에서 바로 부를 수 없어(CORS),
+        <b>직접 띄운 중계(프록시) 주소</b>가 있어야 합니다. 비워 두면 이 기능은 꺼집니다.</p>
+
+      <div class="field">
+        <label for="humanProxy">프록시 주소</label>
+        <input type="url" id="humanProxy" placeholder="예) https://my-worker.workers.dev/humanize" spellcheck="false" autocomplete="off">
+        <p class="hint"><code>{url}</code> 을 넣으면 그 자리에 대상 주소가 들어갑니다.
+          <code>…/?url=</code> 로 끝나면 뒤에 붙이고, <code>/</code> 로 끝나면 주소를 그대로 이어 붙입니다.
+          그 외에는 적어 준 주소로 그대로 보냅니다.</p>
+      </div>
+
+      <div class="grid">
+        <div class="field">
+          <label for="humanMode">윤문 방식</label>
+          <select id="humanMode">
+            <option value="fast">빠르게 (fast)</option>
+            <option value="precision">꼼꼼히 (precision)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="humanWhen">언제 돌릴지</label>
+          <select id="humanWhen">
+            <option value="off">직접 누를 때만</option>
+            <option value="auto">쓰자마자 자동으로</option>
+          </select>
+          <p class="hint">자동은 대목·단편이 하나 끝날 때마다 이어서 돌립니다.</p>
+        </div>
+      </div>
+
+      <div class="checks">
+        <label class="check"><input type="checkbox" id="humanSanitize" checked> 보이지 않는 문자도 정리 (sanitize)</label>
+        <button class="btn ghost" id="humanTest" type="button">연결 확인</button>
+      </div>
+      <p class="note" id="humanNote" hidden></p>
+    </details>
+
     <details class="adv">
       <summary>고급 옵션</summary>
 
@@ -254,6 +294,7 @@
       <span class="pill"><b id="charVal">0</b>자</span>
     </div>
     <div class="row wrap-row tools">
+      <button class="btn ghost" id="humanAll" type="button">전체 AI 티 빼기</button>
       <button class="btn ghost" id="copyBtn" type="button">본문 복사</button>
       <button class="btn ghost" id="saveMd" type="button">.md 저장</button>
       <button class="btn ghost" id="saveHtml" type="button">.html 저장 (사진 포함)</button>
@@ -415,6 +456,7 @@
       </details>
 
       <div class="row wrap-row tools">
+        <button class="btn ghost" id="sHumanAll" type="button">전체 AI 티 빼기</button>
         <button class="btn ghost" id="sSaveAll" type="button">전체 그림으로 저장 (.zip)</button>
         <button class="btn ghost" id="sSaveTxt" type="button">.txt 저장</button>
         <button class="btn ghost danger" id="sClearAll" type="button">단편 모두 지우기</button>
