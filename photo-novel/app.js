@@ -145,8 +145,26 @@ function genConfig() {
 let saveTimer = 0;
 let saveStopped = '';     // 저장 공간 부족 등으로 멈춘 이유
 
+/*
+  지난 작업을 다 읽기 전에는 저장하지 않는다.
+  읽는 도중(사진이 많으면 몇 초 걸린다) 화면이 꺼지거나 다른 앱으로 넘어가면 pagehide·
+  visibilitychange 가 저장을 부르는데, 그때의 화면은 아직 비어 있어서 빈 작업이
+  저장된 작업을 덮어써 버렸다. 읽기에 실패했을 때도 마찬가지로 덮어쓰지 않는다.
+    pending — 아직 읽는 중,  ok — 읽기를 마쳤거나 읽을 것이 없음,  failed — 읽지 못함
+*/
+let restoreState = 'pending';
+
 function autosaveOn() {
-  return $('optAutosave').checked && !saveStopped && storageAvailable();
+  return $('optAutosave').checked && !saveStopped && storageAvailable() && restoreState === 'ok';
+}
+
+/* 저장된 작업을 읽지 못했을 때 — 빈 화면으로 덮어쓰지 않도록 저장을 멈춘다. */
+function holdSaving(reason) {
+  restoreState = 'failed';
+  clearTimeout(saveTimer);
+  saveStopped = `${reason} — 저장된 작업을 덮어쓰지 않도록 자동 저장을 멈췄습니다. 새로고침해 보세요.`;
+  $('savedInfo').textContent = saveStopped;
+  setStatus(saveStopped, true);
 }
 
 /* 잦은 호출을 한 번으로 묶는다. */
@@ -207,19 +225,19 @@ function migratePassages(saved, imageCount) {
 
 /* 지난번 작업을 되살린다. */
 async function restoreWork() {
-  if (!$('optAutosave').checked || !storageAvailable()) return;
+  if (!$('optAutosave').checked || !storageAvailable()) { restoreState = 'ok'; return; }
   let work = null;
   try {
     work = await loadWork();
   } catch (err) {
-    setStatus(`저장된 작업을 불러오지 못했습니다: ${err.message}`, true);
+    holdSaving(`저장된 작업을 불러오지 못했습니다: ${err.message}`);
     return;
   }
-  if (!work) return;
+  if (!work) { restoreState = 'ok'; return; }
   const passages = migratePassages(work.passages, work.images.length);
   const hasText = Object.values(passages).some((p) => p?.text);
   const hasShorts = (work.shorts?.images || []).length > 0;
-  if (!work.images.length && !hasText && !hasShorts) return;
+  if (!work.images.length && !hasText && !hasShorts) { restoreState = 'ok'; return; }
 
   try {
     const images = [];
@@ -233,9 +251,10 @@ async function restoreWork() {
     for (const row of work.shorts?.images || []) shortImages.push(await recordFromStored(row));
     state.shorts = { images: shortImages, items: work.shorts?.items || {} };
   } catch (err) {
-    setStatus(`저장된 사진을 여는 데 실패했습니다: ${err.message}`, true);
+    holdSaving(`저장된 사진을 여는 데 실패했습니다: ${err.message}`);
     return;
   }
+  restoreState = 'ok';
 
   renderImages();
   renderStory();
@@ -1429,7 +1448,7 @@ $('optAutosave').addEventListener('change', async () => {
     await flushSave();
     return;
   }
-  try { await clearWork(); } catch { /* 지울 게 없으면 그만 */ }
+  try { await clearWork(); restoreState = 'ok'; } catch { /* 지울 게 없으면 그만 */ }
   $('savedInfo').textContent = '자동 저장이 꺼져 있습니다. 새로고침하면 사진과 본문이 사라집니다.';
 });
 
@@ -1438,6 +1457,7 @@ $('clearSaved').addEventListener('click', async () => {
   try {
     await clearWork();
     saveStopped = '';
+    restoreState = 'ok';          // 지켜야 할 저장본이 없으니 다시 저장해도 된다
     $('savedInfo').textContent = $('optAutosave').checked
       ? '저장된 작업을 지웠습니다. 다음 변경부터 다시 저장됩니다.'
       : '저장된 작업을 지웠습니다.';
