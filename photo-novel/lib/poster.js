@@ -51,8 +51,14 @@ const FONT_STACK = '"Nanum Myeongjo", "Apple SD Gothic Neo", "Noto Serif KR", "H
 /* 캔버스에 그려 Blob 으로 돌려준다. 브라우저에서만 쓴다. */
 export async function renderPoster(image, text, options = {}) {
   const o = { ...POSTER_DEFAULTS, ...options };
-  // 줄이기 전 원본이 남아 있으면 그 위에 글을 얹는다.
-  const bitmap = await createImageBitmap(image.original || image.blob);
+  // 줄이기 전 원본이 남아 있으면 그 위에 글을 얹는다. 원본을 못 읽으면 줄인 사진으로 대신한다.
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(image.original || image.blob);
+  } catch (err) {
+    if (!image.original) throw err;
+    bitmap = await createImageBitmap(image.blob);
+  }
   const scale = Math.min(1, o.maxWidth / Math.max(bitmap.width, bitmap.height) || 1);
   const width = Math.max(1, Math.round(bitmap.width * scale));
   const height = Math.max(1, Math.round(bitmap.height * scale));

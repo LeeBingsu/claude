@@ -102,12 +102,16 @@ export async function saveWork({ images, passages, beats, memo, shorts }) {
     const existing = await req(db.transaction(IMAGES, 'readonly').objectStore(IMAGES).getAllKeys());
     const plan = planImageSync(existing.map(String), wanted);
 
+    // 예전 버전이 폰 파일 참조로 저장해 둔 사진은 메모리 복사본으로 한 번 다시 쓴다.
+    const have = new Set(existing.map(String));
+    const rewrite = all.filter((i) => i.rewrite && !i.broken && have.has(i.id)).map((i) => i.id);
+
     const t = db.transaction([IMAGES, META], 'readwrite');
     const imageStore = t.objectStore(IMAGES);
     for (const id of plan.del) imageStore.delete(id);
-    for (const id of plan.put) {
+    for (const id of [...plan.put, ...rewrite]) {
       const img = all.find((x) => x.id === id);
-      if (!img?.blob) continue;
+      if (!img?.blob || img.broken) continue;      // 못 읽은 사진의 자리표는 저장본을 덮지 않는다
       imageStore.put({
         id: img.id,
         name: img.name,
@@ -115,6 +119,7 @@ export async function saveWork({ images, passages, beats, memo, shorts }) {
         width: img.width,
         height: img.height,
         converted: img.converted,
+        own: true,                        // 폰 파일과 무관한 복사본이라는 표시
         blob: img.blob,
         original: img.original || null   // 그림으로 저장할 때 쓰는 원본
       });
@@ -128,6 +133,7 @@ export async function saveWork({ images, passages, beats, memo, shorts }) {
       updatedAt: Date.now()
     }, CURRENT);
     await done(t);
+    for (const img of all) if (img.rewrite) img.rewrite = false;
   } finally {
     db.close();
   }
@@ -138,12 +144,18 @@ export async function loadWork() {
   try {
     const meta = await req(db.transaction(META, 'readonly').objectStore(META).get(CURRENT));
     if (!meta) return null;
-    const store = db.transaction(IMAGES, 'readonly').objectStore(IMAGES);
     const pick = async (order) => {
       const out = [];
       for (const id of order || []) {
-        const row = await req(store.get(id));
-        if (row?.blob) out.push(row);           // 중간에 지워진 사진은 건너뛴다
+        let row = null;
+        // 한 장을 못 읽어도 나머지 사진과 글은 살린다. 못 읽은 자리는 id 만 넘겨 자리를 지킨다.
+        // 실패한 요청은 트랜잭션을 통째로 멈추므로 한 장마다 새 트랜잭션으로 읽는다.
+        try {
+          row = await req(db.transaction(IMAGES, 'readonly').objectStore(IMAGES).get(id));
+        } catch {
+          row = { id, unreadable: true };
+        }
+        if (row?.blob || row?.unreadable) out.push(row);   // 중간에 지워진 사진은 건너뛴다
       }
       return out;
     };

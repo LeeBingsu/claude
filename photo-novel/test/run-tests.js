@@ -13,6 +13,7 @@ import {
 } from '../lib/gemini.js';
 import { planImageSync, normalizePassages, normalizeShorts } from '../lib/store.js';
 import { wrapLines } from '../lib/poster.js';
+import { ownCopy } from '../lib/images.js';
 import { buildProject, readProject, readManifest, imageEntryName, safeFileName, PROJECT_FILE } from '../lib/project.js';
 import {
   planChunks, byteLen, libreRequest, parseLibre, myMemoryRequest, parseMyMemory, translateText, DEFAULT_ENDPOINT
@@ -789,6 +790,17 @@ await check('같은 언어면 부르지 않는다', async () => {
   });
   eq(called, 0, '요청 수');
   eq(out, '밤', '원문 그대로');
+});
+
+/* ------------------------------------------------------- 사진 복사본 */
+
+await check('올린 사진은 원본 파일과 무관한 복사본으로 담는다', async () => {
+  const src = new Blob([new Uint8Array([1, 2, 3, 4])], { type: 'image/png' });
+  const copy = await ownCopy(src);
+  ok(copy !== src, '다른 객체');
+  eq(copy.type, 'image/png', '형식 유지');
+  eq([...new Uint8Array(await copy.arrayBuffer())], [1, 2, 3, 4], '바이트 동일');
+  eq((await ownCopy(src, 'image/jpeg')).type, 'image/jpeg', '형식 지정');
 });
 
 /* --------------------------------------------------------- AI 티 빼기 */
