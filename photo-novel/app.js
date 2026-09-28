@@ -14,6 +14,7 @@ import { buildProject, readProject, safeFileName } from './lib/project.js';
 import { renderPoster, POSTER_DEFAULTS } from './lib/poster.js';
 import { translateText, ENGINES, DEFAULT_ENDPOINT } from './lib/translate.js';
 import { humanize, MODES as HUMAN_MODES } from './lib/humanize.js';
+import { buildSettingsFile, readSettingsFile } from './lib/settings-file.js';
 
 const $ = (id) => document.getElementById(id);
 const STORE_KEY = 'photoNovel.settings.v1';
@@ -1240,6 +1241,69 @@ function exportableSettings() {
   return out;
 }
 
+/* 설정 값을 화면 칸에 넣고, 값에 딸린 표시(보이고 숨는 칸, 숫자 표시)를 맞춘다. */
+function applyFieldValues(settings) {
+  for (const [id, prop] of FIELDS) {
+    const el = $(id);
+    if (!el || id === 'saveKey' || settings?.[id] === undefined) continue;
+    if (id === 'model' && !Array.from(el.options).some((o) => o.value === settings[id])) {
+      el.append(new Option(settings[id], settings[id]));
+    }
+    el[prop] = settings[id];
+  }
+  $('customModel').hidden = !$('customModelOn').checked;
+  $('model').disabled = $('customModelOn').checked;
+  $('temperatureVal').textContent = Number($('temperature').value).toFixed(2);
+  $('topPVal').textContent = Number($('topP').value).toFixed(2);
+  $('posterDarkVal').textContent = `${$('posterDark').value}%`;
+  $('posterFontVal').textContent = `${(Number($('posterFont').value) / 10).toFixed(1)}%`;
+  syncDropBox();
+  syncTransBox();
+}
+
+/* ------------------------------------------------------------ 설정 파일 */
+
+$('settingsSave').addEventListener('click', () => {
+  const withKey = $('settingsWithKey').checked;
+  const apiKey = withKey ? $('apiKey').value.trim() : '';
+  const text = buildSettingsFile({
+    settings: exportableSettings(),
+    theme: document.documentElement.dataset.theme,
+    proseScale: state.proseScale,
+    apiKey
+  });
+  download(`photo-novel-settings-${stamp()}.json`, new Blob([text], { type: 'application/json' }));
+  const note = state.tab === 'shorts' ? sStatus : setStatus;
+  note(`설정 파일을 내려받았습니다${apiKey ? ' (API 키 포함 — 남과 공유하지 마세요)' : ' (API 키 없음)'}.`);
+});
+
+$('settingsLoad').addEventListener('click', () => $('settingsInput').click());
+
+$('settingsInput').addEventListener('change', async (e) => {
+  const file = e.target.files?.[0];
+  e.target.value = '';
+  if (!file) return;
+  const note = state.tab === 'shorts' ? sStatus : setStatus;
+  if (state.running) { note('생성 중에는 설정을 바꿀 수 없습니다.', true); return; }
+  try {
+    const got = readSettingsFile(await file.text());
+    applyFieldValues(got.settings);
+    if (got.theme) document.documentElement.dataset.theme = got.theme;
+    if (got.proseScale) setProseScale(got.proseScale, { save: false });
+    if (got.apiKey) {
+      $('apiKey').value = got.apiKey;
+      $('saveKey').checked = true;          // 불러온 키는 다음에도 쓰도록 이 브라우저에 남긴다
+    }
+    saveSettings();
+    renderStory();
+    renderShorts();
+    const n = Object.keys(got.settings).length;
+    note(`설정을 불러왔습니다 · 항목 ${n}개${got.apiKey ? ' · API 키 포함' : ''}`);
+  } catch (err) {
+    note(`설정을 불러오지 못했습니다: ${err.message}`, true);
+  }
+});
+
 function hasWork() {
   return Boolean(state.images.length || Object.keys(state.passages).length || state.shorts.images.length);
 }
@@ -1377,19 +1441,7 @@ $('importInput').addEventListener('change', async (e) => {
     state.shorts = { images: shortImages, items: project.manifest.shorts?.items || {} };
 
     // 설정도 함께 복원한다. 키는 파일에 없으니 화면의 것을 그대로 둔다.
-    for (const [id, prop] of FIELDS) {
-      const el = $(id);
-      if (el && id !== 'saveKey' && project.manifest.settings[id] !== undefined) {
-        if (id === 'model' && !Array.from(el.options).some((o) => o.value === project.manifest.settings[id])) {
-          el.append(new Option(project.manifest.settings[id], project.manifest.settings[id]));
-        }
-        el[prop] = project.manifest.settings[id];
-      }
-    }
-    $('customModel').hidden = !$('customModelOn').checked;
-    $('model').disabled = $('customModelOn').checked;
-    $('temperatureVal').textContent = Number($('temperature').value).toFixed(2);
-    $('topPVal').textContent = Number($('topP').value).toFixed(2);
+    applyFieldValues(project.manifest.settings);
 
     renderImages();
     renderStory();

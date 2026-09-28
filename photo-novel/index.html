@@ -125,6 +125,14 @@
         <button class="btn" id="backupNow" type="button">지금 백업 받기</button>
         <button class="btn" id="backupRestore" type="button">백업에서 되살리기</button>
       </div>
+      <div class="row wrap-row tools">
+        <button class="btn" id="settingsSave" type="button">설정 파일로 저장 (.json)</button>
+        <button class="btn" id="settingsLoad" type="button">설정 파일 불러오기</button>
+        <label class="check"><input type="checkbox" id="settingsWithKey" checked> API 키 포함</label>
+        <input type="file" id="settingsInput" accept=".json,application/json" hidden>
+      </div>
+      <p class="hint">맞춤 지시사항(연작·단편), 모델, 모든 옵션, 번역·AI 티 빼기·그림 설정, 테마와 글자 크기를 JSON 하나로 담습니다.
+        사진과 글은 들어가지 않습니다. API 키를 넣었다면 그 파일은 남과 공유하지 마세요.</p>
     </details>
 
     <details class="adv">

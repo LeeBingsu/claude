@@ -14,6 +14,7 @@ import {
 import { planImageSync, normalizePassages, normalizeShorts } from '../lib/store.js';
 import { wrapLines } from '../lib/poster.js';
 import { ownCopy } from '../lib/images.js';
+import { buildSettingsFile, readSettingsFile } from '../lib/settings-file.js';
 import { buildProject, readProject, readManifest, imageEntryName, safeFileName, PROJECT_FILE } from '../lib/project.js';
 import {
   planChunks, byteLen, libreRequest, parseLibre, myMemoryRequest, parseMyMemory, translateText, DEFAULT_ENDPOINT
@@ -790,6 +791,29 @@ await check('같은 언어면 부르지 않는다', async () => {
   });
   eq(called, 0, '요청 수');
   eq(out, '밤', '원문 그대로');
+});
+
+/* --------------------------------------------------------- 설정 파일 */
+
+await check('설정 파일은 저장한 그대로 돌아온다', () => {
+  const text = buildSettingsFile({ settings: { instructions: '담담하게', model: 'gemini-2.5-pro', optEnding: true, temperature: '1.1' }, theme: 'dark', proseScale: 1.25, apiKey: 'AIza-test' });
+  const got = readSettingsFile(text);
+  eq(got.settings, { instructions: '담담하게', model: 'gemini-2.5-pro', optEnding: true, temperature: '1.1' }, '설정');
+  eq([got.theme, got.proseScale, got.apiKey], ['dark', 1.25, 'AIza-test'], '테마·글자·키');
+});
+
+await check('키를 빼면 파일에 키가 없다', () => {
+  const text = buildSettingsFile({ settings: { a: 1 }, apiKey: '' });
+  ok(!text.includes('apiKey'), '키 칸 없음');
+  eq(readSettingsFile(text).apiKey, '', '빈 키');
+});
+
+await check('엉뚱한 파일은 이유와 함께 거절한다', () => {
+  const why = (s) => { try { readSettingsFile(s); return ''; } catch (e) { return e.message; } };
+  ok(why('not json').includes('JSON'), '깨진 JSON');
+  ok(why('[1,2]').includes('모양'), '배열');
+  ok(why('{"x":1}').includes('설정'), '설정 없음');
+  eq(readSettingsFile('{"settings":{"a":"b","bad":{"x":1}}}').settings, { a: 'b' }, '값만 받음');
 });
 
 /* ------------------------------------------------------- 사진 복사본 */
