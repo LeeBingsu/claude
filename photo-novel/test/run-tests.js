@@ -17,7 +17,7 @@ import { buildProject, readProject, readManifest, imageEntryName, safeFileName, 
 import {
   planChunks, byteLen, libreRequest, parseLibre, myMemoryRequest, parseMyMemory, translateText, DEFAULT_ENDPOINT
 } from '../lib/translate.js';
-import { proxyUrl, humanizeRequest, takeLines, splitLong, humanize, TARGET } from '../lib/humanize.js';
+import { proxyUrl, humanizeRequest, takeLines, splitLong, humanize, unreachable, TARGET } from '../lib/humanize.js';
 
 let passed = 0;
 const failures = [];
@@ -862,6 +862,16 @@ await check('결과가 없으면 성공으로 보지 않는다', async () => {
     });
   } catch (e) { msg = e.message; }
   ok(msg.includes('비어'), `빈 결과 (${msg})`);
+});
+
+await check('연결이 안 되면 넣어야 할 사이트 주소를 짚어 준다', async () => {
+  let msg = '';
+  try {
+    await humanize({ proxy: 'https://p/x', text: '글', fetch: async () => { throw new TypeError('Failed to fetch'); } });
+  } catch (e) { msg = e.message; }
+  ok(msg.includes('Failed to fetch') && msg.includes('프록시에 닿지'), `원인 안내 (${msg})`);
+  ok(unreachable(new TypeError('Failed to fetch'), 'http://opus.kro.kr').includes('http://opus.kro.kr'), '사이트 주소');
+  ok(unreachable(new TypeError('x'), 'null').includes('웹 서버'), '파일로 열었을 때');
 });
 
 await check('프록시가 막으면 그렇게 알려 준다', async () => {

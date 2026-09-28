@@ -67,10 +67,27 @@ export function takeLines(buffer) {
   return { lines, rest };
 }
 
+/*
+  브라우저는 CORS 로 막힌 응답과 끊긴 연결을 똑같이 "Failed to fetch" 로만 알려 준다.
+  그중 흔한 쪽은 중계 서버의 허용 목록에 지금 사이트 주소가 없는 경우라, 그 주소를 짚어 준다.
+*/
+export function unreachable(err, origin = globalThis.location?.origin) {
+  const here = origin && origin !== 'null' ? origin : '';
+  return here
+    ? `프록시에 닿지 못했습니다 (${err.message}). 주소가 맞는지, 그리고 프록시의 허용 목록에 이 사이트 주소 ${here} 가 들어 있는지 확인하세요.`
+    : `프록시에 닿지 못했습니다 (${err.message}). 파일을 직접 열었다면 웹 서버로 띄워서 열어 주세요.`;
+}
+
 /* 한 덩어리를 보내고 결과 글을 받는다. */
 async function once({ proxy, text, mode, sanitize, fetch: f, signal, onProgress }) {
   const { url, init } = humanizeRequest({ proxy, text, mode, sanitize });
-  const res = await f(url, { ...init, signal });
+  let res;
+  try {
+    res = await f(url, { ...init, signal });
+  } catch (err) {
+    if (err.name === 'AbortError') throw err;
+    throw new Error(unreachable(err));
+  }
   if (!res.ok) {
     const hint = res.status === 403 || res.status === 401
       ? ' (프록시가 요청을 막았습니다)'
