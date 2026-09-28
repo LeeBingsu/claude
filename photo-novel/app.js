@@ -1,6 +1,6 @@
 /* app.js - 화면 로직. 설정은 localStorage 에만 저장한다. */
 
-import { collectImages, recordFromStored, makeImageRecord } from './lib/images.js';
+import { collectImages, recordFromStored, makeImageRecord, placeholderRecord } from './lib/images.js';
 import { sortByName } from './lib/sort.js';
 import { generate, listModels, isRefusal, isWorthRetrying, describeFailure, SAFETY_LADDER } from './lib/gemini.js';
 import {
@@ -57,6 +57,7 @@ const FIELDS = [
   ['transEngine', 'value'], ['transEndpoint', 'value'], ['transEmail', 'value'],
   ['humanProxy', 'value'], ['humanMode', 'value'], ['humanWhen', 'value'],
   ['humanSanitize', 'checked'], ['humanBox', 'open'],
+  ['autoBackup', 'value'],
   ['posterDark', 'value'], ['posterFont', 'value'], ['posterPos', 'value'],
   ['posterAlign', 'value'], ['posterFormat', 'value'], ['posterTitle', 'checked'], ['optAutosave', 'checked'], ['saveKey', 'checked']
 ];
@@ -239,29 +240,42 @@ async function restoreWork() {
   const hasShorts = (work.shorts?.images || []).length > 0;
   if (!work.images.length && !hasText && !hasShorts) { restoreState = 'ok'; return; }
 
+  // 사진은 한 장씩 연다. 못 읽은 사진이 있어도 나머지와 글은 모두 되살린다.
+  let broken = 0;
+  const open = async (row) => {
+    if (!row.unreadable) {
+      try { return await recordFromStored(row); } catch { /* 아래에서 자리만 지킨다 */ }
+    }
+    broken++;
+    return placeholderRecord(row);
+  };
   try {
     const images = [];
-    for (const row of work.images) images.push(await recordFromStored(row));
+    for (const row of work.images) images.push(await open(row));
     state.images = images;
     state.passages = passages;
     state.beats = work.beats || {};
     state.memo = work.memo;
 
     const shortImages = [];
-    for (const row of work.shorts?.images || []) shortImages.push(await recordFromStored(row));
+    for (const row of work.shorts?.images || []) shortImages.push(await open(row));
     state.shorts = { images: shortImages, items: work.shorts?.items || {} };
   } catch (err) {
     holdSaving(`저장된 사진을 여는 데 실패했습니다: ${err.message}`);
     return;
   }
   restoreState = 'ok';
+  // 예전 방식(폰 파일 참조)으로 저장된 사진은 지금 읽힌 김에 복사본으로 다시 저장해 둔다.
+  if ([...state.images, ...state.shorts.images].some((i) => i.rewrite)) scheduleSave(0);
 
   renderImages();
   renderStory();
   renderShortImages();
   renderShorts();
   showSaved(work.updatedAt || Date.now());
-  setStatus(`지난 작업을 불러왔습니다 · 사진 ${state.images.length}장 · ${storyChars().toLocaleString('ko-KR')}자 (${clockOf(work.updatedAt || Date.now())} 저장)`);
+  const shortsNote = state.shorts.images.length ? ` · 단편 ${state.shorts.images.length}편` : '';
+  setStatus(`지난 작업을 불러왔습니다 · 사진 ${state.images.length}장 · ${storyChars().toLocaleString('ko-KR')}자${shortsNote} (${clockOf(work.updatedAt || Date.now())} 저장)`
+    + (broken ? `\n사진 ${broken}장은 읽지 못해 회색 칸으로 자리만 지켰습니다. 백업 파일이 있다면 "백업에서 되살리기" 로 불러오세요.` : ''), Boolean(broken));
   maybeAutoResume();
 }
 
@@ -1060,6 +1074,7 @@ async function runAll({ onlyEmpty }) {
     }
     const failed = Object.values(state.passages).filter((p) => p && p.status === 'error').length;
     setStatus(failed ? `완료 (실패한 대목 ${failed}개 — 다시 쓰기를 눌러 보세요)` : '완료되었습니다.', Boolean(failed));
+    maybeAutoBackup(setStatus, $('status'));
   } catch (err) {
     if (err.name === 'AbortError') {
       dropHalfWritten('중단했습니다. "빈 대목만 이어서" 로 이 대목부터 다시 씁니다.');
@@ -1225,8 +1240,62 @@ function exportableSettings() {
   return out;
 }
 
+function hasWork() {
+  return Boolean(state.images.length || Object.keys(state.passages).length || state.shorts.images.length);
+}
+
+/* 사진 원본·본문·단편·설정을 zip 하나로 — 전체 내보내기와 백업이 같은 파일을 만든다. */
+async function projectZip() {
+  const { files } = buildProject({
+    images: state.images,
+    passages: state.passages,
+    beats: state.beats,
+    memo: state.memo,
+    shorts: state.shorts,
+    settings: exportableSettings(),
+    story: plainText(),
+    shortsText: shortsPlainText()
+  });
+  return createZip(files);
+}
+
+function sizeText(n) {
+  return n >= 1048576 ? `${(n / 1048576).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`;
+}
+
+/*
+  백업 파일을 휴대폰에 내려받는다. 사진 원본까지 들어 있어서, 폰에서 사진을 지우거나
+  브라우저 저장소가 비워져도 "백업에서 되살리기" 로 그대로 돌아온다.
+*/
+async function downloadBackup({ note = setStatus, auto = false } = {}) {
+  if (!hasWork()) { if (!auto) note('백업할 것이 없습니다.', true); return; }
+  note(auto ? '자동 백업 파일을 만드는 중…' : '백업 파일을 만드는 중…');
+  try {
+    const blob = await projectZip();
+    download(`photo-novel-backup-${stamp()}.zip`, blob);
+    note(`${auto ? '자동 백업' : '백업'}을 내려받았습니다 · 사진 ${state.images.length + state.shorts.images.length}장 · ${sizeText(blob.size)}`
+      + ' — 다운로드 폴더에 있습니다.');
+  } catch (err) {
+    note(`백업을 만들지 못했습니다: ${err.message}`, true);
+  }
+}
+
+/*
+  글쓰기가 끝날 때마다 자동으로 받는다(설정에서 끌 수 있다).
+  "완료 (실패한 대목 n개 …)" 같은 끝 안내는 지우지 않고, 백업 소식을 그 아래 줄에 붙인다.
+*/
+function maybeAutoBackup(note, el) {
+  if ($('autoBackup').value !== 'done') return;
+  const before = el.textContent;
+  const wasErr = el.classList.contains('err');
+  downloadBackup({ note: (msg, err) => note(`${before}\n${msg}`, Boolean(err) || wasErr), auto: true });
+}
+
+$('backupNow').addEventListener('click', () => downloadBackup({ note: state.tab === 'shorts' ? sStatus : setStatus }));
+$('backupRestore').addEventListener('click', () => $('importInput').click());
+
 $('exportProject').addEventListener('click', async () => {
-  if (!state.images.length && !Object.keys(state.passages).length && !state.shorts.images.length) {
+  if (!hasWork()) {
     setStatus('내보낼 것이 없습니다.', true);
     return;
   }
@@ -1261,20 +1330,22 @@ $('importInput').addEventListener('change', async (e) => {
   const file = e.target.files?.[0];
   e.target.value = '';
   if (!file) return;
-  if (state.running) { setStatus('생성 중에는 불러올 수 없습니다.', true); return; }
-  setStatus('파일을 여는 중…');
+  // 단편 탭에서 불렀으면 그 탭 상태줄에 알린다.
+  const note = state.tab === 'shorts' ? sStatus : setStatus;
+  if (state.running) { note('생성 중에는 불러올 수 없습니다.', true); return; }
+  note('파일을 여는 중…');
   try {
     const buf = await file.arrayBuffer();
     const entries = await unzip(buf);
     const project = readProject(entries);
-    if (project.error) { setStatus(project.error, true); return; }
+    if (project.error) { note(project.error, true); return; }
 
     if (project.plainZip) {
-      setStatus('사진만 들어 있는 zip 입니다. 사진 올리기로 넣어 주세요.', true);
+      note('사진만 들어 있는 zip 입니다. 사진 올리기로 넣어 주세요.', true);
       return;
     }
-    const has = state.images.length || Object.values(state.passages).some((p) => p?.text);
-    if (has && !confirm('지금 작업을 덮어쓰고 파일의 내용을 불러올까요?')) { setStatus('불러오기를 취소했습니다.'); return; }
+    const has = state.images.length || state.shorts.images.length || Object.values(state.passages).some((p) => p?.text);
+    if (has && !confirm('지금 작업을 덮어쓰고 파일의 내용을 불러올까요?')) { note('불러오기를 취소했습니다.'); return; }
 
     const toRecords = async (list, tag) => {
       const out = [];
@@ -1325,14 +1396,17 @@ $('importInput').addEventListener('change', async (e) => {
     renderShortImages();
     renderShorts();
     saveSettings();
+    // 직접 고른 파일로 바꾸는 것이니, 저장본을 읽지 못해 멈춰 둔 저장도 다시 연다.
+    restoreState = 'ok';
+    saveStopped = '';
     scheduleSave(0);
 
     const when = project.manifest.exportedAt ? ` (${clockOf(Date.parse(project.manifest.exportedAt))} 내보낸 파일)` : '';
     const lost = project.missing?.length ? ` · 사진 ${project.missing.length}장은 파일에 없어 빠졌습니다` : '';
     const shortsNote = shortImages.length ? ` · 단편 사진 ${shortImages.length}장` : '';
-    setStatus(`불러왔습니다 · 사진 ${images.length}장${shortsNote} · ${storyChars().toLocaleString('ko-KR')}자${when}${lost}`, Boolean(lost));
+    note(`불러왔습니다 · 사진 ${images.length}장${shortsNote} · ${storyChars().toLocaleString('ko-KR')}자${when}${lost}`, Boolean(lost));
   } catch (err) {
-    setStatus(`불러오지 못했습니다: ${err.message}`, true);
+    note(`불러오지 못했습니다: ${err.message}`, true);
   }
 });
 
@@ -1792,6 +1866,7 @@ async function runShorts({ onlyEmpty = false, only = null } = {}) {
     }
     const failed = targets.filter((img) => state.shorts.items[img.id]?.status === 'error').length;
     sStatus(failed ? `완료 (실패 ${failed}편 — 다시 쓰기를 눌러 보세요)` : '완료되었습니다.', Boolean(failed));
+    maybeAutoBackup(sStatus, $('sStatus'));
   } catch (err) {
     for (const img of targets) {
       const item = state.shorts.items[img.id];

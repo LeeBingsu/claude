@@ -73,10 +73,21 @@ function nextId() {
   maxDim = 0 이면 원본 그대로 보낸다. keepOriginal 을 켜면 줄이기 전 원본도 함께 들고 있는다
   (그림으로 저장할 때 원본 위에 글을 얹기 위해서다).
 */
-export async function makeImageRecord(name, blob, opts = {}) {
+/*
+  고른 파일의 바이트를 지금 다 읽어 메모리에 따로 복사한다.
+  안드로이드에서 갤러리로 고른 파일(File)은 폰의 원본을 가리키는 참조라서, 그대로 저장하면
+  폰에서 사진을 지웠을 때 저장본도 읽을 수 없게 된다. 복사본은 원본과 무관하게 남는다.
+*/
+export async function ownCopy(blob, type) {
+  const bytes = await blob.arrayBuffer();
+  return new Blob([bytes], { type: type || blob.type || 'application/octet-stream' });
+}
+
+export async function makeImageRecord(name, source, opts = {}) {
   const maxDim = opts.maxDim ?? 1568;
   const quality = opts.quality ?? 0.85;
-  let mimeType = blob.type && blob.type.startsWith('image/') ? blob.type : mimeOf(name, 'image/jpeg');
+  let mimeType = source.type && source.type.startsWith('image/') ? source.type : mimeOf(name, 'image/jpeg');
+  const blob = await ownCopy(source, mimeType);
   let data = blob;
   let width = 0;
   let height = 0;
@@ -120,19 +131,69 @@ export async function makeImageRecord(name, blob, opts = {}) {
 }
 
 /* IndexedDB 에 저장해 둔 사진을 다시 화면에 쓸 수 있는 레코드로 되돌린다. */
-export async function recordFromStored(row) {
+/*
+  저장본에서 사진을 읽지 못했을 때 자리를 지키는 회색 그림.
+  자리가 빠지면 뒤 대목들이 한 칸씩 밀려 엉뚱한 사진에 붙으므로, 같은 id 로 자리를 남긴다.
+  저장소의 원래 행은 건드리지 않는다(같은 id 라 다시 쓰지도, 지우지도 않는다).
+*/
+export async function placeholderRecord(row) {
+  const w = 800;
+  const h = 600;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#3a3f4b';
+  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = '#e8ecf6';
+  ctx.textAlign = 'center';
+  ctx.font = '600 34px sans-serif';
+  ctx.fillText('사진을 읽지 못했습니다', w / 2, h / 2 - 12);
+  ctx.font = '24px sans-serif';
+  ctx.fillText(String(row?.name || ''), w / 2, h / 2 + 32);
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
   return {
-    original: row.original || null,
+    original: null,
+    id: row.id,
+    name: row.name || '(읽지 못한 사진)',
+    mimeType: 'image/png',
+    width: w,
+    height: h,
+    bytes: blob.size,
+    converted: false,
+    broken: true,
+    blob,
+    base64: await blobToBase64(blob),
+    url: URL.createObjectURL(blob)
+  };
+}
+
+/*
+  저장본을 화면용 레코드로 되살린다.
+  예전 버전은 폰의 파일을 가리키는 참조(File)를 그대로 저장했다. 아직 읽히는 동안 메모리 복사본으로
+  바꾸고 rewrite 표시를 달아, 다음 저장 때 복사본으로 다시 써 둔다(own: true 로 표시된 행은 이미 복사본).
+  본문용 사진(blob)을 못 읽으면 던진다 — 부르는 쪽이 자리만 지킨다.
+  원본(original)은 못 읽어도 버리고 넘어간다 — 그림으로 저장할 때 줄인 사진을 쓴다.
+*/
+export async function recordFromStored(row) {
+  const blob = row.own ? row.blob : await ownCopy(row.blob, row.mimeType);
+  let original = row.original || null;
+  if (original && !row.own) {
+    try { original = await ownCopy(original); } catch { original = null; }
+  }
+  return {
+    original,
     id: row.id,
     name: row.name,
     mimeType: row.mimeType,
     width: row.width || 0,
     height: row.height || 0,
-    bytes: row.blob.size,
+    bytes: blob.size,
     converted: Boolean(row.converted),
-    blob: row.blob,
-    base64: await blobToBase64(row.blob),
-    url: URL.createObjectURL(row.blob)
+    rewrite: !row.own,
+    blob,
+    base64: await blobToBase64(blob),
+    url: URL.createObjectURL(blob)
   };
 }
 

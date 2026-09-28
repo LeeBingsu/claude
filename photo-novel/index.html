@@ -105,6 +105,28 @@
       <p class="note" id="humanNote" hidden></p>
     </details>
 
+    <details class="adv" id="backupBox" open>
+      <summary>백업 (파일로)</summary>
+      <p class="hint">작업은 이 브라우저 안에 저장되지만, 브라우저 데이터가 지워지면 함께 사라집니다.
+        백업 파일에는 <b>사진 원본과 글이 모두</b> 들어 있어서, 폰에서 사진을 지워도 이 파일 하나로
+        그대로 되살리고 그림 저장·글 추가를 계속할 수 있습니다.</p>
+      <div class="grid">
+        <div class="field">
+          <label for="autoBackup">자동 백업</label>
+          <select id="autoBackup">
+            <option value="done">글쓰기가 끝날 때마다 받기</option>
+            <option value="off">끄기 (직접 받기만)</option>
+          </select>
+          <p class="hint">연작·단편 쓰기가 끝나면 백업 zip 이 다운로드 폴더에 저장됩니다.
+            처음 한 번은 브라우저가 "여러 파일 다운로드" 허용을 물을 수 있습니다.</p>
+        </div>
+      </div>
+      <div class="row wrap-row tools">
+        <button class="btn" id="backupNow" type="button">지금 백업 받기</button>
+        <button class="btn" id="backupRestore" type="button">백업에서 되살리기</button>
+      </div>
+    </details>
+
     <details class="adv">
       <summary>고급 옵션</summary>
 
