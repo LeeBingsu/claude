@@ -16,7 +16,10 @@ import { translateText, ENGINES, DEFAULT_ENDPOINT } from './lib/translate.js';
 import { humanize, MODES as HUMAN_MODES } from './lib/humanize.js';
 import { buildSettingsFile, readSettingsFile } from './lib/settings-file.js';
 import {
-  SHAPES, TYPES, FONT_PRESETS, makeBubble, normalizeBubble, normalizeComic, copyStyle, parseDialogue,
+  mirrorAvailable, saveMirror, loadMirror, mirrorInfo, clearMirror, requestPersistence, storageInfo, MIRROR_MAX_BYTES
+} from './lib/mirror.js';
+import {
+  SHAPES, TYPES, FONT_PRESETS, FONT_SETS, fontSetFor, applyFontSet, loadFonts, fontKey, makeBubble, normalizeBubble, normalizeComic, copyStyle, parseDialogue,
   sizeBubble, bubblesFromDialogue, hitTest, drawBubbles, drawHandles, renderComic, renderComicStrip,
   comicPlainText, buildComicSystem, buildComicParts, newBubbleId
 } from './lib/comic.js';
@@ -64,9 +67,9 @@ const FIELDS = [
   ['transEngine', 'value'], ['transEndpoint', 'value'], ['transEmail', 'value'],
   ['humanProxy', 'value'], ['humanMode', 'value'], ['humanWhen', 'value'],
   ['humanSanitize', 'checked'], ['humanBox', 'open'],
-  ['autoBackup', 'value'],
+  ['autoBackup', 'value'], ['optMirror', 'checked'],
   ['comicCast', 'value'], ['comicInstructions', 'value'], ['comicLang', 'value'], ['comicMax', 'value'],
-  ['comicContext', 'checked'], ['comicFormat', 'value'], ['cImagesBox', 'open'],
+  ['comicContext', 'checked'], ['comicFormat', 'value'], ['comicFontSet', 'value'], ['cImagesBox', 'open'],
   ['posterDark', 'value'], ['posterFont', 'value'], ['posterPos', 'value'],
   ['posterAlign', 'value'], ['posterFormat', 'value'], ['posterTitle', 'checked'], ['optAutosave', 'checked'], ['saveKey', 'checked']
 ];
@@ -197,6 +200,8 @@ async function flushSave() {
       comic: state.comic
     });
     showSaved(Date.now());
+    scheduleMirror();
+    if (!persistAsked) { persistAsked = true; requestPersistence().then(refreshStorageInfo); }
   } catch (err) {
     saveStopped = err.name === 'QuotaExceededError'
       ? '브라우저 저장 공간이 부족합니다. 고급 옵션의 이미지 최대 변 길이를 줄이거나 저장된 작업을 지워 주세요.'
@@ -386,6 +391,10 @@ function fillSelects() {
   for (const [code, v] of Object.entries(LANGS)) comicLang.append(new Option(v.label, code));
   comicLang.value = 'ko';
 
+  const fontSet = $('comicFontSet');
+  for (const [key, v] of Object.entries(FONT_SETS)) fontSet.append(new Option(v.label, key));
+  fontSet.value = 'shonen';
+
   $('memoMode').value = 'inline';      // 추가 요청 없이 일관성을 지킬 수 있으므로 기본값
   $('retryRefusal').value = '3';       // 그냥 넘어가면 이야기에 구멍이 생긴다
   const safety = $('safety');
@@ -557,6 +566,7 @@ async function addFiles(files) {
   try {
     const { images, errors } = await collectImages(arr, {
       maxDim: Math.max(0, Number($('maxDim').value) || 0),
+      keepOriginal: true,                  // 줄이기 전 원본도 함께 저장·백업한다
       onProgress: (done, total, name) => setStatus(`사진 처리 중 ${done}/${total} ${name}`)
     });
     // 새로 넣은 묶음은 이름순으로 들어오고, 이미 손으로 맞춰 둔 순서는 건드리지 않는다.
@@ -1394,6 +1404,114 @@ function maybeAutoBackup(note, el) {
   downloadBackup({ note: (msg, err) => note(`${before}\n${msg}`, Boolean(err) || wasErr), auto: true });
 }
 
+/* ------------------------------------------------- 브라우저 저장소 사본 */
+
+/*
+  자동 저장(IndexedDB)과 별도로, 프로젝트 전체를 zip 하나로 다른 저장소에 한 번 더 둔다.
+  기본 저장소가 깨지거나 비어도 이 사본에서 되살린다. 사진이 많으면 만드는 데 시간과 메모리가 들어서
+  바뀐 뒤 잠깐 기다렸다가(글쓰기 도중이면 끝난 뒤에) 만든다.
+*/
+let mirrorTimer = 0;
+let mirrorDirty = false;
+let mirroring = false;
+let persistAsked = false;
+
+function mirrorOn() {
+  return $('optMirror').checked && $('optAutosave').checked && mirrorAvailable() && storageAvailable();
+}
+
+function workBytes() {
+  const sum = (list) => list.reduce((n, i) => n + (i.original?.size || i.blob?.size || 0), 0);
+  return sum(state.images) + sum(state.shorts.images) + sum(state.comic.images)
+    + state.comic.fonts.reduce((n, f) => n + f.blob.size, 0);
+}
+
+function mbText(n) {
+  return n >= 1073741824 ? `${(n / 1073741824).toFixed(1)}GB` : `${Math.max(0.1, n / 1048576).toFixed(n >= 10485760 ? 0 : 1)}MB`;
+}
+
+async function refreshStorageInfo() {
+  const meta = await mirrorInfo();
+  $('mirrorInfo').textContent = !$('optMirror').checked
+    ? '브라우저 사본이 꺼져 있습니다.'
+    : meta
+      ? `브라우저 사본: ${clockOf(meta.savedAt)} 저장 · 사진 ${meta.photos ?? '?'}장 · ${mbText(meta.size)}`
+      : '브라우저 사본: 아직 없습니다. 작업을 하면 잠시 뒤 만들어집니다.';
+  const info = await storageInfo();
+  const use = info.usage != null && info.quota != null ? `저장 공간 ${mbText(info.usage)} 사용 (한도 ${mbText(info.quota)})` : '저장 공간 사용량을 알 수 없습니다';
+  const keep = info.persisted === true ? ' · 브라우저가 이 사이트 데이터를 지우지 않도록 보호 중'
+    : info.secure ? ' · 보호 요청 전 또는 거절됨 (저장 공간이 모자라면 브라우저가 먼저 지울 수 있음)'
+      : ' · 이 주소(http)에서는 저장 공간 보호를 요청할 수 없습니다 — https 주소로 열면 가능합니다';
+  $('storageInfo').textContent = use + keep;
+}
+
+function scheduleMirror(delay = 15000) {
+  if (!mirrorOn() || restoreState !== 'ok') return;      // 지난 작업을 다 읽기 전엔 사본을 덮지 않는다
+  mirrorDirty = true;
+  clearTimeout(mirrorTimer);
+  mirrorTimer = setTimeout(mirrorNow, delay);
+}
+
+async function mirrorNow({ force = false } = {}) {
+  clearTimeout(mirrorTimer);
+  if (!mirrorOn() || restoreState !== 'ok' || mirroring) return false;
+  if (!mirrorDirty && !force) return false;
+  if (state.running) { mirrorTimer = setTimeout(mirrorNow, 10000); return false; }   // 쓰는 중에는 끝난 뒤에
+  if (!hasWork()) {                                        // 다 지웠다면 사본도 지운다
+    mirrorDirty = false;
+    await clearMirror();
+    refreshStorageInfo();
+    return true;
+  }
+  if (workBytes() > MIRROR_MAX_BYTES) {
+    $('mirrorInfo').textContent = `사진이 ${mbText(workBytes())}로 커서 브라우저 사본은 만들지 않았습니다(한도 ${mbText(MIRROR_MAX_BYTES)}). 파일 백업을 쓰세요.`;
+    mirrorDirty = false;
+    return false;
+  }
+  mirroring = true;
+  try {
+    const blob = await projectZip();
+    await saveMirror(blob, { photos: state.images.length + state.shorts.images.length + state.comic.images.length });
+    mirrorDirty = false;
+    await refreshStorageInfo();
+    return true;
+  } catch (err) {
+    $('mirrorInfo').textContent = `브라우저 사본을 만들지 못했습니다: ${err.name === 'QuotaExceededError' ? '저장 공간이 부족합니다' : err.message}`;
+    return false;
+  } finally {
+    mirroring = false;
+  }
+}
+
+/* 사본에서 되살린다. auto 면 묻지 않는다(화면이 비어 있을 때 열면서 자동으로). */
+async function restoreFromMirror({ auto = false } = {}) {
+  const note = auto ? setStatus : tabNote();
+  const m = await loadMirror();
+  if (!m) { note('브라우저 사본이 없습니다.', true); return false; }
+  const ok = await importProjectFile(m.blob, { note, ask: !auto });
+  if (ok) {
+    const at = m.meta.savedAt ? ` (${clockOf(m.meta.savedAt)} 사본)` : '';
+    note(`${auto ? '저장소가 비어 있어 ' : ''}브라우저 사본에서 되살렸습니다${at}. 사진 ${state.images.length + state.shorts.images.length + state.comic.images.length}장 · ${storyChars().toLocaleString('ko-KR')}자`);
+  }
+  return ok;
+}
+
+$('mirrorNow').addEventListener('click', async () => {
+  const note = tabNote();
+  if (!$('optMirror').checked) { note('브라우저 사본이 꺼져 있습니다. 체크를 켜 주세요.', true); return; }
+  if (!hasWork()) { note('사본으로 둘 작업이 없습니다.', true); return; }
+  note('브라우저 사본을 만드는 중…');
+  const ok = await mirrorNow({ force: true });
+  note(ok ? '브라우저 사본을 만들었습니다.' : '브라우저 사본을 만들지 못했습니다. 위 안내를 확인해 주세요.', !ok);
+});
+$('mirrorRestore').addEventListener('click', () => restoreFromMirror());
+$('optMirror').addEventListener('change', async () => {
+  if ($('optMirror').checked) { scheduleMirror(1000); }
+  else { clearTimeout(mirrorTimer); mirrorDirty = false; await clearMirror(); }
+  refreshStorageInfo();
+  saveSettings();
+});
+
 $('backupNow').addEventListener('click', () => downloadBackup({ note: state.tab === 'shorts' ? sStatus : setStatus }));
 $('backupRestore').addEventListener('click', () => $('importInput').click());
 
@@ -1419,58 +1537,56 @@ $('exportProject').addEventListener('click', async () => {
 
 $('importProject').addEventListener('click', () => $('importInput').click());
 
+/* 지금 보고 있는 탭의 상태줄 */
+function tabNote() {
+  return state.tab === 'shorts' ? sStatus : state.tab === 'comic' ? cStatus : setStatus;
+}
+
 $('importInput').addEventListener('change', async (e) => {
   const file = e.target.files?.[0];
   e.target.value = '';
   if (!file) return;
-  // 단편 탭에서 불렀으면 그 탭 상태줄에 알린다.
-  const note = state.tab === 'shorts' ? sStatus : setStatus;
-  if (state.running) { note('생성 중에는 불러올 수 없습니다.', true); return; }
+  await importProjectFile(file, { note: tabNote() });
+});
+
+/*
+  프로젝트 zip(백업·전체 내보내기·브라우저 사본)을 열어 화면에 올린다.
+  ask 가 false 면 지금 작업을 덮어쓰는지 묻지 않는다(빈 화면에서 사본을 되살릴 때).
+*/
+async function importProjectFile(file, { note, ask = true }) {
+  if (state.running) { note('생성 중에는 불러올 수 없습니다.', true); return false; }
   note('파일을 여는 중…');
   try {
     const buf = await file.arrayBuffer();
     const entries = await unzip(buf);
     const project = readProject(entries);
-    if (project.error) { note(project.error, true); return; }
+    if (project.error) { note(project.error, true); return false; }
 
     if (project.plainZip) {
       note('사진만 들어 있는 zip 입니다. 사진 올리기로 넣어 주세요.', true);
-      return;
+      return false;
     }
     const has = state.images.length || state.shorts.images.length || state.comic.images.length || Object.values(state.passages).some((p) => p?.text);
-    if (has && !confirm('지금 작업을 덮어쓰고 파일의 내용을 불러올까요?')) { note('불러오기를 취소했습니다.'); return; }
+    if (ask && has && !confirm('지금 작업을 덮어쓰고 파일의 내용을 불러올까요?')) { note('불러오기를 취소했습니다.'); return false; }
 
-    const toRecords = async (list, tag) => {
+    // 연작·단편·만화 사진은 모두 원본으로 담겨 오므로, 모델에 보낼 크기는 지금 설정대로 다시 만든다.
+    // 예전 파일(줄인 사진만 든 것)도 그대로 읽힌다.
+    const rebuild = async (list, tag) => {
       const out = [];
       for (const [i, meta] of (list || []).entries()) {
         const blob = new Blob([meta.bytes], { type: meta.mimeType || 'image/jpeg' });
+        const rec = await makeImageRecord(meta.name, blob, {
+          maxDim: Math.max(0, Number($('maxDim').value) || 0),
+          keepOriginal: true
+        });
         // 예전 파일에는 id 가 없을 수 있어 그때는 새로 붙인다.
-        out.push(await recordFromStored({ ...meta, id: meta.id || `imp${Date.now().toString(36)}${tag}${i}`, blob }));
+        out.push({ ...rec, id: meta.id || `imp${Date.now().toString(36)}${tag}${i}` });
       }
       return out;
     };
-    const images = await toRecords(project.images, 's');
-    // 단편 사진은 원본으로 담겨 오므로, 보낼 크기는 지금 설정대로 다시 만든다.
-    const shortImages = [];
-    for (const meta of project.shortImages || []) {
-      const blob = new Blob([meta.bytes], { type: meta.mimeType || 'image/jpeg' });
-      const rec = await makeImageRecord(meta.name, blob, {
-        maxDim: Math.max(0, Number($('maxDim').value) || 0),
-        keepOriginal: true
-      });
-      shortImages.push({ ...rec, id: meta.id || rec.id });
-    }
-
-    // 만화 컷 사진도 원본 위에 말풍선을 얹으므로 같은 방식으로 다시 만든다.
-    const comicImages = [];
-    for (const meta of project.comicImages || []) {
-      const blob = new Blob([meta.bytes], { type: meta.mimeType || 'image/jpeg' });
-      const rec = await makeImageRecord(meta.name, blob, {
-        maxDim: Math.max(0, Number($('maxDim').value) || 0),
-        keepOriginal: true
-      });
-      comicImages.push({ ...rec, id: meta.id || rec.id });
-    }
+    const images = await rebuild(project.images, 's');
+    const shortImages = await rebuild(project.shortImages, 't');
+    const comicImages = await rebuild(project.comicImages, 'c');
 
     state.images.forEach((img) => URL.revokeObjectURL(img.url));
     state.shorts.images.forEach((img) => URL.revokeObjectURL(img.url));
@@ -1505,10 +1621,12 @@ $('importInput').addEventListener('change', async (e) => {
     const shortsNote = (shortImages.length ? ` · 단편 사진 ${shortImages.length}장` : '')
       + (comicImages.length ? ` · 만화 컷 ${comicImages.length}장` : '');
     note(`불러왔습니다 · 사진 ${images.length}장${shortsNote} · ${storyChars().toLocaleString('ko-KR')}자${when}${lost}`, Boolean(lost));
+    return true;
   } catch (err) {
     note(`불러오지 못했습니다: ${err.message}`, true);
+    return false;
   }
-});
+}
 
 $('clearStory').addEventListener('click', () => {
   if (Object.values(state.passages).some((p) => p && p.text) && !confirm('본문을 모두 지울까요?')) return;
@@ -1623,13 +1741,21 @@ $('optAutosave').addEventListener('change', async () => {
     return;
   }
   try { await clearWork(); restoreState = 'ok'; } catch { /* 지울 게 없으면 그만 */ }
+  clearTimeout(mirrorTimer);
+  mirrorDirty = false;
+  await clearMirror();                       // 자동 저장을 끄면 두 번째 사본도 함께 지운다
+  refreshStorageInfo();
   $('savedInfo').textContent = '자동 저장이 꺼져 있습니다. 새로고침하면 사진과 본문이 사라집니다.';
 });
 
 $('clearSaved').addEventListener('click', async () => {
-  if (!confirm('이 브라우저에 저장된 사진과 본문을 지울까요? 화면에 있는 내용은 그대로 남습니다.')) return;
+  if (!confirm('이 브라우저에 저장된 사진과 본문을 지울까요? (두 번째 사본도 함께 지웁니다.) 화면에 있는 내용은 그대로 남습니다.')) return;
   try {
     await clearWork();
+    clearTimeout(mirrorTimer);
+    mirrorDirty = false;
+    await clearMirror();          // 사본이 남아 있으면 열 때마다 되살아나므로 함께 지운다
+    refreshStorageInfo();
     saveStopped = '';
     restoreState = 'ok';          // 지켜야 할 저장본이 없으니 다시 저장해도 된다
     $('savedInfo').textContent = $('optAutosave').checked
@@ -1641,7 +1767,7 @@ $('clearSaved').addEventListener('click', async () => {
 });
 
 // 탭을 덮거나 닫을 때, 아직 미뤄 둔 저장을 흘려보낸다.
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSave(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { flushSave(); mirrorNow(); } });
 window.addEventListener('pagehide', () => { flushSave(); });
 
 $('temperature').addEventListener('input', () => { $('temperatureVal').textContent = Number($('temperature').value).toFixed(2); });
@@ -2034,8 +2160,18 @@ function comicForExport() {
 function fontOptions() {
   const sel = $('cpFont');
   sel.textContent = '';
-  for (const [key, f] of Object.entries(FONT_PRESETS)) sel.append(new Option(f.label, key));
-  for (const f of state.comic.fonts) sel.append(new Option(`${f.name} (올린 글꼴)`, f.name));
+  const groups = {};
+  for (const [key, f] of Object.entries(FONT_PRESETS)) {
+    if (!groups[f.group]) { groups[f.group] = document.createElement('optgroup'); groups[f.group].label = f.group; }
+    groups[f.group].append(new Option(f.label, key));
+  }
+  for (const g of Object.values(groups)) sel.append(g);
+  if (state.comic.fonts.length) {
+    const up = document.createElement('optgroup');
+    up.label = '올린 글꼴';
+    for (const f of state.comic.fonts) up.append(new Option(f.name, f.name));
+    sel.append(up);
+  }
   sel.append(new Option('직접 입력…', '__custom'));
 }
 
@@ -2227,10 +2363,22 @@ function renderChips(id) {
   });
 }
 
+/* 쓰는 글꼴이 바뀌었으면 불러온 뒤 다시 그린다. 그 사이에는 대체 글꼴로 먼저 보여 준다. */
+function ensureComicFonts(id) {
+  const view = comicView.get(id);
+  const item = state.comic.items[id];
+  if (!view || !item) return;
+  const key = fontKey(item.bubbles);
+  if (view.fontKey === key) return;
+  view.fontKey = key;
+  loadFonts(item.bubbles).then(() => scheduleDraw(id));
+}
+
 function drawComic(id) {
   const view = comicView.get(id);
   if (!view?.ready) return;
   const item = comicAt(id);
+  ensureComicFonts(id);
   const ctx = view.canvas.getContext('2d');
   ctx.clearRect(0, 0, view.W, view.H);
   ctx.drawImage(view.el, 0, 0, view.W, view.H);
@@ -2384,12 +2532,13 @@ function syncProps() {
   $('cpTail').disabled = b.shape === 'box' || b.shape === 'text';
 }
 
-function editBubble(fn) {
+/* 글꼴·색을 직접 고쳤을 때만(remember) 새로 만드는 말풍선이 그 모양을 이어받는다. */
+function editBubble(fn, { remember = false } = {}) {
   const sel = selectedBubble();
   if (!sel) return;
   fn(sel.b, sel);
   sel.item.status = 'done';
-  comicLastStyle = { font: sel.b.font, color: sel.b.color, stroke: sel.b.stroke, strokeW: sel.b.strokeW };
+  if (remember) comicLastStyle = { ...comicLastStyle, font: sel.b.font, color: sel.b.color, stroke: sel.b.stroke, strokeW: sel.b.strokeW };
   scheduleDraw(sel.id);
   scheduleSave(800);
 }
@@ -2415,13 +2564,13 @@ function bindProps() {
     const v = $('cpFont').value;
     if (v === '__custom') { $('cpFontCustom').hidden = false; $('cpFontCustom').focus(); return; }
     $('cpFontCustom').hidden = true;
-    editBubble((b) => { b.font = v; });
+    editBubble((b) => { b.font = v; }, { remember: true });
   });
-  on('cpFontCustom', 'input', () => editBubble((b) => { b.font = $('cpFontCustom').value.trim() || 'gothic'; }));
+  on('cpFontCustom', 'input', () => editBubble((b) => { b.font = $('cpFontCustom').value.trim() || 'gothic'; }, { remember: true }));
   on('cpAlign', 'change', () => editBubble((b) => { b.align = $('cpAlign').value; }));
   on('cpFill', 'input', () => editBubble((b) => { b.fill = $('cpFill').value; }));
-  on('cpStroke', 'input', () => editBubble((b) => { b.stroke = $('cpStroke').value; }));
-  on('cpColor', 'input', () => editBubble((b) => { b.color = $('cpColor').value; }));
+  on('cpStroke', 'input', () => editBubble((b) => { b.stroke = $('cpStroke').value; }, { remember: true }));
+  on('cpColor', 'input', () => editBubble((b) => { b.color = $('cpColor').value; }, { remember: true }));
   on('cpAlpha', 'input', () => {
     editBubble((b) => { b.fillAlpha = num('cpAlpha') / 100; });
     $('cpAlphaVal').textContent = `${num('cpAlpha')}%`;
@@ -2506,7 +2655,7 @@ function bindProps() {
     const name = file.name.replace(/\.[^.]+$/, '').replace(/["'\;{}<>]/g, '').trim().slice(0, 40) || 'font';
     try {
       await registerComicFont(name, file);
-      editBubble((b) => { b.font = name; });
+      editBubble((b) => { b.font = name; }, { remember: true });
       syncProps();
       redrawAllComic();
       cStatus(`글꼴 "${name}" 을 올렸습니다. 저장·백업에도 함께 들어갑니다.`);
@@ -2543,12 +2692,13 @@ function reorderBubble(dir) {
 
 /* ------------------------------------------------------------ 말풍선 더하기 */
 
-function addBubble(id) {
+async function addBubble(id) {
   const img = state.comic.images.find((i) => i.id === id);
   if (!img) return;
   const item = comicAt(id);
   const { W, H } = comicDims(img);
-  const b = makeBubble({ type: 'say', text: '새 말풍선' }, comicLastStyle || {});
+  const b = makeBubble({ type: 'say', text: '새 말풍선' }, { fontSet: $('comicFontSet').value, ...(comicLastStyle || {}) });
+  await loadFonts([b]);
   sizeBubble(b, measureFor, W, H);
   const n = item.bubbles.length;
   b.x = Math.min(0.9 - b.w, 0.08 + (n % 4) * 0.06);
@@ -2634,12 +2784,17 @@ async function writeComic(img, o, signal) {
       const dialogue = parseDialogue(res.text || '', max);
       if (dialogue.length) {
         // 다시 만들어도 정해 둔 글자체·색은 그대로 두고 글과 자리만 새로 만든다.
+        // 정해 둔 색·모양은 이어 가고, 글꼴은 세트의 기본과 다를 때(직접 고른 것)만 이어 간다.
+        const fontSet = $('comicFontSet').value;
         const style = keepStyle
           ? {
-            font: keepStyle.font, color: keepStyle.color, stroke: keepStyle.stroke, strokeW: keepStyle.strokeW,
-            fill: keepStyle.fill, shape: keepStyle.shape
+            color: keepStyle.color, stroke: keepStyle.stroke, strokeW: keepStyle.strokeW,
+            fill: keepStyle.fill, shape: keepStyle.shape,
+            ...(keepStyle.font !== fontSetFor(fontSet, keepStyle.type) ? { font: keepStyle.font } : {})
           }
           : comicLastStyle || {};
+        style.fontSet = fontSet;
+        await loadFonts(dialogue.map((d) => makeBubble(d, style)));   // 크기를 재기 전에 글꼴부터
         const { W, H } = comicDims(img);
         item.bubbles = bubblesFromDialogue(dialogue, { measureFor, W, H, style });
         item.status = 'done';
@@ -2874,6 +3029,20 @@ $('cClearImages').addEventListener('click', () => {
   renderComicImages();
   renderComicList();
   scheduleSave(0);
+});
+
+$('cFontSetApply').addEventListener('click', async () => {
+  const set = $('comicFontSet').value;
+  const total = Object.values(state.comic.items).reduce((n, it) => n + it.bubbles.length, 0);
+  if (!total) { cStatus('적용할 말풍선이 없습니다.'); return; }
+  if (!confirm(`말풍선 ${total}개의 글꼴을 "${FONT_SETS[set].label}" 로 바꿀까요? 손으로 고른 글꼴도 바뀝니다.`)) return;
+  for (const item of Object.values(state.comic.items)) applyFontSet(item.bubbles, set);
+  comicLastStyle = null;
+  const sel = selectedBubble();
+  if (sel) syncProps();
+  redrawAllComic();
+  scheduleSave(600);
+  cStatus(`글꼴 세트를 적용했습니다 · ${FONT_SETS[set].label}`);
 });
 
 $('cRunBtn').addEventListener('click', () => runComic({}));
@@ -3322,4 +3491,8 @@ if (!storageAvailable()) {
   $('savedInfo').textContent = '이 브라우저에서는 자동 저장을 쓸 수 없습니다.';
 } else {
   await restoreWork();
+  // 기본 저장소가 비었거나 읽히지 않았는데 두 번째 사본이 있으면 거기서 되살린다.
+  if (mirrorOn() && !hasWork() && await mirrorInfo()) await restoreFromMirror({ auto: true });
+  else if (mirrorOn() && hasWork() && !(await mirrorInfo())) scheduleMirror(4000);   // 사본이 아직 없으면 만든다
+  refreshStorageInfo();
 }

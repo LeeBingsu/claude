@@ -7,6 +7,7 @@
 <meta name="description" content="사진 여러 장 또는 zip 을 올리면 Gemini 가 장면과 장면 사이를 잇는 소설을 써 주는 도구">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128214;</text></svg>">
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="fonts/fonts.css">
 </head>
 <body>
 <div class="wrap">
@@ -121,6 +122,19 @@
             처음 한 번은 브라우저가 "여러 파일 다운로드" 허용을 물을 수 있습니다.</p>
         </div>
       </div>
+      <div class="checks">
+        <label class="check"><input type="checkbox" id="optMirror" checked> 브라우저 저장소에 <b>사본을 하나 더</b> 자동 저장 (사진 원본·글·설정·글꼴 전부)</label>
+      </div>
+      <p class="hint" id="mirrorInfo"></p>
+      <div class="row wrap-row tools">
+        <button class="btn" id="mirrorNow" type="button">지금 사본 만들기</button>
+        <button class="btn" id="mirrorRestore" type="button">브라우저 사본에서 되살리기</button>
+      </div>
+      <p class="hint">위의 자동 저장은 사진과 글을 나눠 담고, 이 사본은 <b>프로젝트 전체를 zip 하나로</b> 별도 저장소에 한 번 더 둡니다.
+        기본 저장소를 못 읽거나 비어 있으면 열 때 이 사본에서 자동으로 되살립니다.
+        둘 다 이 브라우저 안에 있어서, 브라우저의 "사이트 데이터 삭제"를 하면 함께 사라집니다 — 그럴 때를 위해 아래 파일 백업이 있습니다.
+        API 키는 보안상 사본에 넣지 않습니다(이 브라우저에 저장 체크를 하면 따로 남습니다).</p>
+      <p class="hint" id="storageInfo"></p>
       <div class="row wrap-row tools">
         <button class="btn" id="backupNow" type="button">지금 백업 받기</button>
         <button class="btn" id="backupRestore" type="button">백업에서 되살리기</button>
@@ -556,6 +570,16 @@
           <label for="comicMax">컷마다 말풍선 최대</label>
           <input type="number" id="comicMax" min="1" max="12" step="1" value="4">
         </div>
+        <div class="field">
+          <label for="comicFontSet">글꼴 세트</label>
+          <select id="comicFontSet"></select>
+          <p class="hint">말의 종류(대화·생각·외침·나레이션)마다 어울리는 글꼴을 자동으로 고릅니다.
+            <a class="link" href="https://m.blog.naver.com/kkkhumor/40208211727" target="_blank" rel="noopener">식자 길라잡이</a>의
+            계열 구분을 따랐고, 무료 글꼴(OFL)만 담았습니다.</p>
+        </div>
+      </div>
+      <div class="row wrap-row tools">
+        <button class="btn ghost" id="cFontSetApply" type="button">이미 만든 말풍선에 이 글꼴 세트 적용</button>
       </div>
       <div class="checks">
         <label class="check"><input type="checkbox" id="comicContext" checked> 앞선 컷의 시나리오·대사를 참고해 이어 쓰기</label>

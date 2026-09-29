@@ -28,17 +28,45 @@ const INNER = { oval: 0.72, whisper: 0.72, cloud: 0.66, burst: 0.6, round: 0.9, 
 const LINE_H = 1.28;
 
 /*
-  글자체. 웹 글꼴을 따로 받지 않으므로 기기에 깔린 글꼴을 순서대로 찾는다.
-  마음에 드는 글꼴 파일은 화면에서 올려 쓸 수 있다.
+  글자체. fonts/ 에 함께 담은 무료 글꼴(OFL)을 먼저 쓰고, 없으면 기기에 깔린 글꼴로 넘어간다.
+  https://m.blog.naver.com/kkkhumor/40208211727 (식자 길라잡이)가 말하는 계열 — 대화는 고딕/돋움,
+  외침은 굵은 고딕, 생각은 얇은 고딕, 나레이션·회상은 바탕/명조, 설명 상자는 둥근 고딕 — 에 맞춰 골랐다.
+  그 글의 한컴돋움·윤고딕·HY 계열은 상용이라 넣을 수 없어, 같은 계열의 무료 글꼴로 대신한다.
 */
+const KO_SANS = '"Apple SD Gothic Neo", "Malgun Gothic", "Nanum Gothic", sans-serif';
+const KO_SERIF = '"Nanum Myeongjo", "Noto Serif KR", "Apple Myungjo", "Batang", serif';
 export const FONT_PRESETS = {
-  gothic: { label: '고딕', stack: '"Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Nanum Gothic", sans-serif' },
-  serif: { label: '명조', stack: '"Nanum Myeongjo", "Noto Serif KR", "Apple Myungjo", "Batang", serif' },
-  hand: { label: '손글씨', stack: '"Nanum Pen Script", "Gaegu", "Hi Melody", "Segoe Print", "Comic Sans MS", cursive' },
-  round: { label: '둥근 고딕', stack: '"Jua", "Nanum Round", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif' },
-  black: { label: '굵은 제목체', stack: '"Black Han Sans", "Do Hyeon", "Noto Sans KR", "Malgun Gothic", sans-serif' },
-  mono: { label: '고정폭', stack: '"D2Coding", "Nanum Gothic Coding", "Consolas", monospace' }
+  gothic: { group: '기본', label: '고딕 · 기본 대화 (Noto Sans KR)', family: 'Noto Sans KR', stack: `"PN Noto Sans KR", "Noto Sans KR", ${KO_SANS}` },
+  dodum: { group: '기본', label: '돋움 · 부드러운 고딕 (Gowun Dodum)', family: 'Gowun Dodum', stack: `"PN Gowun Dodum", "Gowun Dodum", ${KO_SANS}` },
+  serif: { group: '기본', label: '바탕 · 순정·나레이션 (Gowun Batang)', family: 'Gowun Batang', stack: `"PN Gowun Batang", "Gowun Batang", ${KO_SERIF}` },
+  recall: { group: '기본', label: '회상 · 흩날린 명조 (Song Myung)', family: 'Song Myung', stack: `"PN Song Myung", "Song Myung", ${KO_SERIF}` },
+  round: { group: '기본', label: '둥근 · 설명 상자 (Jua)', family: 'Jua', stack: `"PN Jua", "Jua", "Nanum Round", ${KO_SANS}` },
+  black: { group: '강조', label: '굵은 외침 (Black Han Sans)', family: 'Black Han Sans', stack: `"PN Black Han Sans", "Black Han Sans", "Noto Sans KR", ${KO_SANS}` },
+  dohyeon: { group: '강조', label: '굵은 제목·기계음 (Do Hyeon)', family: 'Do Hyeon', stack: `"PN Do Hyeon", "Do Hyeon", "Noto Sans KR", ${KO_SANS}` },
+  hand: { group: '손글씨', label: '나눔 손글씨 펜 (Nanum Pen Script)', family: 'Nanum Pen Script', stack: `"PN Nanum Pen Script", "Nanum Pen Script", "Gaegu", cursive, ${KO_SANS}` },
+  gaegu: { group: '손글씨', label: '개구 (Gaegu)', family: 'Gaegu', stack: `"PN Gaegu", "Gaegu", cursive, ${KO_SANS}` },
+  himelody: { group: '손글씨', label: '하이멜로디 (Hi Melody)', family: 'Hi Melody', stack: `"PN Hi Melody", "Hi Melody", cursive, ${KO_SANS}` },
+  poorstory: { group: '손글씨', label: '푸어스토리 (Poor Story)', family: 'Poor Story', stack: `"PN Poor Story", "Poor Story", cursive, ${KO_SANS}` },
+  yeonsung: { group: '손글씨', label: '연성 (Yeon Sung)', family: 'Yeon Sung', stack: `"PN Yeon Sung", "Yeon Sung", cursive, ${KO_SANS}` },
+  singleday: { group: '손글씨', label: '싱글데이 (Single Day)', family: 'Single Day', stack: `"PN Single Day", "Single Day", cursive, ${KO_SANS}` },
+  gamja: { group: '손글씨', label: '감자꽃 (Gamja Flower)', family: 'Gamja Flower', stack: `"PN Gamja Flower", "Gamja Flower", cursive, ${KO_SANS}` },
+  dokdo: { group: '손글씨', label: '동해 독도 붓글씨 (East Sea Dokdo)', family: 'East Sea Dokdo', stack: `"PN East Sea Dokdo", "East Sea Dokdo", cursive, ${KO_SANS}` },
+  mono: { group: '기타', label: '고정폭', family: '', stack: '"D2Coding", "Nanum Gothic Coding", "Consolas", monospace' }
 };
+
+/*
+  글꼴 세트 — 말의 종류마다 어울리는 글꼴. 위 가이드가 소년만화(대화=돋움, 나레이션=바탕)와
+  순정·치유(대화=바탕, 나레이션=돋움)를 뒤집어 쓴다고 정리한 것을 그대로 옮겼다.
+*/
+export const FONT_SETS = {
+  shonen: { label: '소년만화형 (대화 고딕 · 나레이션 바탕)', say: 'gothic', think: 'dodum', shout: 'black', whisper: 'dodum', narration: 'serif' },
+  shojo: { label: '순정·치유형 (대화 바탕 · 나레이션 돋움)', say: 'serif', think: 'dodum', shout: 'black', whisper: 'dodum', narration: 'dodum' },
+  hand: { label: '손글씨형 (귀여운 웹툰)', say: 'gaegu', think: 'gaegu', shout: 'dohyeon', whisper: 'gaegu', narration: 'round' }
+};
+
+export function fontSetFor(setKey, type) {
+  return (FONT_SETS[setKey] || FONT_SETS.shonen)[type] || 'gothic';
+}
 
 export function resolveFont(font) {
   const key = String(font || 'gothic');
@@ -62,7 +90,7 @@ const DEFAULT_STYLE = {
 const TYPE_STYLE = {
   say: { shape: 'oval' },
   think: { shape: 'cloud' },
-  shout: { shape: 'burst', bold: true, fsMul: 1.15 },
+  shout: { shape: 'burst', italic: true, fsMul: 1.15 },      // 굵은 고딕 + 기울임: 화난 장면을 바로 알아보게
   whisper: { shape: 'whisper', fsMul: 0.85 },
   narration: { shape: 'box', fill: '#fff6d6', align: 'left', tail: false }
 };
@@ -118,8 +146,9 @@ export function normalizeBubble(raw = {}) {
 export function makeBubble({ type = 'say', text = '', speaker = '' } = {}, style = {}) {
   const t = TYPES[type] ? type : 'say';
   const ts = TYPE_STYLE[t];
-  const base = { ...DEFAULT_STYLE, ...ts, ...style };
-  base.fs = (style.fs ?? DEFAULT_STYLE.fs) * (ts.fsMul || 1);
+  const { fontSet, ...own } = style;
+  const base = { ...DEFAULT_STYLE, ...ts, font: fontSetFor(fontSet, t), ...own };
+  base.fs = (own.fs ?? DEFAULT_STYLE.fs) * (ts.fsMul || 1);
   return normalizeBubble({
     ...base, type: t, text, speaker,
     tail: { on: ts.tail !== false && base.shape !== 'box' && base.shape !== 'text' }
@@ -142,6 +171,39 @@ export function normalizeComic(items) {
     };
   }
   return out;
+}
+
+/* 이미 만든 말풍선들의 글꼴을 세트에 맞춘다 (외침은 기울임도 함께). */
+export function applyFontSet(list, setKey) {
+  for (const b of list) {
+    b.font = fontSetFor(setKey, b.type);
+    b.italic = b.type === 'shout';
+  }
+  return list;
+}
+
+/*
+  캔버스는 CSS 글꼴을 저절로 불러오지 않는다. 그리기 전에 쓰는 글꼴을 모두 불러와야 한다.
+  글꼴이 없거나 못 불러와도 던지지 않는다(그 경우 대체 글꼴로 그려진다).
+*/
+export async function loadFonts(list, doc = globalThis.document) {
+  if (!doc?.fonts?.load) return;
+  const seen = new Set();
+  const jobs = [];
+  for (const b of list) {
+    for (const weight of new Set([b.bold ? 700 : 400])) {
+      const css = `${b.italic ? 'italic ' : ''}${weight} 32px ${resolveFont(b.font)}`;
+      if (seen.has(css)) continue;
+      seen.add(css);
+      jobs.push(doc.fonts.load(css, b.text || '가').catch(() => {}));
+    }
+  }
+  await Promise.all(jobs);
+}
+
+/* 어떤 글꼴들이 쓰이는지 나타내는 표. 바뀌면 다시 불러온다. */
+export function fontKey(list) {
+  return [...new Set(list.map((b) => `${b.font}|${b.bold ? 1 : 0}|${b.italic ? 1 : 0}`))].sort().join(',');
 }
 
 /* 이 컷의 말풍선 모양을 다른 말풍선에 그대로 옮긴다 (글·위치·크기는 그대로 둔다). */
@@ -637,6 +699,7 @@ async function bitmapOf(image) {
 
 /* 사진 한 컷에 말풍선을 얹어 캔버스로 돌려준다. width 를 주면 그 가로폭에 맞춘다. */
 export async function paintPanel(image, bubbles, { width = 0, maxWidth = 4096 } = {}) {
+  await loadFonts(bubbles);
   const bmp = await bitmapOf(image);
   const longest = Math.max(bmp.width, bmp.height);
   let scale = Math.min(1, maxWidth / longest);

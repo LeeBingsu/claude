@@ -15,9 +15,11 @@ import { planImageSync, normalizePassages, normalizeShorts } from '../lib/store.
 import { wrapLines } from '../lib/poster.js';
 import { ownCopy } from '../lib/images.js';
 import { buildSettingsFile, readSettingsFile } from '../lib/settings-file.js';
+import { mirrorAvailable, requestPersistence, storageInfo, MIRROR_MAX_BYTES } from '../lib/mirror.js';
 import {
   parseDialogue, makeBubble, normalizeBubble, normalizeComic, copyStyle, sizeBubble, layoutBubbles,
-  bubblesFromDialogue, hitTest, tailGeometry, layoutText, resolveFont, comicPlainText, buildComicParts, buildComicSystem
+  bubblesFromDialogue, hitTest, tailGeometry, layoutText, resolveFont, comicPlainText, buildComicParts, buildComicSystem,
+  FONT_PRESETS, FONT_SETS, fontSetFor, applyFontSet, fontKey, loadFonts
 } from '../lib/comic.js';
 import { buildProject, readProject, readManifest, imageEntryName, safeFileName, PROJECT_FILE } from '../lib/project.js';
 import {
@@ -797,6 +799,16 @@ await check('같은 언어면 부르지 않는다', async () => {
   eq(out, '밤', '원문 그대로');
 });
 
+/* ------------------------------------------------------ 브라우저 사본 */
+
+await check('브라우저 저장소가 없는 환경에서도 사본 도구는 던지지 않는다', async () => {
+  eq(mirrorAvailable(), false, 'indexedDB 없음');
+  eq(await requestPersistence(), null, '영구 보관 요청 불가');
+  const info = await storageInfo();
+  eq([info.usage, info.quota, info.persisted, info.secure], [null, null, null, false], '알 수 없는 값은 null');
+  ok(MIRROR_MAX_BYTES > 50 * 1024 * 1024, '사본 한도가 사진 몇 장보다 넉넉하다');
+});
+
 /* ------------------------------------------------------------- 만화 */
 
 /* 글자 하나가 글자 크기의 0.95배 폭이라고 치는 가짜 재기 도구 */
@@ -832,7 +844,7 @@ await check('말풍선 값은 안전한 범위로 고쳐 담는다', () => {
 await check('말의 종류마다 처음 모양이 다르다', () => {
   eq(makeBubble({ type: 'think' }).shape, 'cloud', '생각');
   const shout = makeBubble({ type: 'shout', text: '!' });
-  ok(shout.shape === 'burst' && shout.bold && shout.fs > makeBubble({ type: 'say' }).fs, '외침은 뾰족·굵게·크게');
+  ok(shout.shape === 'burst' && shout.italic && shout.font === 'black' && shout.fs > makeBubble({ type: 'say' }).fs, '외침은 뾰족·기울임·굵은 글꼴·크게');
   const nar = makeBubble({ type: 'narration', text: '밤' });
   ok(nar.shape === 'box' && !nar.tail.on && nar.align === 'left', '설명 글상자는 꼬리 없음');
   eq(makeBubble({ type: 'say' }, { font: 'serif', color: '#ff0000' }).font, 'serif', '고른 스타일을 이어받음');
@@ -870,6 +882,31 @@ await check('다시 만들어도 정해 둔 색·글자체·모양은 이어 간
   eq([bs[0].font, bs[0].fill, bs[0].shape, bs[0].stroke], ['hand', '#aaddff', 'round', '#ff0000'], '말: 모두 이어감');
   eq([bs[1].font, bs[1].fill, bs[1].shape], ['hand', '#aaddff', 'burst'], '외침: 색은 이어가고 모양은 종류대로');
   eq([bs[2].font, bs[2].fill, bs[2].shape], ['hand', '#fff6d6', 'box'], '설명: 자기 바탕색과 네모');
+});
+
+await check('글꼴 세트: 말의 종류마다 글꼴이 정해지고, 이미 만든 것에도 다시 적용된다', () => {
+  eq(['say', 'think', 'shout', 'narration'].map((t) => fontSetFor('shonen', t)), ['gothic', 'dodum', 'black', 'serif'], '소년만화형');
+  eq([fontSetFor('shojo', 'say'), fontSetFor('shojo', 'narration')], ['serif', 'dodum'], '순정형은 대화와 나레이션이 뒤집힌다');
+  eq(fontSetFor('없는세트', 'say'), 'gothic', '모르는 세트는 기본');
+  eq(makeBubble({ type: 'say' }, { fontSet: 'hand' }).font, 'gaegu', '세트로 만들기');
+  eq(makeBubble({ type: 'say' }, { fontSet: 'hand', font: 'serif' }).font, 'serif', '직접 고른 글꼴이 세트보다 앞선다');
+  const list = [makeBubble({ type: 'say' }), makeBubble({ type: 'shout' })];
+  applyFontSet(list, 'shojo');
+  eq([list[0].font, list[1].font, list[1].italic, list[0].italic], ['serif', 'black', true, false], '다시 적용');
+  for (const set of Object.values(FONT_SETS)) for (const t of ['say', 'think', 'shout', 'whisper', 'narration']) ok(FONT_PRESETS[set[t]], `${t} → ${set[t]} 가 프리셋에 있다`);
+  eq(fontKey([{ font: 'a', bold: false, italic: true }, { font: 'a', bold: false, italic: true }]), 'a|0|1', '같은 글꼴은 한 번만');
+});
+
+await check('글꼴 불러오기: 쓰는 글꼴만, 한 번씩, 실패해도 던지지 않는다', async () => {
+  const asked = [];
+  const doc = { fonts: { load: (css, text) => { asked.push(css); return css.includes('Broken') ? Promise.reject(new Error('x')) : Promise.resolve([]); } } };
+  await loadFonts([
+    { font: 'gothic', bold: false, italic: false, text: '가' }, { font: 'gothic', bold: false, italic: false, text: '나' },
+    { font: 'black', bold: false, italic: true, text: '악' }, { font: 'Broken', bold: true, italic: false, text: '깨짐' }
+  ], doc);
+  eq(asked.length, 3, '중복은 한 번');
+  ok(asked.some((c) => c.startsWith('italic 400 32px "PN Black Han Sans"')), '외침 글꼴은 기울임으로 부른다');
+  await loadFonts([{ font: 'gothic', text: 'a' }], {});               // fonts 가 없는 환경
 });
 
 await check('말풍선을 눌러 잡는다: 꼬리 끝·모서리·몸통 순', () => {

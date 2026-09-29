@@ -70,7 +70,8 @@ export function buildProject({
   if (shortsText) files.push({ name: SHORTS_FILE, data: shortsText, compress: true });
   if (comicText) files.push({ name: COMIC_FILE, data: comicText, compress: true });
   images.forEach((img, i) => {
-    files.push({ name: imageEntryName(i, img.name, 'images'), data: img.blob });  // 사진은 이미 압축돼 있다
+    // 줄이기 전 원본이 남아 있으면 원본을 담는다. 불러올 때 모델에 보낼 크기로 다시 줄인다.
+    files.push({ name: imageEntryName(i, img.name, 'images'), data: img.original || img.blob });  // 사진은 이미 압축돼 있다
   });
   shortImages.forEach((img, i) => {
     // 단편은 원본 위에 글을 얹으므로, 남아 있으면 원본 쪽을 담는다.
