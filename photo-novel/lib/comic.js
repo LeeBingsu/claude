@@ -1,5 +1,5 @@
 /*
-  comic.js - 만화 컷: 말풍선 데이터, 모델이 준 대사 읽기, 처음 배치, 그리기, 그림으로 굽기.
+  comic.js - 만화 컷: 말풍선 데이터, 모델이 준 대사 읽기, 터치한 자리에 놓기, 그리기, 그림으로 굽기.
 
   좌표는 모두 사진 크기에 대한 비율이다 (x, w 는 가로폭 기준, y, h 는 세로 기준,
   글자 크기 fs 와 테두리 strokeW 는 가로폭 기준). 그래서 화면 미리보기와 원본 크기로 굽는 그림이
@@ -128,6 +128,7 @@ export function normalizeBubble(raw = {}) {
       x: clampNum(tail.x, -0.5, 1.5, x + w / 2),
       y: clampNum(tail.y, -0.5, 1.5, y + h + 0.08)
     },
+    placed: raw.placed !== false,             // false: 대사만 있고 아직 사진 위에 놓지 않은 말풍선
     fill: colorOr(raw.fill, DEFAULT_STYLE.fill),
     fillAlpha: clampNum(raw.fillAlpha, 0, 1, DEFAULT_STYLE.fillAlpha),
     stroke: colorOr(raw.stroke, DEFAULT_STYLE.stroke),
@@ -230,22 +231,6 @@ function typeOf(v) {
   return 'say';
 }
 
-/* 0~1, 0~100, 0~1000 어느 눈금으로 와도 0~1 로 맞춘다. */
-function unit(v, scale) {
-  const n = Number(v);
-  return Number.isFinite(n) ? Math.min(1, Math.max(0, n / scale)) : null;
-}
-
-function mouthOf(m) {
-  if (!m || typeof m !== 'object') return null;
-  const x = Number(m.x);
-  const y = Number(m.y);
-  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-  const top = Math.max(x, y);
-  const scale = top <= 1.0001 ? 1 : top <= 100 ? 100 : 1000;
-  return { x: unit(x, scale), y: unit(y, scale) };
-}
-
 function cleanText(s) {
   return String(s ?? '').replace(/^["'“”‘’「」『』]+|["'“”‘’「」『』]+$/g, '').replace(/\r/g, '').trim();
 }
@@ -253,7 +238,7 @@ function cleanText(s) {
 /*
   모델 답에서 대사 목록을 뽑는다. JSON 배열이 정상이고, 코드 울타리나 앞뒤 군말이 붙어도 읽는다.
   JSON 이 아니면 "이름: 대사" 줄로 읽어 본다.
-  돌려주는 것: [{ speaker, type, text, mouth: {x,y}|null }]
+  돌려주는 것: [{ speaker, type, text }]
 */
 export function parseDialogue(text, max = 8) {
   const raw = String(text || '').replace(/```(?:json)?/gi, '').trim();
@@ -277,19 +262,18 @@ export function parseDialogue(text, max = 8) {
   let out = [];
   if (Array.isArray(list)) {
     out = list.map((it) => (typeof it === 'string'
-      ? { speaker: '', type: 'say', text: cleanText(it), mouth: null }
+      ? { speaker: '', type: 'say', text: cleanText(it) }
       : {
         speaker: String(it?.speaker ?? it?.name ?? '').trim().slice(0, 40),
         type: typeOf(it?.type),
-        text: cleanText(it?.text ?? it?.line ?? it?.dialogue),
-        mouth: mouthOf(it?.mouth)
+        text: cleanText(it?.text ?? it?.line ?? it?.dialogue)
       }));
   } else {
     // "이름 (생각): 대사" 줄 모양으로 읽는다
     const re = /^\s*(?:\d+[.)]\s*)?([^:：()（）]{1,20}?)\s*(?:[(（]([^)）]*)[)）])?\s*[:：]\s*(.+)$/;
     for (const line of raw.split('\n')) {
       const m = re.exec(line);
-      if (m) out.push({ speaker: m[1].trim(), type: typeOf(m[2]), text: cleanText(m[3]), mouth: null });
+      if (m) out.push({ speaker: m[1].trim(), type: typeOf(m[2]), text: cleanText(m[3]) });
     }
   }
   return out.filter((d) => d.text).slice(0, Math.max(1, max));
@@ -320,79 +304,32 @@ export function sizeBubble(b, measureFor, W, H) {
   return b;
 }
 
-const overlap = (a, b) => {
-  const w = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
-  const h = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
-  return w > 0 && h > 0 ? w * h : 0;
-};
-
-/*
-  처음 자리를 잡는다. 화자의 입 위치(mouths[i])가 있으면 그 위쪽을 먼저 보고,
-  겹침이 적고 입에 가까운 자리를 고른다. 입 위치가 없으면 위쪽 왼쪽/오른쪽에 번갈아 쌓는다.
-  b.x, b.y, b.tail 을 채운다. 사진 밖으로 나가지 않는다.
-*/
-export function layoutBubbles(list, mouths = [], { margin = 0.03 } = {}) {
-  const placed = [];
-  const fit = (b, x, y) => ({
-    x: Math.min(1 - b.w - margin, Math.max(margin, x)),
-    y: Math.min(1 - b.h - margin, Math.max(margin, y))
-  });
-  const gap = 0.07;
-
-  list.forEach((b, i) => {
-    const m = mouths[i] || null;
-    let cands = [];
-    if (b.type === 'narration') {
-      cands = [
-        [margin, margin], [1 - b.w - margin, margin],
-        [margin, 1 - b.h - margin], [1 - b.w - margin, 1 - b.h - margin]
-      ];
-    } else if (m) {
-      cands = [
-        [m.x - b.w / 2, m.y - b.h - gap],
-        [m.x - b.w * 0.85, m.y - b.h - gap],
-        [m.x - b.w * 0.15, m.y - b.h - gap],
-        [m.x - b.w - gap, m.y - b.h * 0.9],
-        [m.x + gap, m.y - b.h * 0.9],
-        [m.x - b.w / 2, m.y + gap]
-      ];
-    } else {
-      const left = i % 2 === 0;
-      const row = margin + Math.floor(i / 2) * (b.h + 0.03);
-      cands = [
-        [left ? margin : 1 - b.w - margin, row],
-        [left ? 1 - b.w - margin : margin, row + b.h * 0.5]
-      ];
-    }
-    // 위에서 못 잡으면 위쪽 줄에서 빈 곳을 찾아 내려온다
-    for (let r = 0; r < 6; r++) cands.push([margin + (r % 2) * (1 - b.w - 2 * margin), margin + r * (b.h + 0.02)]);
-
-    let bestScore = Infinity;
-    let best = null;
-    cands.forEach(([cx, cy], n) => {
-      const p = fit(b, cx, cy);
-      const rect = { x: p.x, y: p.y, w: b.w, h: b.h };
-      let score = n * 0.01;
-      for (const q of placed) score += overlap(rect, q) * 400;
-      if (m) {
-        const inside = m.x > rect.x && m.x < rect.x + rect.w && m.y > rect.y && m.y < rect.y + rect.h;
-        if (inside) score += 30;                       // 말하는 사람의 입을 가리지 않는다
-        score += Math.hypot(m.x - (rect.x + rect.w / 2), m.y - (rect.y + rect.h / 2)) * 0.6;
-      }
-      if (score < bestScore) { bestScore = score; best = { p, rect }; }
-    });
-    b.x = best.p.x;
-    b.y = best.p.y;
-    placed.push(best.rect);
-
-    const tipX = m ? m.x : b.x + b.w / 2;
-    const tipY = m ? m.y : Math.min(1.02, b.y + b.h + 0.07);
-    b.tail = { on: b.tail.on && b.type !== 'narration', x: tipX, y: tipY };
-  });
-  return list;
+/* 기본 꼬리: 말풍선 아래로 짧게. 화자 쪽으로는 사용자가 끌어서 정한다. */
+export function defaultTail(b) {
+  return { on: b.shape !== 'box' && b.shape !== 'text' && b.type !== 'narration', x: b.x + b.w / 2, y: Math.min(1.02, b.y + b.h + 0.08) };
 }
 
-/* 모델이 준 대사를 말풍선들로 만든다: 만들고, 글에 맞게 키우고, 자리를 잡는다. */
+/*
+  (nx, ny) 를 터치한 자리에 말풍선을 놓는다. 터치한 곳이 말풍선의 가운데가 되고, 사진 밖으로 나가지 않는다.
+  자리는 앱이 정하지 않는다 — 언제나 사용자가 사진에서 직접 고른다.
+*/
+export function placeBubble(b, nx, ny, { margin = 0.01 } = {}) {
+  b.x = Math.min(1 - b.w - margin, Math.max(margin, nx - b.w / 2));
+  b.y = Math.min(1 - b.h - margin, Math.max(margin, ny - b.h / 2));
+  b.placed = true;
+  b.tail = defaultTail(b);
+  return b;
+}
+
+/* 아직 놓지 않은 말풍선 중 다음 것. preferId 가 아직 안 놓였으면 그것을 먼저 준다. */
+export function nextUnplaced(list, preferId = '') {
+  return list.find((b) => b.id === preferId && !b.placed) || list.find((b) => !b.placed) || null;
+}
+
+/*
+  모델이 준 대사를 말풍선들로 만든다: 만들고 글에 맞게 크기를 잡는다.
+  자리는 잡지 않는다. 모두 "아직 안 놓은" 상태로 두고, 사용자가 사진을 터치해 하나씩 놓는다.
+*/
 export function bubblesFromDialogue(dialogue, { measureFor, W, H, style = {} }) {
   // 손으로 정해 둔 색·글자체는 다시 만들어도 이어 간다. 설명 글상자는 자기 바탕색을 지키고,
   // 모양(shape)은 보통의 말풍선에만 이어 준다 — 외침·생각은 종류에 맞는 모양이 있다.
@@ -403,8 +340,13 @@ export function bubblesFromDialogue(dialogue, { measureFor, W, H, style = {} }) 
     return fill === undefined ? rest : { ...rest, fill };
   };
   const bubbles = dialogue.map((d) => makeBubble(d, styleFor(d.type)));
-  bubbles.forEach((b) => sizeBubble(b, measureFor, W, H));
-  layoutBubbles(bubbles, dialogue.map((d) => d.mouth));
+  bubbles.forEach((b) => {
+    sizeBubble(b, measureFor, W, H);
+    b.x = 0.05;
+    b.y = 0.05;
+    b.placed = false;
+    b.tail = defaultTail(b);
+  });
   return bubbles;
 }
 
@@ -426,13 +368,13 @@ const inBubble = (b, nx, ny) => {
 export function hitTest(list, nx, ny, W, H, selectedId, tolPx = 14) {
   const px = nx * W;
   const py = ny * H;
-  const sel = list.find((b) => b.id === selectedId);
+  const sel = list.find((b) => b.id === selectedId && b.placed);
   if (sel) {
     if (sel.tail.on && Math.hypot(px - sel.tail.x * W, py - sel.tail.y * H) <= tolPx) return { id: sel.id, part: 'tail' };
     if (Math.hypot(px - (sel.x + sel.w) * W, py - (sel.y + sel.h) * H) <= tolPx) return { id: sel.id, part: 'resize' };
   }
   for (let i = list.length - 1; i >= 0; i--) {
-    if (inBubble(list[i], nx, ny)) return { id: list[i].id, part: 'body' };
+    if (list[i].placed && inBubble(list[i], nx, ny)) return { id: list[i].id, part: 'body' };
   }
   return null;
 }
@@ -663,7 +605,7 @@ export function drawBubble(ctx, b, W, H, env = {}) {
 }
 
 export function drawBubbles(ctx, list, W, H, env) {
-  for (const b of list) drawBubble(ctx, b, W, H, env);
+  for (const b of list) if (b.placed) drawBubble(ctx, b, W, H, env);   // 아직 안 놓은 것은 그림에 넣지 않는다
 }
 
 /* 고른 말풍선의 테두리·잡는 점. 미리보기에만 그린다. */
@@ -776,11 +718,9 @@ export function buildComicSystem(opts) {
   lines.push(
     '',
     '출력 형식 (앱이 읽으므로 반드시 지킨다): 설명 없이 JSON 배열 하나만 출력한다.',
-    '[{"speaker":"말하는 인물 이름","type":"say","text":"말풍선에 들어갈 글","mouth":{"x":0.42,"y":0.30}}, …]',
+    '[{"speaker":"말하는 인물 이름","type":"say","text":"말풍선에 들어갈 글"}, …]',
     '- type 은 say(말), think(속마음), shout(외침), whisper(속삭임), narration(설명 글상자) 중 하나.',
-    '- mouth 는 말하는 인물의 입(없으면 얼굴) 위치를 사진 크기에 대한 비율(0~1)로 적은 것이다.',
-    '  x 는 왼쪽 끝이 0, 오른쪽 끝이 1. y 는 위쪽 끝이 0, 아래쪽 끝이 1. 인물이 화면 밖에 있거나 narration 이면 null.',
-    '- 배열의 순서가 읽는 순서다.'
+    '- 배열의 순서가 읽는 순서다. 말풍선의 위치는 작가가 직접 정하므로 위치는 적지 않는다.'
   );
   return lines.join('\n');
 }

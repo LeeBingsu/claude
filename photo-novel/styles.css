@@ -142,6 +142,13 @@ body {
 .chip:hover { border-color: var(--accent); color: var(--ink); }
 .chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .comic .err { font-size: 12px; color: var(--bad); margin: 8px 0 0; }
+.place-hint {
+  margin: 0 0 8px; padding: 8px 10px; border-radius: 10px; font-size: 12.5px; line-height: 1.55;
+  background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent);
+}
+.comic-canvas.placing { cursor: crosshair; outline: 2px dashed var(--accent); outline-offset: 2px; }
+.chip.todo { border-style: dashed; color: var(--ink-3); }
+.chip[data-next="1"] { border-color: var(--accent); color: var(--accent); }
 
 .props {
   margin-top: 10px; padding: 12px; border: 1px solid var(--accent); border-radius: 12px; background: var(--panel);
