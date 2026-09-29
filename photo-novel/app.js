@@ -1,6 +1,6 @@
 /* app.js - 화면 로직. 설정은 localStorage 에만 저장한다. */
 
-import { collectImages, recordFromStored, makeImageRecord, placeholderRecord } from './lib/images.js';
+import { collectImages, recordFromStored, makeImageRecord, placeholderRecord, ownCopy } from './lib/images.js';
 import { sortByName } from './lib/sort.js';
 import { generate, listModels, isRefusal, isWorthRetrying, describeFailure, SAFETY_LADDER } from './lib/gemini.js';
 import {
@@ -15,6 +15,11 @@ import { renderPoster, POSTER_DEFAULTS } from './lib/poster.js';
 import { translateText, ENGINES, DEFAULT_ENDPOINT } from './lib/translate.js';
 import { humanize, MODES as HUMAN_MODES } from './lib/humanize.js';
 import { buildSettingsFile, readSettingsFile } from './lib/settings-file.js';
+import {
+  SHAPES, TYPES, FONT_PRESETS, makeBubble, normalizeBubble, normalizeComic, copyStyle, parseDialogue,
+  sizeBubble, bubblesFromDialogue, hitTest, drawBubbles, drawHandles, renderComic, renderComicStrip,
+  comicPlainText, buildComicSystem, buildComicParts, newBubbleId
+} from './lib/comic.js';
 
 const $ = (id) => document.getElementById(id);
 const STORE_KEY = 'photoNovel.settings.v1';
@@ -30,6 +35,7 @@ const DEFAULT_MODELS = [
 const state = {
   tab: 'series',
   shorts: { images: [], items: {} },   // items: 사진 id → { base, lang, texts, status, error }
+  comic: { images: [], items: {}, fonts: [] },   // items: 사진 id → { scenario, bubbles, status, error }
   images: [],
   passages: {},          // 대목 이름 → { text, status: 'empty' | 'busy' | 'done' | 'error', error }
   beats: {},             // 대목 이름 → 그 구간에서 일어난 일 한 줄
@@ -59,6 +65,8 @@ const FIELDS = [
   ['humanProxy', 'value'], ['humanMode', 'value'], ['humanWhen', 'value'],
   ['humanSanitize', 'checked'], ['humanBox', 'open'],
   ['autoBackup', 'value'],
+  ['comicCast', 'value'], ['comicInstructions', 'value'], ['comicLang', 'value'], ['comicMax', 'value'],
+  ['comicContext', 'checked'], ['comicFormat', 'value'], ['cImagesBox', 'open'],
   ['posterDark', 'value'], ['posterFont', 'value'], ['posterPos', 'value'],
   ['posterAlign', 'value'], ['posterFormat', 'value'], ['posterTitle', 'checked'], ['optAutosave', 'checked'], ['saveKey', 'checked']
 ];
@@ -185,7 +193,8 @@ async function flushSave() {
       passages: state.passages,
       beats: state.beats,
       memo: state.memo,
-      shorts: state.shorts
+      shorts: state.shorts,
+      comic: state.comic
     });
     showSaved(Date.now());
   } catch (err) {
@@ -208,7 +217,7 @@ function clockOf(ts) {
 }
 
 function showSaved(ts) {
-  $('savedInfo').textContent = state.images.length || storyChars() || state.shorts.images.length
+  $('savedInfo').textContent = state.images.length || storyChars() || state.shorts.images.length || state.comic.images.length
     ? `자동 저장됨 · 사진 ${state.images.length}장 · ${storyChars().toLocaleString('ko-KR')}자 · ${clockOf(ts)}`
     : '저장된 작업이 없습니다.';
 }
@@ -239,7 +248,8 @@ async function restoreWork() {
   const passages = migratePassages(work.passages, work.images.length);
   const hasText = Object.values(passages).some((p) => p?.text);
   const hasShorts = (work.shorts?.images || []).length > 0;
-  if (!work.images.length && !hasText && !hasShorts) { restoreState = 'ok'; return; }
+  const hasComic = (work.comic?.images || []).length > 0 || Object.keys(work.comic?.items || {}).length > 0;
+  if (!work.images.length && !hasText && !hasShorts && !hasComic) { restoreState = 'ok'; return; }
 
   // 사진은 한 장씩 연다. 못 읽은 사진이 있어도 나머지와 글은 모두 되살린다.
   let broken = 0;
@@ -261,20 +271,28 @@ async function restoreWork() {
     const shortImages = [];
     for (const row of work.shorts?.images || []) shortImages.push(await open(row));
     state.shorts = { images: shortImages, items: work.shorts?.items || {} };
+
+    const comicImages = [];
+    for (const row of work.comic?.images || []) comicImages.push(await open(row));
+    state.comic = { images: comicImages, items: normalizeComic(work.comic?.items), fonts: [] };
+    for (const f of work.comic?.fonts || []) await registerComicFont(f.name, f.blob, { persist: false });
   } catch (err) {
     holdSaving(`저장된 사진을 여는 데 실패했습니다: ${err.message}`);
     return;
   }
   restoreState = 'ok';
   // 예전 방식(폰 파일 참조)으로 저장된 사진은 지금 읽힌 김에 복사본으로 다시 저장해 둔다.
-  if ([...state.images, ...state.shorts.images].some((i) => i.rewrite)) scheduleSave(0);
+  if ([...state.images, ...state.shorts.images, ...state.comic.images].some((i) => i.rewrite)) scheduleSave(0);
 
   renderImages();
   renderStory();
   renderShortImages();
   renderShorts();
+  renderComicImages();
+  renderComicList();
   showSaved(work.updatedAt || Date.now());
-  const shortsNote = state.shorts.images.length ? ` · 단편 ${state.shorts.images.length}편` : '';
+  const shortsNote = (state.shorts.images.length ? ` · 단편 ${state.shorts.images.length}편` : '')
+    + (state.comic.images.length ? ` · 만화 ${state.comic.images.length}컷` : '');
   setStatus(`지난 작업을 불러왔습니다 · 사진 ${state.images.length}장 · ${storyChars().toLocaleString('ko-KR')}자${shortsNote} (${clockOf(work.updatedAt || Date.now())} 저장)`
     + (broken ? `\n사진 ${broken}장은 읽지 못해 회색 칸으로 자리만 지켰습니다. 백업 파일이 있다면 "백업에서 되살리기" 로 불러오세요.` : ''), Boolean(broken));
   maybeAutoResume();
@@ -318,11 +336,21 @@ function maybeAutoResume() {
     run: () => runShorts({ onlyEmpty: true }),
     remaining: shortsUnfinishedCount
   };
-  const here = state.tab === 'shorts' ? shorts : series;
-  const there = state.tab === 'shorts' ? series : shorts;
+  const comic = {
+    left: comicUnfinishedCount(),
+    written: Object.values(state.comic.items).some((x) => x?.status === 'done'),
+    unit: '컷',
+    button: '빈 컷만 이어서',
+    note: cStatus,
+    run: () => runComic({ onlyEmpty: true }),
+    remaining: comicUnfinishedCount
+  };
+  const tabs = { series, shorts, comic };
+  const here = tabs[state.tab] || series;
 
   // 보고 있지 않은 탭은 알려만 준다
-  if (there.left && there.written) {
+  for (const [name, there] of Object.entries(tabs)) {
+    if (name === state.tab || !there.left || !there.written) continue;
     there.note(`남은 ${there.unit}이 ${there.left}개 있습니다. 그 탭에서 "${there.button}" 로 이어 쓸 수 있습니다.`);
   }
 
@@ -353,6 +381,10 @@ function fillSelects() {
   const shortLang = $('shortLang');
   for (const [code, v] of Object.entries(LANGS)) shortLang.append(new Option(v.label, code));
   shortLang.value = 'ko';
+
+  const comicLang = $('comicLang');
+  for (const [code, v] of Object.entries(LANGS)) comicLang.append(new Option(v.label, code));
+  comicLang.value = 'ko';
 
   $('memoMode').value = 'inline';      // 추가 요청 없이 일관성을 지킬 수 있으므로 기본값
   $('retryRefusal').value = '3';       // 그냥 넘어가면 이야기에 구멍이 생긴다
@@ -1033,10 +1065,15 @@ function dropHalfWritten(note) {
   }
 }
 
+/* 세 탭이 하나의 실행 잠금을 쓴다. 하나가 돌면 나머지 시작 단추는 잠근다. */
+const RUN_BUTTONS = ['runBtn', 'resumeBtn', 'sRunBtn', 'sResumeBtn', 'cRunBtn', 'cResumeBtn'];
+function lockRunButtons(on) {
+  for (const id of RUN_BUTTONS) $(id).disabled = on;
+}
+
 function setRunning(on) {
   state.running = on;
-  $('runBtn').disabled = on;
-  $('resumeBtn').disabled = on;
+  lockRunButtons(on);
   $('stopBtn').hidden = !on;
   document.querySelectorAll('.prose').forEach((el) => { el.contentEditable = on ? 'false' : 'true'; });
 }
@@ -1305,7 +1342,7 @@ $('settingsInput').addEventListener('change', async (e) => {
 });
 
 function hasWork() {
-  return Boolean(state.images.length || Object.keys(state.passages).length || state.shorts.images.length);
+  return Boolean(state.images.length || Object.keys(state.passages).length || state.shorts.images.length || state.comic.images.length);
 }
 
 /* 사진 원본·본문·단편·설정을 zip 하나로 — 전체 내보내기와 백업이 같은 파일을 만든다. */
@@ -1316,9 +1353,11 @@ async function projectZip() {
     beats: state.beats,
     memo: state.memo,
     shorts: state.shorts,
+    comic: comicForExport(),
     settings: exportableSettings(),
     story: plainText(),
-    shortsText: shortsPlainText()
+    shortsText: shortsPlainText(),
+    comicText: comicPlainText(state.comic.images, state.comic.items)
   });
   return createZip(files);
 }
@@ -1367,17 +1406,7 @@ $('exportProject').addEventListener('click', async () => {
   btn.disabled = true;
   setStatus('전체 내보내기를 만드는 중…');
   try {
-    const { files } = buildProject({
-      images: state.images,
-      passages: state.passages,
-      beats: state.beats,
-      memo: state.memo,
-      shorts: state.shorts,
-      settings: exportableSettings(),
-      story: plainText(),
-      shortsText: shortsPlainText()
-    });
-    const blob = await createZip(files);
+    const blob = await projectZip();
     download(`photo-novel-${stamp()}.zip`, blob);
     const size = blob.size >= 1048576 ? `${(blob.size / 1048576).toFixed(1)}MB` : `${Math.max(1, Math.round(blob.size / 1024))}KB`;
     setStatus(`전체 내보내기 완료 · 사진 ${state.images.length}장 · ${size}`);
@@ -1408,7 +1437,7 @@ $('importInput').addEventListener('change', async (e) => {
       note('사진만 들어 있는 zip 입니다. 사진 올리기로 넣어 주세요.', true);
       return;
     }
-    const has = state.images.length || state.shorts.images.length || Object.values(state.passages).some((p) => p?.text);
+    const has = state.images.length || state.shorts.images.length || state.comic.images.length || Object.values(state.passages).some((p) => p?.text);
     if (has && !confirm('지금 작업을 덮어쓰고 파일의 내용을 불러올까요?')) { note('불러오기를 취소했습니다.'); return; }
 
     const toRecords = async (list, tag) => {
@@ -1432,13 +1461,29 @@ $('importInput').addEventListener('change', async (e) => {
       shortImages.push({ ...rec, id: meta.id || rec.id });
     }
 
+    // 만화 컷 사진도 원본 위에 말풍선을 얹으므로 같은 방식으로 다시 만든다.
+    const comicImages = [];
+    for (const meta of project.comicImages || []) {
+      const blob = new Blob([meta.bytes], { type: meta.mimeType || 'image/jpeg' });
+      const rec = await makeImageRecord(meta.name, blob, {
+        maxDim: Math.max(0, Number($('maxDim').value) || 0),
+        keepOriginal: true
+      });
+      comicImages.push({ ...rec, id: meta.id || rec.id });
+    }
+
     state.images.forEach((img) => URL.revokeObjectURL(img.url));
     state.shorts.images.forEach((img) => URL.revokeObjectURL(img.url));
+    state.comic.images.forEach((img) => URL.revokeObjectURL(img.url));
     state.images = images;
     state.passages = project.manifest.passages;
     state.beats = project.manifest.beats;
     state.memo = project.manifest.memo;
     state.shorts = { images: shortImages, items: project.manifest.shorts?.items || {} };
+    state.comic = { images: comicImages, items: normalizeComic(project.manifest.comic?.items), fonts: [] };
+    for (const f of project.comicFonts || []) {
+      await registerComicFont(f.name, new Blob([f.bytes], { type: 'font/ttf' }), { persist: false });
+    }
 
     // 설정도 함께 복원한다. 키는 파일에 없으니 화면의 것을 그대로 둔다.
     applyFieldValues(project.manifest.settings);
@@ -1447,6 +1492,8 @@ $('importInput').addEventListener('change', async (e) => {
     renderStory();
     renderShortImages();
     renderShorts();
+    renderComicImages();
+    renderComicList();
     saveSettings();
     // 직접 고른 파일로 바꾸는 것이니, 저장본을 읽지 못해 멈춰 둔 저장도 다시 연다.
     restoreState = 'ok';
@@ -1455,7 +1502,8 @@ $('importInput').addEventListener('change', async (e) => {
 
     const when = project.manifest.exportedAt ? ` (${clockOf(Date.parse(project.manifest.exportedAt))} 내보낸 파일)` : '';
     const lost = project.missing?.length ? ` · 사진 ${project.missing.length}장은 파일에 없어 빠졌습니다` : '';
-    const shortsNote = shortImages.length ? ` · 단편 사진 ${shortImages.length}장` : '';
+    const shortsNote = (shortImages.length ? ` · 단편 사진 ${shortImages.length}장` : '')
+      + (comicImages.length ? ` · 만화 컷 ${comicImages.length}장` : '');
     note(`불러왔습니다 · 사진 ${images.length}장${shortsNote} · ${storyChars().toLocaleString('ko-KR')}자${when}${lost}`, Boolean(lost));
   } catch (err) {
     note(`불러오지 못했습니다: ${err.message}`, true);
@@ -1809,7 +1857,7 @@ function shortPreflight() {
 
 function setShortsRunning(on) {
   state.running = on;
-  for (const id of ['sRunBtn', 'sResumeBtn', 'runBtn', 'resumeBtn']) $(id).disabled = on;
+  lockRunButtons(on);
   $('sStopBtn').hidden = !on;
   document.querySelectorAll('.short .prose, .short-title').forEach((el) => {
     el.contentEditable = on ? 'false' : 'true';
@@ -1936,6 +1984,904 @@ async function runShorts({ onlyEmpty = false, only = null } = {}) {
     state.abort = null;
   }
 }
+
+/* =============================================================== 만화 */
+
+/*
+  사진 한 장이 한 컷. 컷마다 시나리오를 적으면 Gemini 가 사진과 시나리오를 보고 대사를 쓰고,
+  그것이 말풍선 데이터(lib/comic.js)로 바뀌어 사진 위에 얹힌다. 말풍선은 끌어서 옮기고 크기·꼬리·모양·
+  색·글자체를 고칠 수 있고, 미리보기와 저장 그림이 같은 그리기 코드를 쓴다.
+*/
+
+const PREVIEW_W = 1000;                 // 미리보기 캔버스와 크기 계산의 기준 가로폭
+const comicView = new Map();            // 컷 id → { canvas, el, W, H, ready, raf }
+const comicUi = { panelId: '', bubbleId: '' };
+let comicLastStyle = null;              // 마지막으로 고친 글자체·색. 새로 만드는 말풍선이 이어받는다.
+
+function comicAt(id) {
+  if (!state.comic.items[id]) state.comic.items[id] = { scenario: '', bubbles: [], status: 'empty', error: '' };
+  return state.comic.items[id];
+}
+
+function cStatus(text, bad) {
+  const el = $('cStatus');
+  el.textContent = text;
+  el.classList.toggle('err', Boolean(bad));
+}
+
+function comicUnfinishedCount() {
+  return state.comic.images.filter((img) => state.comic.items[img.id]?.status !== 'done').length;
+}
+
+/* 글 폭을 재는 도구. 말풍선 크기를 글에 맞출 때 쓴다. */
+const measureCtx = document.createElement('canvas').getContext('2d');
+function measureFor(font) {
+  measureCtx.font = font;
+  return (s) => measureCtx.measureText(s).width;
+}
+
+function comicDims(img) {
+  const ratio = img.width && img.height ? img.height / img.width : 0.75;
+  return { W: PREVIEW_W, H: Math.round(PREVIEW_W * ratio) };
+}
+
+function comicForExport() {
+  return { images: state.comic.images, items: normalizeComic(state.comic.items), fonts: state.comic.fonts };
+}
+
+/* ------------------------------------------------------------ 글꼴 */
+
+function fontOptions() {
+  const sel = $('cpFont');
+  sel.textContent = '';
+  for (const [key, f] of Object.entries(FONT_PRESETS)) sel.append(new Option(f.label, key));
+  for (const f of state.comic.fonts) sel.append(new Option(`${f.name} (올린 글꼴)`, f.name));
+  sel.append(new Option('직접 입력…', '__custom'));
+}
+
+/* 글꼴 파일을 브라우저에 등록한다. 등록해 두면 글꼴 이름만으로 그리기에 쓰인다. */
+async function registerComicFont(name, blob, { persist = true } = {}) {
+  const face = new FontFace(name, await blob.arrayBuffer());
+  await face.load();
+  document.fonts.add(face);
+  const own = persist ? await ownCopy(blob, blob.type) : blob;
+  const at = state.comic.fonts.findIndex((f) => f.name === name);
+  if (at >= 0) state.comic.fonts[at] = { name, blob: own };
+  else state.comic.fonts.push({ name, blob: own });
+  fontOptions();
+  if (persist) scheduleSave(0);
+}
+
+/* ------------------------------------------------------------ 사진 목록 */
+
+function renderComicImages() {
+  const list = $('cImageList');
+  list.textContent = '';
+  $('cCountVal').textContent = String(state.comic.images.length);
+  $('cListHint').textContent = state.comic.images.length
+    ? `(${state.comic.images.length}컷 · 누르면 접기/펴기)` : '(0컷)';
+
+  state.comic.images.forEach((img, i) => {
+    const li = document.createElement('li');
+    li.className = 'thumb';
+    const idx = document.createElement('span');
+    idx.className = 'idx';
+    idx.textContent = String(i + 1);
+    const thumb = document.createElement('img');
+    thumb.src = img.url;
+    thumb.alt = img.name;
+    thumb.loading = 'lazy';
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const name = document.createElement('div');
+    name.className = 'name';
+    name.textContent = img.name;
+    const sub = document.createElement('div');
+    sub.className = 'sub';
+    const n = state.comic.items[img.id]?.bubbles?.length || 0;
+    sub.textContent = `${img.width ? `${img.width}×${img.height} · ` : ''}${n ? `말풍선 ${n}개` : '말풍선 없음'}`;
+    meta.append(name, sub);
+    const acts = document.createElement('div');
+    acts.className = 'acts';
+    acts.append(
+      actBtn('▲', '위로', () => moveComic(i, -1)),
+      actBtn('▼', '아래로', () => moveComic(i, 1)),
+      actBtn('✕', '삭제', () => removeComic(i))
+    );
+    li.append(idx, thumb, meta, acts);
+    list.append(li);
+  });
+}
+
+function moveComic(i, d) {
+  const j = i + d;
+  if (j < 0 || j >= state.comic.images.length) return;
+  const [x] = state.comic.images.splice(i, 1);
+  state.comic.images.splice(j, 0, x);
+  renderComicImages();
+  renderComicList();
+  scheduleSave();
+}
+
+function removeComic(i) {
+  const [x] = state.comic.images.splice(i, 1);
+  URL.revokeObjectURL(x.url);
+  delete state.comic.items[x.id];
+  if (comicUi.panelId === x.id) selectBubble('', '');
+  renderComicImages();
+  renderComicList();
+  scheduleSave(0);
+}
+
+/* ------------------------------------------------------------ 컷 편집 화면 */
+
+function bubbleLabel(b, n) {
+  const who = b.speaker ? `${b.speaker}: ` : '';
+  const txt = (b.text || '').replace(/\s+/g, ' ');
+  return `${n + 1} · ${who}${txt.length > 14 ? `${txt.slice(0, 14)}…` : txt || '(빈 말풍선)'}`;
+}
+
+function renderComicList() {
+  const box = $('cList');
+  const keep = window.scrollY;
+  // 고치는 칸은 목록을 지우기 전에 빼 둔다. 그대로 두면 함께 지워진다.
+  $('viewComic').append($('comicProps'));
+  $('comicProps').hidden = true;
+  for (const v of comicView.values()) cancelAnimationFrame(v.raf);
+  comicView.clear();
+  box.textContent = '';
+  $('cDoneVal').textContent = String(
+    Object.values(state.comic.items).filter((x) => x.status === 'done').length
+  );
+
+  if (!state.comic.images.length) {
+    const p = document.createElement('p');
+    p.className = 'empty';
+    p.textContent = '사진을 올리면 컷이 여기에 나타납니다.';
+    box.append(p);
+    return;
+  }
+  state.comic.images.forEach((img, i) => box.append(comicCard(img, i)));
+  if (comicUi.panelId && comicUi.bubbleId) selectBubble(comicUi.panelId, comicUi.bubbleId);
+  window.scrollTo(0, keep);
+}
+
+function comicCard(img, index) {
+  const item = comicAt(img.id);
+  const card = document.createElement('section');
+  card.className = `comic ${item.status === 'busy' ? 'busy' : ''} ${item.status === 'error' ? 'fail' : ''}`;
+  card.dataset.c = img.id;
+
+  const head = document.createElement('div');
+  head.className = 'comic-head';
+  const label = document.createElement('span');
+  label.textContent = `컷 ${index + 1} · ${img.name}`;
+  const spacer = document.createElement('span');
+  spacer.className = 'spacer';
+  const write = document.createElement('button');
+  write.type = 'button';
+  write.textContent = item.bubbles.length ? '대사 다시 만들기' : '대사 만들기';
+  write.addEventListener('click', () => runComic({ only: img.id }));
+  const add = document.createElement('button');
+  add.type = 'button';
+  add.textContent = '＋ 말풍선';
+  add.addEventListener('click', () => addBubble(img.id));
+  const save = document.createElement('button');
+  save.type = 'button';
+  save.textContent = '그림으로 저장';
+  save.addEventListener('click', () => saveComicPanel(img.id));
+  head.append(label, spacer, write, add, save);
+
+  const scenario = document.createElement('textarea');
+  scenario.className = 'comic-scenario';
+  scenario.rows = 2;
+  scenario.value = item.scenario;
+  scenario.placeholder = '이 컷의 시나리오를 간단히. 예) 하린이 문을 열자 지오가 놀라 돌아본다. 지오는 "왜 이제 와?" 라고 묻는다.';
+  scenario.addEventListener('input', () => {
+    item.scenario = scenario.value;
+    scheduleSave(1200);
+  });
+
+  const stage = document.createElement('div');
+  stage.className = 'comic-stage';
+  const canvas = document.createElement('canvas');
+  canvas.className = 'comic-canvas';
+  const { W, H } = comicDims(img);
+  canvas.width = W;
+  canvas.height = H;
+  stage.append(canvas);
+
+  const chips = document.createElement('div');
+  chips.className = 'chips';
+  const slot = document.createElement('div');
+  slot.className = 'props-slot';
+  const err = document.createElement('p');
+  err.className = 'err';
+  err.textContent = item.error || '';
+  err.hidden = !item.error;
+
+  card.append(head, scenario, stage, chips, slot, err);
+
+  const view = { canvas, chips, el: new Image(), W, H, ready: false, raf: 0 };
+  comicView.set(img.id, view);
+  view.el.onload = () => { view.ready = true; drawComic(img.id); };
+  view.el.src = img.url;
+  bindCanvas(img.id, canvas);
+  renderChips(img.id);
+  return card;
+}
+
+function renderChips(id) {
+  const view = comicView.get(id);
+  if (!view) return;
+  const item = comicAt(id);
+  view.chips.textContent = '';
+  item.bubbles.forEach((b, n) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'chip';
+    btn.textContent = bubbleLabel(b, n);
+    btn.setAttribute('aria-pressed', String(comicUi.panelId === id && comicUi.bubbleId === b.id));
+    btn.addEventListener('click', () => selectBubble(id, b.id));
+    view.chips.append(btn);
+  });
+}
+
+function drawComic(id) {
+  const view = comicView.get(id);
+  if (!view?.ready) return;
+  const item = comicAt(id);
+  const ctx = view.canvas.getContext('2d');
+  ctx.clearRect(0, 0, view.W, view.H);
+  ctx.drawImage(view.el, 0, 0, view.W, view.H);
+  drawBubbles(ctx, item.bubbles, view.W, view.H);
+  if (comicUi.panelId === id) {
+    const b = item.bubbles.find((x) => x.id === comicUi.bubbleId);
+    if (b) drawHandles(ctx, b, view.W, view.H);
+  }
+}
+
+function scheduleDraw(id) {
+  const view = comicView.get(id);
+  if (!view) return;
+  cancelAnimationFrame(view.raf);
+  view.raf = requestAnimationFrame(() => drawComic(id));
+}
+
+function redrawAllComic() {
+  for (const id of comicView.keys()) scheduleDraw(id);
+}
+
+/* ---------------------------------------------------- 끌어서 옮기기 */
+
+function bindCanvas(id, canvas) {
+  let drag = null;
+  const point = (e) => {
+    const r = canvas.getBoundingClientRect();
+    return { nx: (e.clientX - r.left) / r.width, ny: (e.clientY - r.top) / r.height, k: canvas.width / r.width };
+  };
+  const hitAt = (e) => {
+    const { nx, ny, k } = point(e);
+    const item = comicAt(id);
+    const sel = comicUi.panelId === id ? comicUi.bubbleId : '';
+    return { nx, ny, hit: hitTest(item.bubbles, nx, ny, canvas.width, canvas.height, sel, 16 * k) };
+  };
+
+  canvas.addEventListener('pointerdown', (e) => {
+    if (state.running) return;
+    const { nx, ny, hit } = hitAt(e);
+    if (!hit) { selectBubble('', ''); return; }
+    const b = comicAt(id).bubbles.find((x) => x.id === hit.id);
+    if (comicUi.panelId !== id || comicUi.bubbleId !== hit.id) selectBubble(id, hit.id);
+    drag = { part: hit.part, id: hit.id, nx, ny, snap: { x: b.x, y: b.y, w: b.w, h: b.h } };
+    canvas.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+
+  canvas.addEventListener('pointermove', (e) => {
+    if (!drag) {
+      const { hit } = hitAt(e);
+      canvas.style.cursor = !hit ? 'default' : hit.part === 'resize' ? 'nwse-resize' : hit.part === 'tail' ? 'crosshair' : 'move';
+      return;
+    }
+    const { nx, ny } = point(e);
+    const b = comicAt(id).bubbles.find((x) => x.id === drag.id);
+    if (!b) return;
+    const dx = nx - drag.nx;
+    const dy = ny - drag.ny;
+    if (drag.part === 'body') {
+      b.x = Math.min(1.5, Math.max(-0.5, drag.snap.x + dx));
+      b.y = Math.min(1.5, Math.max(-0.5, drag.snap.y + dy));
+    } else if (drag.part === 'resize') {
+      b.w = Math.min(1.5, Math.max(0.04, drag.snap.w + dx));
+      b.h = Math.min(1.5, Math.max(0.03, drag.snap.h + dy));
+    } else {
+      b.tail.x = nx;
+      b.tail.y = ny;
+    }
+    syncProps();
+    scheduleDraw(id);
+  });
+
+  const end = () => {
+    if (!drag) return;
+    drag = null;
+    scheduleSave(600);
+  };
+  canvas.addEventListener('pointerup', end);
+  canvas.addEventListener('pointercancel', end);
+  // 손가락으로 말풍선을 끄는 동안에는 화면이 스크롤되지 않게 한다.
+  canvas.addEventListener('touchmove', (e) => { if (drag && e.cancelable) e.preventDefault(); }, { passive: false });
+}
+
+/* ------------------------------------------------------------ 말풍선 고르기 */
+
+function selectedBubble() {
+  const item = state.comic.items[comicUi.panelId];
+  const b = item?.bubbles.find((x) => x.id === comicUi.bubbleId);
+  return b ? { item, b, id: comicUi.panelId } : null;
+}
+
+function selectBubble(panelId, bubbleId) {
+  const prev = comicUi.panelId;
+  comicUi.panelId = panelId;
+  comicUi.bubbleId = bubbleId;
+  const sel = selectedBubble();
+  const props = $('comicProps');
+  if (sel) {
+    const slot = document.querySelector(`.comic[data-c="${sel.id}"] .props-slot`);
+    if (slot) slot.append(props);
+    props.hidden = false;
+    syncProps();
+  } else {
+    props.hidden = true;
+    comicUi.panelId = '';
+    comicUi.bubbleId = '';
+  }
+  for (const id of new Set([prev, panelId])) {
+    if (!id) continue;
+    scheduleDraw(id);
+    renderChips(id);
+  }
+}
+
+/* ------------------------------------------------------------ 고치는 칸 */
+
+const num = (id) => Number($(id).value);
+
+/* 칸 값을 고른 말풍선에서 읽어 채운다. 값을 넣어도 입력 이벤트는 나지 않는다. */
+function syncProps() {
+  const sel = selectedBubble();
+  if (!sel) return;
+  const b = sel.b;
+  const n = sel.item.bubbles.indexOf(b);
+  $('cpTitle').textContent = `말풍선 ${n + 1} · ${TYPES[b.type]}`;
+  $('cpText').value = b.text;
+  $('cpSpeaker').value = b.speaker;
+  $('cpShape').value = b.shape;
+  const known = Object.keys(FONT_PRESETS).includes(b.font) || state.comic.fonts.some((f) => f.name === b.font);
+  $('cpFont').value = known ? b.font : '__custom';
+  $('cpFontCustom').hidden = known;
+  $('cpFontCustom').value = known ? '' : b.font;
+  $('cpAlign').value = b.align;
+  $('cpFill').value = b.fill.length === 4 ? `#${[...b.fill.slice(1)].map((c) => c + c).join('')}` : b.fill;
+  $('cpStroke').value = b.stroke.length === 4 ? `#${[...b.stroke.slice(1)].map((c) => c + c).join('')}` : b.stroke;
+  $('cpColor').value = b.color.length === 4 ? `#${[...b.color.slice(1)].map((c) => c + c).join('')}` : b.color;
+  $('cpAlpha').value = Math.round(b.fillAlpha * 100);
+  $('cpAlphaVal').textContent = `${Math.round(b.fillAlpha * 100)}%`;
+  $('cpStrokeW').value = Math.round(b.strokeW * 1000);
+  $('cpStrokeWVal').textContent = String(Math.round(b.strokeW * 1000));
+  $('cpFs').value = Math.round(b.fs * 1000);
+  $('cpFsVal').textContent = String(Math.round(b.fs * 1000));
+  for (const [id, v] of [['cpX', b.x], ['cpY', b.y], ['cpW', b.w], ['cpH', b.h]]) {
+    $(id).value = Math.round(v * 100);
+    $(`${id}Val`).textContent = `${Math.round(v * 100)}%`;
+  }
+  $('cpBold').checked = b.bold;
+  $('cpItalic').checked = b.italic;
+  $('cpAutoFit').checked = b.autoFit;
+  $('cpTail').checked = b.tail.on;
+  $('cpTail').disabled = b.shape === 'box' || b.shape === 'text';
+}
+
+function editBubble(fn) {
+  const sel = selectedBubble();
+  if (!sel) return;
+  fn(sel.b, sel);
+  sel.item.status = 'done';
+  comicLastStyle = { font: sel.b.font, color: sel.b.color, stroke: sel.b.stroke, strokeW: sel.b.strokeW };
+  scheduleDraw(sel.id);
+  scheduleSave(800);
+}
+
+function bindProps() {
+  const on = (id, evt, fn) => $(id).addEventListener(evt, fn);
+  fontOptions();
+  const shape = $('cpShape');
+  for (const [k, label] of Object.entries(SHAPES)) shape.append(new Option(label, k));
+
+  on('cpText', 'input', () => {
+    editBubble((b, s) => { b.text = $('cpText').value; renderChipsSoon(s.id); });
+  });
+  on('cpSpeaker', 'input', () => editBubble((b, s) => { b.speaker = $('cpSpeaker').value; renderChipsSoon(s.id); }));
+  on('cpShape', 'change', () => {
+    editBubble((b) => {
+      b.shape = $('cpShape').value;
+      if (b.shape === 'box' || b.shape === 'text') b.tail.on = false;
+    });
+    syncProps();
+  });
+  on('cpFont', 'change', () => {
+    const v = $('cpFont').value;
+    if (v === '__custom') { $('cpFontCustom').hidden = false; $('cpFontCustom').focus(); return; }
+    $('cpFontCustom').hidden = true;
+    editBubble((b) => { b.font = v; });
+  });
+  on('cpFontCustom', 'input', () => editBubble((b) => { b.font = $('cpFontCustom').value.trim() || 'gothic'; }));
+  on('cpAlign', 'change', () => editBubble((b) => { b.align = $('cpAlign').value; }));
+  on('cpFill', 'input', () => editBubble((b) => { b.fill = $('cpFill').value; }));
+  on('cpStroke', 'input', () => editBubble((b) => { b.stroke = $('cpStroke').value; }));
+  on('cpColor', 'input', () => editBubble((b) => { b.color = $('cpColor').value; }));
+  on('cpAlpha', 'input', () => {
+    editBubble((b) => { b.fillAlpha = num('cpAlpha') / 100; });
+    $('cpAlphaVal').textContent = `${num('cpAlpha')}%`;
+  });
+  on('cpStrokeW', 'input', () => {
+    editBubble((b) => { b.strokeW = num('cpStrokeW') / 1000; });
+    $('cpStrokeWVal').textContent = String(num('cpStrokeW'));
+  });
+  on('cpFs', 'input', () => {
+    editBubble((b) => { b.fs = num('cpFs') / 1000; });
+    $('cpFsVal').textContent = String(num('cpFs'));
+  });
+  for (const [id, key] of [['cpX', 'x'], ['cpY', 'y'], ['cpW', 'w'], ['cpH', 'h']]) {
+    on(id, 'input', () => {
+      editBubble((b) => { b[key] = num(id) / 100; });
+      $(`${id}Val`).textContent = `${num(id)}%`;
+    });
+  }
+  on('cpBold', 'change', () => editBubble((b) => { b.bold = $('cpBold').checked; }));
+  on('cpItalic', 'change', () => editBubble((b) => { b.italic = $('cpItalic').checked; }));
+  on('cpAutoFit', 'change', () => editBubble((b) => { b.autoFit = $('cpAutoFit').checked; }));
+  on('cpTail', 'change', () => editBubble((b) => { b.tail.on = $('cpTail').checked; }));
+
+  on('cpFit', 'click', () => {
+    const sel = selectedBubble();
+    if (!sel) return;
+    const { W, H } = comicDims(state.comic.images.find((i) => i.id === sel.id));
+    editBubble((b) => sizeBubble(b, measureFor, W, H));
+    syncProps();
+  });
+  on('cpTailReset', 'click', () => {
+    editBubble((b) => { b.tail = { on: b.shape !== 'box' && b.shape !== 'text', x: b.x + b.w / 2, y: b.y + b.h + 0.08 }; });
+    syncProps();
+  });
+  on('cpDup', 'click', () => {
+    const sel = selectedBubble();
+    if (!sel) return;
+    const copy = normalizeBubble({ ...structuredClone(sel.b), id: newBubbleId(), x: sel.b.x + 0.03, y: sel.b.y + 0.03 });
+    copy.tail = { ...copy.tail, x: sel.b.tail.x, y: sel.b.tail.y };
+    sel.item.bubbles.splice(sel.item.bubbles.indexOf(sel.b) + 1, 0, copy);
+    scheduleSave(600);
+    selectBubble(sel.id, copy.id);
+  });
+  on('cpDel', 'click', () => {
+    const sel = selectedBubble();
+    if (!sel) return;
+    sel.item.bubbles.splice(sel.item.bubbles.indexOf(sel.b), 1);
+    if (!sel.item.bubbles.length) sel.item.status = 'empty';
+    scheduleSave(600);
+    selectBubble('', '');
+    renderChips(sel.id);
+    renderComicImages();
+    $('cDoneVal').textContent = String(Object.values(state.comic.items).filter((x) => x.status === 'done').length);
+  });
+  on('cpFront', 'click', () => reorderBubble(1));
+  on('cpBack', 'click', () => reorderBubble(-1));
+  on('cpStyleCut', 'click', () => {
+    const sel = selectedBubble();
+    if (!sel) return;
+    for (const other of sel.item.bubbles) if (other !== sel.b) copyStyle(sel.b, other);
+    scheduleDraw(sel.id);
+    scheduleSave(600);
+    cStatus('이 컷의 모든 말풍선에 같은 모양을 적용했습니다.');
+  });
+  on('cpStyleAll', 'click', () => {
+    const sel = selectedBubble();
+    if (!sel) return;
+    let n = 0;
+    for (const item of Object.values(state.comic.items)) {
+      for (const other of item.bubbles) if (other !== sel.b) { copyStyle(sel.b, other); n++; }
+    }
+    redrawAllComic();
+    scheduleSave(600);
+    cStatus(`모든 컷의 말풍선 ${n}개에 같은 모양을 적용했습니다.`);
+  });
+
+  on('cpFontUpload', 'click', () => $('cpFontFile').click());
+  on('cpFontFile', 'change', async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const name = file.name.replace(/\.[^.]+$/, '').replace(/["'\;{}<>]/g, '').trim().slice(0, 40) || 'font';
+    try {
+      await registerComicFont(name, file);
+      editBubble((b) => { b.font = name; });
+      syncProps();
+      redrawAllComic();
+      cStatus(`글꼴 "${name}" 을 올렸습니다. 저장·백업에도 함께 들어갑니다.`);
+    } catch (err) {
+      cStatus(`글꼴을 열지 못했습니다: ${err.message}`, true);
+    }
+  });
+}
+
+function renderChipsSoon(id) {
+  const view = comicView.get(id);
+  if (!view) return;
+  // 글을 치는 동안 칩 하나의 글만 바꿔 준다. 목록을 다시 만들면 입력이 끊긴다.
+  const sel = selectedBubble();
+  const n = sel ? sel.item.bubbles.indexOf(sel.b) : -1;
+  const chip = view.chips.children[n];
+  if (chip && sel) chip.textContent = bubbleLabel(sel.b, n);
+}
+
+function reorderBubble(dir) {
+  const sel = selectedBubble();
+  if (!sel) return;
+  const list = sel.item.bubbles;
+  const at = list.indexOf(sel.b);
+  const to = dir > 0 ? list.length - 1 : 0;
+  if (at === to) return;
+  list.splice(at, 1);
+  list.splice(to, 0, sel.b);
+  scheduleDraw(sel.id);
+  renderChips(sel.id);
+  syncProps();
+  scheduleSave(600);
+}
+
+/* ------------------------------------------------------------ 말풍선 더하기 */
+
+function addBubble(id) {
+  const img = state.comic.images.find((i) => i.id === id);
+  if (!img) return;
+  const item = comicAt(id);
+  const { W, H } = comicDims(img);
+  const b = makeBubble({ type: 'say', text: '새 말풍선' }, comicLastStyle || {});
+  sizeBubble(b, measureFor, W, H);
+  const n = item.bubbles.length;
+  b.x = Math.min(0.9 - b.w, 0.08 + (n % 4) * 0.06);
+  b.y = Math.min(0.9 - b.h, 0.08 + (n % 4) * 0.08);
+  b.tail = { on: true, x: b.x + b.w / 2, y: Math.min(1, b.y + b.h + 0.08) };
+  item.bubbles.push(b);
+  item.status = 'done';
+  renderComicImages();
+  $('cDoneVal').textContent = String(Object.values(state.comic.items).filter((x) => x.status === 'done').length);
+  scheduleSave(600);
+  selectBubble(id, b.id);
+}
+
+/* ------------------------------------------------------------ 대사 만들기 */
+
+function comicPreflight() {
+  if (!$('apiKey').value.trim()) { cStatus('API 키를 입력해 주세요.', true); return false; }
+  if (!modelName()) { cStatus('모델을 선택하거나 이름을 입력해 주세요.', true); return false; }
+  if (!state.comic.images.length) { cStatus('컷 사진을 먼저 올려 주세요.', true); return false; }
+  return true;
+}
+
+function setComicRunning(on) {
+  state.running = on;
+  lockRunButtons(on);
+  $('cStopBtn').hidden = !on;
+  $('cRunBtn').textContent = '말풍선 글 만들기';
+}
+
+/* 앞선 컷의 시나리오와 대사를 글로 모아 준다. 인물 이름·말투를 이어 가게 하는 참고용이다. */
+function comicHistory(index) {
+  const out = [];
+  for (let i = Math.max(0, index - 6); i < index; i++) {
+    const img = state.comic.images[i];
+    const item = state.comic.items[img.id];
+    if (!item?.bubbles.length) continue;
+    out.push({
+      index: i,
+      scenario: item.scenario.trim().slice(0, 240),
+      lines: item.bubbles.map((b) => `${b.speaker || TYPES[b.type]}: ${b.text.replace(/\n/g, ' ')}`)
+    });
+  }
+  return out;
+}
+
+async function writeComic(img, o, signal) {
+  const item = comicAt(img.id);
+  const index = state.comic.images.indexOf(img);
+  const keepStyle = item.bubbles.find((b) => b.type === 'say') || item.bubbles[0];
+  item.status = 'busy';
+  item.error = '';
+  renderComicList();
+
+  const max = Math.min(12, Math.max(1, Number($('comicMax').value) || 4));
+  const limit = Number(o.retryRefusal) || 0;
+  let attempt = 0;
+  for (;;) {
+    let failure = '';
+    try {
+      await waitForOnline(signal);
+      const res = await generate({
+        apiKey: $('apiKey').value.trim(),
+        model: modelName(),
+        system: buildComicSystem({
+          comicInstructions: $('comicInstructions').value,
+          comicLangName: LANGS[$('comicLang').value]?.name || '한국어'
+        }),
+        parts: buildComicParts({
+          image: img,
+          index,
+          total: state.comic.images.length,
+          scenario: item.scenario,
+          cast: $('comicCast').value,
+          history: $('comicContext').checked ? comicHistory(index) : [],
+          max,
+          retryNote: retryNote(attempt, o.soften)
+        }),
+        generationConfig: genConfig(),
+        thinkingBudget: thinkingBudget(),
+        state: state.api,
+        signal
+      });
+      const dialogue = parseDialogue(res.text || '', max);
+      if (dialogue.length) {
+        // 다시 만들어도 정해 둔 글자체·색은 그대로 두고 글과 자리만 새로 만든다.
+        const style = keepStyle
+          ? {
+            font: keepStyle.font, color: keepStyle.color, stroke: keepStyle.stroke, strokeW: keepStyle.strokeW,
+            fill: keepStyle.fill, shape: keepStyle.shape
+          }
+          : comicLastStyle || {};
+        const { W, H } = comicDims(img);
+        item.bubbles = bubblesFromDialogue(dialogue, { measureFor, W, H, style });
+        item.status = 'done';
+        item.error = res.finishReason === 'MAX_TOKENS' ? FINISH_MESSAGE.MAX_TOKENS : '';
+        comicUi.panelId = '';
+        comicUi.bubbleId = '';
+        renderComicImages();
+        renderComicList();
+        scheduleSave(0);
+        return item;
+      }
+      failure = describeFailure({ text: res.text || '', finishReason: res.finishReason, blockReason: res.blockReason })?.message
+        || '대사를 읽지 못했습니다. 모델이 정해진 형식으로 답하지 않았습니다.';
+    } catch (err) {
+      if (err.name === 'AbortError' || !isWorthRetrying(err) || limit === 0) throw err;
+      failure = err.message;
+    }
+
+    if (limit >= 0 && attempt >= limit) {
+      item.status = 'error';
+      item.error = attempt ? `${attempt + 1}번 시도했지만 계속 막혔습니다 — ${failure}` : failure;
+      renderComicList();
+      scheduleSave(0);
+      return item;
+    }
+    attempt++;
+    const wait = Math.min(15000, 1000 * 2 ** (attempt - 1)) + (o.delayMs || 0);
+    item.status = 'error';
+    item.error = `${failure} · ${Math.round(wait / 1000)}초 뒤 ${attempt}번째 다시 시도합니다`;
+    renderComicList();
+    cStatus(`컷 ${index + 1} — ${failure} 다시 시도 ${attempt}회째…`);
+    await sleep(wait, signal);
+  }
+}
+
+async function runComic({ onlyEmpty = false, only = null } = {}) {
+  if (state.running || !comicPreflight()) return;
+  const o = opts();
+  state.api.safetyStep = Number($('safety').value) || 0;
+
+  const targets = state.comic.images.filter((img) => {
+    if (only) return img.id === only;
+    if (!onlyEmpty) return true;
+    return state.comic.items[img.id]?.status !== 'done';
+  });
+  if (!targets.length) { cStatus('만들 컷이 없습니다.'); return; }
+
+  // 손으로 고친 말풍선을 말없이 덮어쓰지 않는다.
+  const has = targets.filter((img) => state.comic.items[img.id]?.bubbles?.length);
+  if (has.length && !onlyEmpty && !confirm(`이미 말풍선이 있는 컷 ${has.length}개를 새로 만들면 지금 말풍선(손으로 고친 것 포함)이 사라집니다. 계속할까요?`)) {
+    return;
+  }
+
+  const ac = new AbortController();
+  state.abort = ac;
+  setComicRunning(true);
+  holdScreen();
+  saveSettings();
+
+  let done = 0;
+  $('cBarIn').style.width = '0%';
+  try {
+    for (const img of targets) {
+      cStatus(`(${done + 1}/${targets.length}) 컷 ${state.comic.images.indexOf(img) + 1} 대사 만드는 중…`);
+      await writeComic(img, o, ac.signal);
+      done++;
+      $('cBarIn').style.width = `${Math.round((done / targets.length) * 100)}%`;
+      if (o.delayMs && done < targets.length) await sleep(o.delayMs, ac.signal);
+    }
+    const failed = targets.filter((img) => state.comic.items[img.id]?.status === 'error').length;
+    cStatus(failed ? `완료 (실패 ${failed}컷 — 다시 만들기를 눌러 보세요)` : '완료되었습니다. 말풍선을 끌어서 자리를 잡고, 눌러서 모양을 고쳐 보세요.', Boolean(failed));
+    maybeAutoBackup(cStatus, $('cStatus'));
+  } catch (err) {
+    for (const img of targets) {
+      const item = state.comic.items[img.id];
+      if (item?.status === 'busy') {
+        item.status = item.bubbles.length ? 'done' : 'error';
+        item.error = err.name === 'AbortError' ? '중단했습니다.' : err.message;
+      }
+    }
+    cStatus(err.name === 'AbortError' ? '중단했습니다.' : `오류: ${err.message}`, err.name !== 'AbortError');
+    renderComicList();
+    scheduleSave(0);
+  } finally {
+    setComicRunning(false);
+    releaseScreen();
+    state.abort = null;
+  }
+}
+
+/* ------------------------------------------------------------ 저장 */
+
+function comicFileName(index, img, ext) {
+  const base = safeFileName(img.name).replace(/\.[^.]+$/, '');
+  return `comic-${String(index + 1).padStart(3, '0')}-${base}.${ext}`;
+}
+
+function comicRenderOpts() {
+  const format = $('comicFormat').value === 'image/png' ? 'image/png' : 'image/jpeg';
+  return { format, ext: format === 'image/png' ? 'png' : 'jpg' };
+}
+
+async function saveComicPanel(id) {
+  const img = state.comic.images.find((i) => i.id === id);
+  if (!img) return;
+  const { format, ext } = comicRenderOpts();
+  cStatus('그림을 만드는 중…');
+  try {
+    const blob = await renderComic(img, comicAt(id).bubbles, { format });
+    download(comicFileName(state.comic.images.indexOf(img), img, ext), blob);
+    cStatus(`그림으로 저장했습니다 · ${sizeText(blob.size)}`);
+  } catch (err) {
+    cStatus(`저장하지 못했습니다: ${err.message}`, true);
+  }
+}
+
+$('cSaveAll').addEventListener('click', async () => {
+  if (!state.comic.images.length) { cStatus('저장할 컷이 없습니다.', true); return; }
+  const { format, ext } = comicRenderOpts();
+  const btn = $('cSaveAll');
+  btn.disabled = true;
+  try {
+    const files = [];
+    for (const [i, img] of state.comic.images.entries()) {
+      cStatus(`그림을 만드는 중 ${i + 1}/${state.comic.images.length}`);
+      files.push({ name: comicFileName(i, img, ext), data: await renderComic(img, comicAt(img.id).bubbles, { format }) });
+    }
+    const blob = await createZip(files);
+    download(`comic-${stamp()}.zip`, blob);
+    cStatus(`전체 ${files.length}컷을 저장했습니다 · ${sizeText(blob.size)}`);
+  } catch (err) {
+    cStatus(`저장하지 못했습니다: ${err.message}`, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$('cSaveStrip').addEventListener('click', async () => {
+  if (!state.comic.images.length) { cStatus('저장할 컷이 없습니다.', true); return; }
+  const { format, ext } = comicRenderOpts();
+  const btn = $('cSaveStrip');
+  btn.disabled = true;
+  cStatus('세로로 이어 붙이는 중…');
+  try {
+    const blob = await renderComicStrip(
+      state.comic.images.map((img) => ({ image: img, bubbles: comicAt(img.id).bubbles })),
+      { format }
+    );
+    download(`comic-strip-${stamp()}.${ext}`, blob);
+    cStatus(`한 장으로 저장했습니다 · ${sizeText(blob.size)}`);
+  } catch (err) {
+    cStatus(`저장하지 못했습니다: ${err.message}`, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$('cSaveTxt').addEventListener('click', () => {
+  if (!state.comic.images.length) { cStatus('저장할 것이 없습니다.', true); return; }
+  download(`comic-${stamp()}.txt`, new Blob([comicPlainText(state.comic.images, state.comic.items)], { type: 'text/plain;charset=utf-8' }));
+});
+
+$('cClearAll').addEventListener('click', () => {
+  const any = Object.values(state.comic.items).some((x) => x.bubbles.length);
+  if (any && !confirm('모든 컷의 말풍선을 지울까요? 시나리오와 사진은 남습니다.')) return;
+  for (const item of Object.values(state.comic.items)) { item.bubbles = []; item.status = 'empty'; item.error = ''; }
+  selectBubble('', '');
+  renderComicImages();
+  renderComicList();
+  scheduleSave(0);
+});
+
+/* ------------------------------------------------------------ 사진 올리기 */
+
+async function addComicFiles(files) {
+  const arr = Array.from(files || []);
+  if (!arr.length) return;
+  const note = $('cLoadNote');
+  note.hidden = true;
+  cStatus('사진을 읽는 중…');
+  try {
+    const { images, errors } = await collectImages(arr, {
+      maxDim: Math.max(0, Number($('maxDim').value) || 0),
+      keepOriginal: true,                  // 저장할 때 원본 위에 말풍선을 얹는다
+      onProgress: (d, t, name) => cStatus(`사진 처리 중 ${d}/${t} ${name}`)
+    });
+    const before = state.comic.images.length;
+    state.comic.images = state.comic.images.concat(images);
+    if (before <= 8 && state.comic.images.length > 8 && $('cImagesBox').open) {
+      $('cImagesBox').open = false;
+      saveSettings();
+    }
+    renderComicImages();
+    renderComicList();
+    scheduleSave(0);
+    if (errors.length) { note.hidden = false; note.textContent = errors.join('\n'); }
+    cStatus(state.comic.images.length ? `${state.comic.images.length}컷 준비됨. 컷마다 시나리오를 적어 주세요.` : '읽어들인 사진이 없습니다.');
+  } catch (err) {
+    note.hidden = false;
+    note.textContent = err.message;
+    cStatus('사진을 읽지 못했습니다.', true);
+  }
+}
+
+$('cFileInput').addEventListener('change', (e) => { addComicFiles(e.target.files); e.target.value = ''; });
+$('cPickFiles').addEventListener('click', () => $('cFileInput').click());
+$('cDrop').addEventListener('click', () => $('cFileInput').click());
+$('cDrop').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('cFileInput').click(); }
+});
+['dragenter', 'dragover'].forEach((t) => $('cDrop').addEventListener(t, (e) => {
+  e.preventDefault();
+  $('cDrop').classList.add('over');
+}));
+['dragleave', 'drop'].forEach((t) => $('cDrop').addEventListener(t, (e) => {
+  e.preventDefault();
+  $('cDrop').classList.remove('over');
+}));
+$('cDrop').addEventListener('drop', (e) => addComicFiles(e.dataTransfer?.files));
+$('cSortNow').addEventListener('click', () => {
+  state.comic.images = sortByName(state.comic.images);
+  renderComicImages();
+  renderComicList();
+  scheduleSave();
+});
+$('cClearImages').addEventListener('click', () => {
+  if (state.comic.images.length && !confirm('컷 사진과 말풍선을 모두 지울까요?')) return;
+  state.comic.images.forEach((i) => URL.revokeObjectURL(i.url));
+  state.comic.images = [];
+  state.comic.items = {};
+  selectBubble('', '');
+  renderComicImages();
+  renderComicList();
+  scheduleSave(0);
+});
+
+$('cRunBtn').addEventListener('click', () => runComic({}));
+$('cResumeBtn').addEventListener('click', () => runComic({ onlyEmpty: true }));
+$('cStopBtn').addEventListener('click', () => state.abort?.abort());
+$('comicFormat').addEventListener('change', saveSettings);
+
+bindProps();
 
 /* --------------------------------------------------------- AI 티 빼기 */
 
@@ -2336,9 +3282,10 @@ $('posterFont').addEventListener('input', () => { $('posterFontVal').textContent
 /* ------------------------------------------------------------- 탭 */
 
 function showTab(name) {
-  state.tab = name === 'shorts' ? 'shorts' : 'series';
+  state.tab = name === 'shorts' || name === 'comic' ? name : 'series';
   $('viewSeries').hidden = state.tab !== 'series';
   $('viewShorts').hidden = state.tab !== 'shorts';
+  $('viewComic').hidden = state.tab !== 'comic';
   document.querySelectorAll('.tabs button').forEach((b) => {
     b.setAttribute('aria-selected', String(b.dataset.view === state.tab));
   });
@@ -2367,6 +3314,8 @@ renderImages();
 renderStory();
 renderShortImages();
 renderShorts();
+renderComicImages();
+renderComicList();
 if (!storageAvailable()) {
   $('optAutosave').checked = false;
   $('optAutosave').disabled = true;

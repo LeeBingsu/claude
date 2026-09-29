@@ -110,6 +110,54 @@ body {
 .short .prose { padding: 4px 2px; font-size: calc(15.5px * var(--prose-scale)); line-height: 1.85; }
 .short .err { font-size: 12px; color: var(--bad); margin: 6px 0 0; }
 
+/* ------------------------------------------------------------------ 만화 */
+.comics { display: flex; flex-direction: column; gap: 18px; margin-top: 14px; }
+.comics .empty { color: var(--ink-3); font-size: 13px; text-align: center; padding: 20px 0; margin: 0; }
+.comic {
+  border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); padding: 12px;
+}
+.comic.busy { border-color: var(--accent); }
+.comic.fail { border-color: var(--bad); }
+.comic-head {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;
+  font-size: 12px; color: var(--ink-3);
+}
+.comic-head .spacer { flex: 1; }
+.comic-head button {
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink-2);
+  border-radius: 8px; padding: 4px 9px; font-size: 11.5px; cursor: pointer;
+}
+.comic-head button:hover { color: var(--ink); border-color: var(--accent); }
+.comic-scenario { font-size: 14px; line-height: 1.6; margin-bottom: 10px; resize: vertical; }
+.comic-stage { display: flex; justify-content: center; background: var(--panel); border-radius: 10px; padding: 6px; }
+.comic-canvas {
+  display: block; max-width: 100%; max-height: 78vh; width: auto; height: auto;
+  border-radius: 6px; background: var(--line); user-select: none; -webkit-user-select: none;
+}
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chip {
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink-2);
+  border-radius: 999px; padding: 4px 11px; font-size: 12px; cursor: pointer;
+}
+.chip:hover { border-color: var(--accent); color: var(--ink); }
+.chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.comic .err { font-size: 12px; color: var(--bad); margin: 8px 0 0; }
+
+.props {
+  margin-top: 10px; padding: 12px; border: 1px solid var(--accent); border-radius: 12px; background: var(--panel);
+}
+.props-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; font-size: 13px; }
+.props-head .spacer { flex: 1; }
+.props .grid { margin-bottom: 8px; }
+.props .field { margin-bottom: 4px; }
+.props input[type="color"] { width: 100%; height: 34px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); cursor: pointer; }
+.props .checks { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 6px 0 8px; }
+.props .tools { margin-top: 4px; }
+.adv-min { margin: 4px 0 8px; }
+.adv-min > summary { cursor: pointer; font-size: 12.5px; color: var(--ink-2); font-weight: 600; padding: 4px 0; }
+.adv-min > summary .hint { display: inline; font-weight: 400; }
+.adv-min[open] > summary { margin-bottom: 8px; }
+
 /* ---------------------------------------------------------------- 카드 */
 .card {
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);

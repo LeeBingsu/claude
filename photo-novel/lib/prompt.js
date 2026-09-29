@@ -184,7 +184,7 @@ export function memoDue(stepIndex, totalSteps, every) {
   return (stepIndex + 1) % n === 0;
 }
 
-function imagePart(image) {
+export function imagePart(image) {
   return { inline_data: { mime_type: image.mimeType, data: image.base64 } };
 }
 

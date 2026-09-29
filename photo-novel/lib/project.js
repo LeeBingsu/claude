@@ -3,6 +3,7 @@
 export const PROJECT_FILE = 'photo-novel.json';
 export const STORY_FILE = 'story.txt';
 export const SHORTS_FILE = 'shorts.txt';
+export const COMIC_FILE = 'comic.txt';
 export const FORMAT = 'photo-novel';
 export const FORMAT_VERSION = 1;
 
@@ -38,9 +39,12 @@ function imageMeta(img, i, folder) {
 */
 export function buildProject({
   images, passages, beats, memo, settings, story,
-  shorts = null, shortsText = '', date = new Date()
+  shorts = null, shortsText = '', comic = null, comicText = '', date = new Date()
 }) {
   const shortImages = shorts?.images || [];
+  const comicImages = comic?.images || [];
+  const comicFonts = comic?.fonts || [];
+  const fontFile = (f, i) => `fonts/${String(i + 1).padStart(3, '0')}-${safeFileName(f.name)}`;
   const manifest = {
     app: FORMAT,
     version: FORMAT_VERSION,
@@ -53,12 +57,18 @@ export function buildProject({
       images: shortImages.map((img, i) => imageMeta(img, i, 'shorts')),
       items: shorts?.items || {}
     },
+    comic: {
+      images: comicImages.map((img, i) => imageMeta(img, i, 'comic')),
+      items: comic?.items || {},
+      fonts: comicFonts.map((f, i) => ({ name: f.name, file: fontFile(f, i) }))
+    },
     settings: settings || {}
   };
 
   const files = [{ name: PROJECT_FILE, data: JSON.stringify(manifest, null, 2), compress: true }];
   if (story) files.push({ name: STORY_FILE, data: story, compress: true });
   if (shortsText) files.push({ name: SHORTS_FILE, data: shortsText, compress: true });
+  if (comicText) files.push({ name: COMIC_FILE, data: comicText, compress: true });
   images.forEach((img, i) => {
     files.push({ name: imageEntryName(i, img.name, 'images'), data: img.blob });  // 사진은 이미 압축돼 있다
   });
@@ -66,6 +76,11 @@ export function buildProject({
     // 단편은 원본 위에 글을 얹으므로, 남아 있으면 원본 쪽을 담는다.
     files.push({ name: imageEntryName(i, img.name, 'shorts'), data: img.original || img.blob });
   });
+  comicImages.forEach((img, i) => {
+    // 만화도 원본 위에 말풍선을 얹으므로 원본이 남아 있으면 원본을 담는다.
+    files.push({ name: imageEntryName(i, img.name, 'comic'), data: img.original || img.blob });
+  });
+  comicFonts.forEach((f, i) => files.push({ name: fontFile(f, i), data: f.blob }));
   return { manifest, files };
 }
 
@@ -89,6 +104,11 @@ export function readManifest(text) {
       shorts: {
         images: Array.isArray(data.shorts?.images) ? data.shorts.images : [],
         items: data.shorts?.items && typeof data.shorts.items === 'object' ? data.shorts.items : {}
+      },
+      comic: {
+        images: Array.isArray(data.comic?.images) ? data.comic.images : [],
+        items: data.comic?.items && typeof data.comic.items === 'object' ? data.comic.items : {},
+        fonts: Array.isArray(data.comic?.fonts) ? data.comic.fonts : []
       },
       passages: data.passages && typeof data.passages === 'object' ? data.passages : {},
       beats: data.beats && typeof data.beats === 'object' ? data.beats : {},
@@ -125,6 +145,8 @@ export function readProject(entries) {
     manifest: parsed.manifest,
     images: attach(parsed.manifest.images),
     shortImages: attach(parsed.manifest.shorts.images),
+    comicImages: attach(parsed.manifest.comic.images),
+    comicFonts: attach(parsed.manifest.comic.fonts).map((f) => ({ name: f.name, bytes: f.bytes })),
     missing
   };
 }
