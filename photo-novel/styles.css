@@ -330,6 +330,7 @@ html[data-theme="dark"] .btn.primary { color: #17131f; }
 .saved-row .hint { flex: 1; min-width: 180px; margin: 0; }
 
 .foot { text-align: center; color: var(--ink-3); font-size: 12px; margin-top: 26px; }
+.foot .made-by { margin: 6px 0 0; letter-spacing: .02em; }
 
 @media (max-width: 560px) {
   /* 좁은 화면에서는 제목이 눌리지 않게 도구를 아랫줄로 내린다 */
