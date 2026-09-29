@@ -1,6 +1,8 @@
 /* store.js - 사진과 본문을 IndexedDB 에 담아 두고 다음 방문에 되살린다.
    사진은 Blob 그대로 넣는다(localStorage 는 5MB 남짓이라 사진이 들어가지 않는다). */
 
+import { normalizeComic } from './comic.js';
+
 const DB_NAME = 'photoNovel';
 const DB_VERSION = 1;
 const META = 'meta';
@@ -92,12 +94,18 @@ export function normalizeShorts(items) {
   return out;
 }
 
-export async function saveWork({ images, passages, beats, memo, shorts }) {
+export async function saveWork({ images, passages, beats, memo, shorts, comic }) {
   const db = await openDb();
   const shortImages = shorts?.images || [];
+  const comicImages = comic?.images || [];
+  // 올려 쓴 글꼴 파일도 사진 창고에 함께 담는다(id 는 font:이름).
+  const fontRecs = (comic?.fonts || []).map((f) => ({
+    id: `font:${f.name}`, name: f.name, mimeType: f.blob.type || 'font/ttf',
+    width: 0, height: 0, converted: false, blob: f.blob, original: null
+  }));
   try {
-    // 두 탭이 같은 사진 창고를 쓰므로, 둘을 합친 것이 "남길 사진" 이다.
-    const all = [...images, ...shortImages];
+    // 세 탭이 같은 사진 창고를 쓰므로, 모두 합친 것이 "남길 사진" 이다.
+    const all = [...images, ...shortImages, ...comicImages, ...fontRecs];
     const wanted = [...new Set(all.map((i) => i.id))];
     const existing = await req(db.transaction(IMAGES, 'readonly').objectStore(IMAGES).getAllKeys());
     const plan = planImageSync(existing.map(String), wanted);
@@ -130,6 +138,11 @@ export async function saveWork({ images, passages, beats, memo, shorts }) {
       beats: beats || {},
       memo: memo || '',
       shorts: { order: shortImages.map((i) => i.id), items: normalizeShorts(shorts?.items) },
+      comic: {
+        order: comicImages.map((i) => i.id),
+        items: normalizeComic(comic?.items),
+        fonts: fontRecs.map((f) => ({ id: f.id, name: f.name }))
+      },
       updatedAt: Date.now()
     }, CURRENT);
     await done(t);
@@ -159,12 +172,28 @@ export async function loadWork() {
       }
       return out;
     };
+    // 글꼴은 못 읽어도 작업을 막지 않는다. 그 글꼴만 빠진다.
+    const pickFonts = async (list) => {
+      const out = [];
+      for (const f of list || []) {
+        try {
+          const row = await req(db.transaction(IMAGES, 'readonly').objectStore(IMAGES).get(f.id));
+          if (row?.blob) out.push({ name: f.name, blob: row.blob });
+        } catch { /* 이 글꼴만 건너뛴다 */ }
+      }
+      return out;
+    };
     return {
       images: await pick(meta.order),
       passages: meta.passages || {},
       beats: meta.beats || {},
       memo: meta.memo || '',
       shorts: { images: await pick(meta.shorts?.order), items: meta.shorts?.items || {} },
+      comic: {
+        images: await pick(meta.comic?.order),
+        items: meta.comic?.items || {},
+        fonts: await pickFonts(meta.comic?.fonts)
+      },
       updatedAt: meta.updatedAt || 0
     };
   } finally {

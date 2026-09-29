@@ -7,6 +7,7 @@
 <meta name="description" content="사진 여러 장 또는 zip 을 올리면 Gemini 가 장면과 장면 사이를 잇는 소설을 써 주는 도구">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128214;</text></svg>">
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="fonts/fonts.css">
 </head>
 <body>
 <div class="wrap">
@@ -121,6 +122,19 @@
             처음 한 번은 브라우저가 "여러 파일 다운로드" 허용을 물을 수 있습니다.</p>
         </div>
       </div>
+      <div class="checks">
+        <label class="check"><input type="checkbox" id="optMirror" checked> 브라우저 저장소에 <b>사본을 하나 더</b> 자동 저장 (사진 원본·글·설정·글꼴 전부)</label>
+      </div>
+      <p class="hint" id="mirrorInfo"></p>
+      <div class="row wrap-row tools">
+        <button class="btn" id="mirrorNow" type="button">지금 사본 만들기</button>
+        <button class="btn" id="mirrorRestore" type="button">브라우저 사본에서 되살리기</button>
+      </div>
+      <p class="hint">위의 자동 저장은 사진과 글을 나눠 담고, 이 사본은 <b>프로젝트 전체를 zip 하나로</b> 별도 저장소에 한 번 더 둡니다.
+        기본 저장소를 못 읽거나 비어 있으면 열 때 이 사본에서 자동으로 되살립니다.
+        둘 다 이 브라우저 안에 있어서, 브라우저의 "사이트 데이터 삭제"를 하면 함께 사라집니다 — 그럴 때를 위해 아래 파일 백업이 있습니다.
+        API 키는 보안상 사본에 넣지 않습니다(이 브라우저에 저장 체크를 하면 따로 남습니다).</p>
+      <p class="hint" id="storageInfo"></p>
       <div class="row wrap-row tools">
         <button class="btn" id="backupNow" type="button">지금 백업 받기</button>
         <button class="btn" id="backupRestore" type="button">백업에서 되살리기</button>
@@ -269,6 +283,7 @@
   <nav class="tabs" role="tablist">
     <button role="tab" data-view="series" aria-selected="true">연작 소설 — 사진 사이를 잇기</button>
     <button role="tab" data-view="shorts" aria-selected="false">한 장씩 단편 — 사진마다 따로</button>
+    <button role="tab" data-view="comic" aria-selected="false">만화 — 컷마다 말풍선</button>
   </nav>
 
   <div id="viewSeries">
@@ -497,8 +512,202 @@
 
   </div><!-- /viewShorts -->
 
+  <!-- ------------------------------------------------------------- 만화 -->
+  <div id="viewComic" hidden>
+
+    <section class="card">
+      <div class="card-head">
+        <h2><span class="num">2</span> 컷 사진 올리기</h2>
+        <span class="pill"><b id="cCountVal">0</b>컷</span>
+      </div>
+
+      <div id="cDrop" class="drop" tabindex="0" role="button" aria-label="컷 사진 올리기">
+        <div class="drop-in">
+          <div class="drop-sym">&#128172;</div>
+          <div><b>여기로 끌어다 놓거나 눌러서 선택</b></div>
+          <div class="hint">사진 한 장이 한 컷입니다 · 1.jpg, 2.jpg … 이름 순서가 컷 순서 · zip 도 됩니다</div>
+        </div>
+        <input type="file" id="cFileInput" multiple accept="image/*,.zip,application/zip" hidden>
+      </div>
+
+      <div class="row wrap-row tools">
+        <button class="btn ghost" id="cPickFiles" type="button">파일 선택</button>
+        <button class="btn ghost" id="cSortNow" type="button">이름순 재정렬</button>
+        <button class="btn ghost danger" id="cClearImages" type="button">모두 지우기</button>
+      </div>
+      <p class="note" id="cLoadNote" hidden></p>
+
+      <details class="thumbs-box" id="cImagesBox" open>
+        <summary>컷 목록 <span class="hint" id="cListHint">(0컷)</span></summary>
+        <ul class="thumbs" id="cImageList"></ul>
+      </details>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2><span class="num">3</span> 시나리오로 말풍선 글 만들기</h2></div>
+      <p class="hint" style="margin-top:0">아래 <b>컷 편집</b>에서 컷마다 간단한 시나리오를 적고 여기서 만들면,
+        Gemini 가 사진과 시나리오를 보고 인물들의 대사를 써서 말풍선으로 얹어 줍니다.
+        시나리오를 비워 두면 사진만 보고 씁니다.</p>
+
+      <div class="field">
+        <label for="comicCast">등장인물 (선택)</label>
+        <textarea id="comicCast" rows="3" placeholder="예) 하린: 20대 여자, 밝고 덜렁댄다. 반말.&#10;지오: 하린의 동갑 친구, 무뚝뚝하지만 다정하다. 존댓말."></textarea>
+        <p class="hint">이름과 말투를 적어 두면 컷이 바뀌어도 같은 인물로 이어집니다.</p>
+      </div>
+
+      <div class="field">
+        <label for="comicInstructions">맞춤 지시사항 (만화 전용)</label>
+        <textarea id="comicInstructions" rows="3" placeholder="예) 웹툰 말투. 대사는 짧게 한 줄씩. 효과음 대신 인물의 속마음을 자주 넣을 것."></textarea>
+        <p class="hint">이 탭에서만 씁니다. 다른 탭의 지시사항과 섞이지 않습니다. 말투·분량·분위기를 여기서 정하세요.</p>
+      </div>
+
+      <div class="grid">
+        <div class="field">
+          <label for="comicLang">대사 언어</label>
+          <select id="comicLang"></select>
+        </div>
+        <div class="field">
+          <label for="comicMax">컷마다 말풍선 최대</label>
+          <input type="number" id="comicMax" min="1" max="12" step="1" value="4">
+        </div>
+        <div class="field">
+          <label for="comicFontSet">글꼴 세트</label>
+          <select id="comicFontSet"></select>
+          <p class="hint">말의 종류(대화·생각·외침·속삭임·설명)마다 어울리는 글꼴을 자동으로 고릅니다.
+            눈누의 "무료 상용 폰트" 11종이고, 쓰임은 눈누 안내를 따랐습니다.
+            KoPub 바탕·KoPub 돋움·미원체는 재배포가 금지돼 담지 못했습니다. 공식 사이트에서 받아 아래
+            "글꼴 파일 올리기"로 올리면 그 이름으로 쓰이고, 올리기 전에는 비슷한 글꼴로 보입니다.</p>
+        </div>
+      </div>
+      <div class="row wrap-row tools">
+        <button class="btn ghost" id="cFontSetApply" type="button">이미 만든 말풍선에 이 글꼴 세트 적용</button>
+      </div>
+      <div class="checks">
+        <label class="check"><input type="checkbox" id="comicContext" checked> 앞선 컷의 시나리오·대사를 참고해 이어 쓰기</label>
+      </div>
+
+      <div class="row wrap-row tools">
+        <button class="btn primary" id="cRunBtn" type="button">말풍선 글 만들기</button>
+        <button class="btn" id="cResumeBtn" type="button">빈 컷만 이어서</button>
+        <button class="btn danger" id="cStopBtn" type="button" hidden>중단</button>
+      </div>
+      <div class="bar"><div class="bar-in" id="cBarIn"></div></div>
+      <p class="status" id="cStatus">사진을 올리고 컷마다 시나리오를 적은 뒤 시작하세요. API 키와 모델은 위 설정을 함께 씁니다.</p>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2><span class="num">4</span> 컷 편집</h2>
+        <span class="pill"><b id="cDoneVal">0</b>컷 완성</span>
+      </div>
+      <p class="hint" style="margin-top:0">대사를 만든 뒤 <b>사진을 터치해서 말풍선을 하나씩 놓습니다.</b> 터치한 자리가 말풍선의 가운데가 되고,
+        터치한 채 말하는 사람 쪽으로 끌면 꼬리가 그쪽을 가리킵니다. 놓은 뒤에는 <b>끌어서 옮기고</b>, 오른쪽 아래 <b>동그라미</b>를 끌어 크기를,
+        꼬리 끝의 <b>보라 점</b>을 끌어 가리키는 곳을 바꿉니다. 모양·색·글자체는 말풍선을 누르면 나오는 칸에서 고칩니다.
+        앱이 자리를 정해 주지는 않습니다.</p>
+
+      <div class="grid">
+        <div class="field">
+          <label for="comicFormat">파일 형식</label>
+          <select id="comicFormat">
+            <option value="image/jpeg">JPEG (용량 작음)</option>
+            <option value="image/png">PNG (선명함)</option>
+          </select>
+        </div>
+      </div>
+      <div class="row wrap-row tools">
+        <button class="btn ghost" id="cSaveAll" type="button">전체 그림으로 저장 (.zip)</button>
+        <button class="btn ghost" id="cSaveStrip" type="button">세로로 이어 한 장으로 저장</button>
+        <button class="btn ghost" id="cSaveTxt" type="button">대사 .txt 저장</button>
+        <button class="btn ghost danger" id="cClearAll" type="button">말풍선 모두 지우기</button>
+      </div>
+
+      <div id="cList" class="comics"><p class="empty">사진을 올리면 컷이 여기에 나타납니다.</p></div>
+
+      <!-- 선택한 말풍선을 고치는 칸. 고른 컷 아래로 옮겨 붙는다. -->
+      <div id="comicProps" class="props" hidden>
+        <div class="props-head">
+          <b id="cpTitle">말풍선</b>
+          <span class="spacer"></span>
+          <button class="btn ghost" id="cpUnplace" type="button" title="다시 사진을 터치해서 놓기">다시 놓기</button>
+          <button class="btn ghost" id="cpFront" type="button" title="맨 앞으로">앞으로</button>
+          <button class="btn ghost" id="cpBack" type="button" title="맨 뒤로">뒤로</button>
+          <button class="btn ghost" id="cpDup" type="button">복제</button>
+          <button class="btn ghost danger" id="cpDel" type="button">삭제</button>
+        </div>
+
+        <div class="field">
+          <label for="cpText">글</label>
+          <textarea id="cpText" rows="2"></textarea>
+        </div>
+
+        <div class="grid">
+          <div class="field">
+            <label for="cpSpeaker">말하는 사람</label>
+            <input type="text" id="cpSpeaker" maxlength="40" spellcheck="false">
+          </div>
+          <div class="field">
+            <label for="cpShape">모양</label>
+            <select id="cpShape"></select>
+          </div>
+          <div class="field">
+            <label for="cpFont">글자체</label>
+            <select id="cpFont"></select>
+            <input type="text" id="cpFontCustom" placeholder="글꼴 이름 (기기에 깔린 것)" spellcheck="false" hidden>
+          </div>
+          <div class="field">
+            <label for="cpAlign">글 정렬</label>
+            <select id="cpAlign"><option value="center">가운데</option><option value="left">왼쪽</option></select>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="field"><label for="cpFill">채우기 색</label><input type="color" id="cpFill"></div>
+          <div class="field"><label for="cpStroke">테두리 색</label><input type="color" id="cpStroke"></div>
+          <div class="field"><label for="cpColor">글자 색</label><input type="color" id="cpColor"></div>
+        </div>
+
+        <div class="grid">
+          <div class="field"><label for="cpAlpha">채우기 진하기 <b class="val" id="cpAlphaVal"></b></label><input type="range" id="cpAlpha" min="0" max="100" step="5"></div>
+          <div class="field"><label for="cpStrokeW">테두리 굵기 <b class="val" id="cpStrokeWVal"></b></label><input type="range" id="cpStrokeW" min="0" max="12" step="1"></div>
+          <div class="field"><label for="cpFs">글자 크기 <b class="val" id="cpFsVal"></b></label><input type="range" id="cpFs" min="10" max="120" step="1"></div>
+        </div>
+
+        <details class="adv-min">
+          <summary>위치·크기를 숫자로 맞추기 <span class="hint">(끌어서 옮기는 것과 같습니다)</span></summary>
+        <div class="grid">
+          <div class="field"><label for="cpX">가로 위치 <b class="val" id="cpXVal"></b></label><input type="range" id="cpX" min="-20" max="120" step="1"></div>
+          <div class="field"><label for="cpY">세로 위치 <b class="val" id="cpYVal"></b></label><input type="range" id="cpY" min="-20" max="120" step="1"></div>
+          <div class="field"><label for="cpW">너비 <b class="val" id="cpWVal"></b></label><input type="range" id="cpW" min="4" max="100" step="1"></div>
+          <div class="field"><label for="cpH">높이 <b class="val" id="cpHVal"></b></label><input type="range" id="cpH" min="3" max="100" step="1"></div>
+        </div>
+        </details>
+
+        <div class="checks">
+          <label class="check"><input type="checkbox" id="cpBold"> 굵게</label>
+          <label class="check"><input type="checkbox" id="cpItalic"> 기울임</label>
+          <label class="check"><input type="checkbox" id="cpAutoFit"> 넘치면 글자 자동 줄임</label>
+          <label class="check"><input type="checkbox" id="cpTail"> 꼬리</label>
+        </div>
+
+        <div class="row wrap-row tools">
+          <button class="btn ghost" id="cpFit" type="button">글에 맞춰 크기 조정</button>
+          <button class="btn ghost" id="cpTailReset" type="button">꼬리 자리 되돌리기</button>
+          <button class="btn ghost" id="cpFontUpload" type="button">글꼴 파일 올리기</button>
+          <input type="file" id="cpFontFile" accept=".ttf,.otf,.woff,.woff2,font/*" hidden>
+        </div>
+        <div class="row wrap-row tools">
+          <button class="btn ghost" id="cpStyleCut" type="button">이 모양을 이 컷 전체에</button>
+          <button class="btn ghost" id="cpStyleAll" type="button">이 모양을 모든 컷에</button>
+        </div>
+        <p class="hint">목록의 글꼴은 사이트에 담긴 것이라 어느 기기에서나 같게 보입니다. "(파일 올려야 함)" 글꼴은 파일(.ttf, .otf, .woff)을
+          올리면 그 자리에 쓰이고, 다른 글꼴 파일을 올리면 목록에 더해집니다. 올린 파일은 저장·백업에도 함께 들어갑니다.</p>
+      </div>
+    </section>
+  </div><!-- /viewComic -->
+
   <footer class="foot">
     브라우저에서만 동작하는 정적 페이지입니다 · 사진과 API 키는 서버로 보내지 않습니다
+    <p class="made-by">made by Rinple</p>
   </footer>
 </div>
 

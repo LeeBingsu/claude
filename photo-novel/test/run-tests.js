@@ -15,6 +15,12 @@ import { planImageSync, normalizePassages, normalizeShorts } from '../lib/store.
 import { wrapLines } from '../lib/poster.js';
 import { ownCopy } from '../lib/images.js';
 import { buildSettingsFile, readSettingsFile } from '../lib/settings-file.js';
+import { mirrorAvailable, requestPersistence, storageInfo, MIRROR_MAX_BYTES } from '../lib/mirror.js';
+import {
+  parseDialogue, makeBubble, normalizeBubble, normalizeComic, copyStyle, sizeBubble, placeBubble, nextUnplaced, defaultTail,
+  bubblesFromDialogue, hitTest, tailGeometry, layoutText, resolveFont, comicPlainText, buildComicParts, buildComicSystem,
+  FONT_PRESETS, FONT_SETS, fontSetFor, applyFontSet, fontKey, loadFonts, fontWeight, presetKey, ownFontFor, fontCss
+} from '../lib/comic.js';
 import { buildProject, readProject, readManifest, imageEntryName, safeFileName, PROJECT_FILE } from '../lib/project.js';
 import {
   planChunks, byteLen, libreRequest, parseLibre, myMemoryRequest, parseMyMemory, translateText, DEFAULT_ENDPOINT
@@ -791,6 +797,271 @@ await check('같은 언어면 부르지 않는다', async () => {
   });
   eq(called, 0, '요청 수');
   eq(out, '밤', '원문 그대로');
+});
+
+/* ------------------------------------------------------ 브라우저 사본 */
+
+await check('브라우저 저장소가 없는 환경에서도 사본 도구는 던지지 않는다', async () => {
+  eq(mirrorAvailable(), false, 'indexedDB 없음');
+  eq(await requestPersistence(), null, '영구 보관 요청 불가');
+  const info = await storageInfo();
+  eq([info.usage, info.quota, info.persisted, info.secure], [null, null, null, false], '알 수 없는 값은 null');
+  ok(MIRROR_MAX_BYTES > 50 * 1024 * 1024, '사본 한도가 사진 몇 장보다 넉넉하다');
+});
+
+/* ------------------------------------------------------------- 만화 */
+
+/* 글자 하나가 글자 크기의 0.95배 폭이라고 치는 가짜 재기 도구 */
+const fakeMeasure = (font) => { const px = Number(/(\d+(?:\.\d+)?)px/.exec(font)[1]); return (s) => s.length * px * 0.95; };
+
+await check('대사: 코드 울타리·군말이 붙은 JSON 도 읽는다 (위치 값이 섞여 와도 무시)', () => {
+  const raw = '여기 있습니다:\n```json\n[{"speaker":"하린","type":"say","text":"“안녕?”","mouth":{"x":420,"y":300}},'
+    + '{"speaker":"","type":"설명","text":"그날 밤"},{"speaker":"지오","type":"생각","text":"뭐지"}]\n```\n끝';
+  const d = parseDialogue(raw, 8);
+  eq(d.map((x) => x.type), ['say', 'narration', 'think'], '종류(한글 별칭 포함)');
+  eq(d[0].text, '안녕?', '따옴표 벗김');
+  ok(!('mouth' in d[0]), '위치는 받지 않는다 — 자리는 작가가 정한다');
+});
+
+await check('대사: JSON 이 아니면 "이름: 대사" 줄로 읽고, 개수를 자른다', () => {
+  const d = parseDialogue('하린: 안녕\n지오 (생각): 누구지?\n잡담이라 건너뜀\n하린: 또', 2);
+  eq(d.map((x) => [x.speaker, x.type, x.text]), [['하린', 'say', '안녕'], ['지오', 'think', '누구지?']], '두 개만');
+  eq(parseDialogue('읽을 게 없다', 4), [], '빈 결과');
+  eq(parseDialogue('[{"text":""},{"speaker":"a","text":"  "}]', 4), [], '빈 글은 버린다');
+});
+
+await check('말풍선 값은 안전한 범위로 고쳐 담는다', () => {
+  const b = normalizeBubble({ shape: 'evil', type: '?', x: 99, w: -3, fs: 5, fill: 'red;}', stroke: '#abc', fillAlpha: 7, font: '  ', align: 'right' });
+  eq([b.shape, b.type], ['oval', 'say'], '모르는 종류는 기본값');
+  ok(b.x <= 1.5 && b.w >= 0.04 && b.fs <= 0.2, '범위');
+  eq([b.fill, b.stroke], ['#ffffff', '#abc'], '색은 #색만');
+  eq([b.fillAlpha, b.font, b.align], [1, 'ridi', 'center'], '나머지 기본값');
+  ok(/^b/.test(b.id), 'id 부여');
+});
+
+await check('말의 종류마다 처음 모양이 다르다', () => {
+  eq(makeBubble({ type: 'think' }).shape, 'cloud', '생각');
+  const shout = makeBubble({ type: 'shout', text: '!' });
+  ok(shout.shape === 'burst' && shout.italic && shout.bold && shout.font === 'dohyeon' && shout.fs > makeBubble({ type: 'say' }).fs, '외침은 뾰족·기울임·굵은 글꼴·크게');
+  const nar = makeBubble({ type: 'narration', text: '밤' });
+  ok(nar.shape === 'box' && !nar.tail.on && nar.align === 'left', '설명 글상자는 꼬리 없음');
+  eq(makeBubble({ type: 'say' }, { font: 'simple', color: '#ff0000' }).font, 'simple', '고른 스타일을 이어받음');
+});
+
+await check('만든 말풍선은 글에 맞춰 크기만 잡고, 자리는 잡지 않는다 (모두 아직 안 놓은 상태)', () => {
+  const dialogue = [
+    { speaker: 'a', type: 'say', text: '안녕하세요, 오랜만이에요. 잘 지냈어요?' },
+    { speaker: 'b', type: 'say', text: '네.' },
+    { speaker: '', type: 'narration', text: '그날 저녁' }
+  ];
+  const bs = bubblesFromDialogue(dialogue, { measureFor: fakeMeasure, W: 1000, H: 700 });
+  ok(bs.every((b) => b.placed === false), '모두 미배치');
+  ok(bs[0].w * bs[0].h > bs[1].w * bs[1].h, '글이 긴 쪽이 더 크다');
+  ok(bs.every((b) => b.w <= 0.9 && b.h <= 0.7), '크기 한도');
+  ok(!bs[2].tail.on, '설명 글상자는 꼬리 없음');
+});
+
+await check('터치한 자리가 말풍선의 가운데가 되고, 사진 밖으로 나가지 않는다', () => {
+  const b = makeBubble({ type: 'say', text: 'a' });
+  Object.assign(b, { w: 0.3, h: 0.2, placed: false });
+  placeBubble(b, 0.5, 0.5);
+  eq([b.placed, +(b.x + b.w / 2).toFixed(3), +(b.y + b.h / 2).toFixed(3)], [true, 0.5, 0.5], '가운데');
+  placeBubble(b, 0.99, 0.99);
+  ok(b.x + b.w <= 1 && b.y + b.h <= 1, '오른쪽 아래 끝을 눌러도 안쪽으로');
+  placeBubble(b, 0, 0);
+  ok(b.x >= 0 && b.y >= 0, '왼쪽 위 끝을 눌러도 안쪽으로');
+  placeBubble(b, 0.5, 0.5);
+  eq([b.tail.x, b.tail.on], [0.5, true], '꼬리는 기본으로 아래쪽');
+  ok(b.tail.y > b.y + b.h, '꼬리 끝은 말풍선 아래');
+  const nar = makeBubble({ type: 'narration', text: '밤' });
+  eq(defaultTail(nar).on, false, '설명 글상자는 꼬리 없음');
+});
+
+await check('다음에 놓을 말풍선: 고른 것이 먼저, 없으면 순서대로', () => {
+  const l = [makeBubble({ text: 'a' }), makeBubble({ text: 'b' }), makeBubble({ text: 'c' })];
+  l[0].placed = true; l[1].placed = false; l[2].placed = false;
+  eq(nextUnplaced(l).text, 'b', '순서대로');
+  eq(nextUnplaced(l, l[2].id).text, 'c', '고른 것이 먼저');
+  eq(nextUnplaced(l, l[0].id).text, 'b', '이미 놓은 것을 골랐으면 무시');
+  l[1].placed = true; l[2].placed = true;
+  eq(nextUnplaced(l), null, '다 놓았다');
+});
+
+await check('저장된 말풍선은 놓인 것으로 읽고, 안 놓은 표시는 그대로 남는다', () => {
+  eq(normalizeBubble({ text: '옛날 말풍선' }).placed, true, '옛 데이터는 놓인 것');
+  eq(normalizeBubble({ text: 'x', placed: false }).placed, false, '안 놓은 표시 유지');
+});
+
+await check('다시 만들어도 정해 둔 색·글자체·모양은 이어 간다', () => {
+  const style = { font: 'hippie', color: '#112233', stroke: '#ff0000', fill: '#aaddff', shape: 'round' };
+  const bs = bubblesFromDialogue([
+    { speaker: 'a', type: 'say', text: '안녕' },
+    { speaker: 'b', type: 'shout', text: '악!' },
+    { speaker: '', type: 'narration', text: '밤' }
+  ], { measureFor: fakeMeasure, W: 1000, H: 700, style });
+  eq([bs[0].font, bs[0].fill, bs[0].shape, bs[0].stroke], ['hippie', '#aaddff', 'round', '#ff0000'], '말: 모두 이어감');
+  eq([bs[1].font, bs[1].fill, bs[1].shape], ['hippie', '#aaddff', 'burst'], '외침: 색은 이어가고 모양은 종류대로');
+  eq([bs[2].font, bs[2].fill, bs[2].shape], ['hippie', '#fff6d6', 'box'], '설명: 자기 바탕색과 네모');
+});
+
+await check('줄바꿈: 물음표·마침표·닫는 따옴표는 앞 글자에 붙고, 여는 따옴표는 뒤 글자에 붙는다', () => {
+  const m = (s) => s.length * 10;
+  eq(wrapLines(m, '왜 이제 와?', 50), ['왜 이제', '와?'], '?가 홀로 남지 않는다');
+  ok(!wrapLines(m, '그가 "안녕"이라고 말했다.', 60).some((l) => /^[.,!?"”」』…]/.test(l)), '줄 첫머리에 닫는 부호가 없다');
+  ok(!wrapLines(m, '그가 "안녕"이라고 말했다.', 60).some((l) => /["“「『(]$/.test(l)), '줄 끝에 여는 부호가 홀로 남지 않는다');
+  eq(wrapLines(m, 'hello, world! (test) ok', 110), ['hello,', 'world!', '(test) ok'], '영어 낱말은 그대로 붙는다');
+});
+
+await check('글꼴 세트: 말의 종류마다 글꼴이 정해지고, 이미 만든 것에도 다시 적용된다', () => {
+  eq(['say', 'think', 'shout', 'whisper', 'narration'].map((t) => fontSetFor('basic', t)), ['ridi', 'dangdang', 'dohyeon', 'restart', 'kopubbatang'], '기본 세트');
+  eq([fontSetFor('casual', 'say'), fontSetFor('serious', 'shout')], ['kopubdotum', 'miwon'], '캐주얼·진지 세트');
+  eq(fontSetFor('없는세트', 'say'), 'ridi', '모르는 세트(옛 세트 이름 포함)는 기본');
+  eq(makeBubble({ type: 'say' }, { fontSet: 'dreamy' }).font, 'surround', '세트로 만들기');
+  eq(makeBubble({ type: 'say' }, { fontSet: 'dreamy', font: 'squareneo' }).font, 'squareneo', '직접 고른 글꼴이 세트보다 앞선다');
+  const shout = makeBubble({ type: 'shout' });
+  eq([shout.bold, shout.italic], [true, true], '외침은 굵게·기울임(눈누 안내)');
+  const list = [makeBubble({ type: 'say' }), makeBubble({ type: 'shout' })];
+  applyFontSet(list, 'serious');
+  eq([list[0].font, list[1].font, list[1].italic, list[1].bold, list[0].italic], ['kopubbatang', 'miwon', true, true, false], '다시 적용');
+  for (const set of Object.values(FONT_SETS)) for (const t of ['say', 'think', 'shout', 'whisper', 'narration']) ok(FONT_PRESETS[set[t]], `${t} → ${set[t]} 가 프리셋에 있다`);
+  eq(fontKey([{ font: 'a', bold: false, italic: true }, { font: 'a', bold: false, italic: true }]), 'a|0|1', '같은 글꼴은 한 번만');
+  eq(Object.keys(FONT_PRESETS).length, 12, '11종 + Heavy 변형');
+});
+
+await check('글꼴: 옛 이름은 새 글꼴로 옮겨지고, 담지 못한 글꼴은 올린 파일 이름으로 알아본다', () => {
+  eq(['gothic', 'serif', 'black', 'hand', 'mono'].map(presetKey), ['ridi', 'kopubbatang', 'squareheavy', 'restart', 'ridi'], '옛 이름 대응');
+  eq(normalizeBubble({ font: 'gaegu' }).font, 'hippie', '저장된 말풍선도 새 이름으로');
+  eq(normalizeBubble({ font: '내글꼴' }).font, '내글꼴', '모르는 이름은 그대로(올린 글꼴)');
+  eq(ownFontFor('KoPubWorld Batang Medium.ttf')?.key, 'kopubbatang', 'KoPub 바탕 파일');
+  eq(ownFontFor('KoPubWorld돋움체_Pro Medium.otf')?.key, 'kopubdotum', 'KoPub 돋움 파일');
+  eq(ownFontFor('MiwonB.ttf')?.alias, '미원체', '미원체 파일');
+  eq(ownFontFor('아무거나.ttf'), null, '그 밖은 그냥 올린 글꼴');
+  ok(resolveFont('kopubbatang').startsWith('"KoPub 바탕"'), '올린 글꼴이 먼저');
+  ok(resolveFont('kopubbatang').includes('"PN RIDIBatang"'), '올리기 전에는 리디바탕으로');
+  ok(resolveFont('miwon').includes('"PN NanumSquare Neo"'), '미원체는 나눔스퀘어 네오로');
+  eq([fontWeight({ font: 'ridi', bold: false }), fontWeight({ font: 'ridi', bold: true }), fontWeight({ font: 'squareheavy', bold: false }), fontWeight({ font: 'miwon', bold: true })], [400, 700, 900, 900], '굵기');
+  ok(fontCss({ font: 'squareheavy', italic: false, bold: false }, 30).startsWith('900 30px "PN NanumSquare Neo"'), '캔버스 글꼴 문자열');
+});
+
+await check('글꼴 불러오기: 쓰는 글꼴만, 한 번씩, 실패해도 던지지 않는다', async () => {
+  const asked = [];
+  const doc = { fonts: { load: (css, text) => { asked.push(css); return css.includes('Broken') ? Promise.reject(new Error('x')) : Promise.resolve([]); } } };
+  await loadFonts([
+    { font: 'ridi', bold: false, italic: false, text: '가' }, { font: 'ridi', bold: false, italic: false, text: '나' },
+    { font: 'dohyeon', bold: true, italic: true, text: '악' }, { font: 'Broken', bold: true, italic: false, text: '깨짐' }
+  ], doc);
+  eq(asked.length, 3, '중복은 한 번');
+  ok(asked.some((c) => c.startsWith('italic 700 32px "PN BM Dohyeon"')), '외침 글꼴은 굵게·기울임으로 부른다');
+  await loadFonts([{ font: 'ridi', text: 'a' }], {});               // fonts 가 없는 환경
+});
+
+await check('말풍선을 눌러 잡는다: 꼬리 끝·모서리·몸통 순', () => {
+  const bs = [makeBubble({ type: 'say', text: 'a' }), makeBubble({ type: 'say', text: 'b' })];
+  Object.assign(bs[0], { x: 0.1, y: 0.1, w: 0.3, h: 0.2 });
+  Object.assign(bs[1], { x: 0.3, y: 0.1, w: 0.3, h: 0.2 });
+  bs[0].tail = { on: true, x: 0.2, y: 0.6 };
+  const W = 1000; const H = 700;
+  eq(hitTest(bs, 0.2, 0.6, W, H, bs[0].id)?.part, 'tail', '꼬리 끝');
+  eq(hitTest(bs, 0.4, 0.3, W, H, bs[0].id)?.part, 'resize', '오른쪽 아래 모서리');
+  eq(hitTest(bs, 0.55, 0.2, W, H, null)?.id, bs[1].id, '몸통');
+  eq(hitTest(bs, 0.35, 0.2, W, H, null)?.id, bs[1].id, '겹친 곳은 위에 그려진 것');
+  eq(hitTest(bs, 0.9, 0.9, W, H, null), null, '빈 곳');
+  eq(hitTest(bs, 0.2, 0.6, W, H, null), null, '고르지 않은 말풍선의 꼬리는 잡지 않는다');
+  bs[1].placed = false;
+  eq(hitTest(bs, 0.55, 0.2, W, H, null), null, '아직 안 놓은 말풍선은 눌러 잡히지 않는다');
+});
+
+await check('꼬리: 끝이 풍선 안이면 없고, 구름은 점, 설명 상자는 없다', () => {
+  const b = makeBubble({ type: 'say', text: 'a' });
+  Object.assign(b, { x: 0.2, y: 0.2, w: 0.3, h: 0.2 });
+  b.tail = { on: true, x: 0.35, y: 0.3 };
+  eq(tailGeometry(b, 1000, 700), null, '안쪽');
+  b.tail = { on: true, x: 0.35, y: 0.8 };
+  eq(tailGeometry(b, 1000, 700).kind, 'wedge', '곡선 삼각형');
+  b.shape = 'cloud';
+  eq(tailGeometry(b, 1000, 700).circles.length, 3, '구름은 점 세 개');
+  b.shape = 'box';
+  eq(tailGeometry(b, 1000, 700), null, '네모는 꼬리 없음');
+});
+
+await check('글이 넘치면 글자를 줄여 맞추고(35%까지), 끄면 그대로 둔다', () => {
+  const b = makeBubble({ type: 'say', text: '아주 아주 아주 긴 글이라서 작은 말풍선에는 도저히 들어가지 않는다 정말로 한참을 써 넣는다' });
+  Object.assign(b, { w: 0.12, h: 0.08, fs: 0.05 });
+  const fit = layoutText(b, 1000, 700, fakeMeasure);
+  ok(fit.fs < 50 && fit.fs >= 50 * 0.35 - 0.001, `줄어듦 (${fit.fs.toFixed(1)}px)`);
+  b.autoFit = false;
+  eq(Math.round(layoutText(b, 1000, 700, fakeMeasure).fs), 50, '자동 줄임을 끄면 그대로');
+});
+
+await check('글꼴 이름은 안전하게 이어 붙이고, 모양은 글은 두고 옮긴다', () => {
+  ok(resolveFont('ridi').includes('Nanum Myeongjo'), '기본 글꼴 묶음');
+  const custom = resolveFont('내 글꼴"; } body { x: y');
+  ok(!/[;{}]/.test(custom.split(',')[0]) && custom.startsWith('"'), `주입 방지 (${custom.slice(0, 40)})`);
+  const a = makeBubble({ type: 'say', text: '가' }); const b = makeBubble({ type: 'say', text: '나' });
+  a.fill = '#ffe066'; a.font = 'hippie'; a.shape = 'box';
+  copyStyle(a, b);
+  eq([b.fill, b.font, b.shape, b.text, b.tail.on], ['#ffe066', 'hippie', 'box', '나', false], '모양만 옮기고 글은 그대로, 네모는 꼬리 끄기');
+});
+
+await check('컷 저장: 쓰다 만 것은 남기지 않고, 말풍선이 있으면 완성', () => {
+  const out = normalizeComic({
+    a: { scenario: '문 앞', bubbles: [{ text: '안녕' }], status: 'busy' },
+    b: { scenario: '', bubbles: [], status: 'busy' },
+    c: { scenario: '시나리오만', bubbles: [], status: 'empty' },
+    d: { scenario: '', bubbles: [], status: 'error', error: '막힘' }
+  });
+  eq(Object.keys(out).sort(), ['a', 'c', 'd'], '빈 컷 b 는 버린다');
+  eq([out.a.status, out.c.status, out.d.status], ['done', 'empty', 'error'], '상태');
+  eq(out.d.error, '막힘', '오류 유지');
+});
+
+await check('프롬프트: 시나리오·인물·앞선 대사·최대 개수가 들어가고 출력 형식이 고정된다', () => {
+  const parts = buildComicParts({
+    image: { name: '2.jpg', mimeType: 'image/jpeg', base64: 'AA==' }, index: 1, total: 3,
+    scenario: '지오가 사과한다', cast: '하린: 밝다',
+    history: [{ index: 0, scenario: '하린이 화낸다', lines: ['하린: 왜 이제 와?'] }], max: 3, retryNote: '다시'
+  });
+  const text = parts.map((p) => p.text || '').join('\n');
+  ok(text.includes('컷 2/3') && text.includes('지오가 사과한다') && text.includes('하린: 밝다'), '시나리오·인물');
+  ok(text.includes('[컷 1]') && text.includes('하린: 왜 이제 와?') && text.includes('최대 3개') && text.includes('다시'), '앞선 대사·개수·재시도 안내');
+  ok(parts.some((p) => p.inline_data), '사진이 실린다');
+  const sys = buildComicSystem({ comicInstructions: '웹툰 말투', comicLangName: '일본어' });
+  ok(sys.includes('웹툰 말투') && sys.includes('일본어') && sys.includes('JSON 배열'), '지시사항·언어·형식');
+  ok(!sys.includes('mouth') && sys.includes('위치는 적지 않는다'), '위치를 요구하지 않는다');
+  ok(!buildComicParts({ image: { name: 'a', mimeType: 'image/png', base64: '' }, index: 0, total: 1, scenario: '' }).map((p) => p.text || '').join('').includes('앞선 컷들'), '앞선 컷이 없으면 그 절이 없다');
+});
+
+await check('대사 글 뽑기', () => {
+  const b = makeBubble({ type: 'think', text: '뭐지', speaker: '지오' });
+  const txt = comicPlainText([{ id: 'x', name: '1.jpg' }], { x: { scenario: '문 앞', bubbles: [b, makeBubble({ type: 'say', text: '안녕' })] } });
+  eq(txt, '[컷 1 — 1.jpg]\n시나리오: 문 앞\n지오 (생각): 뭐지\n말: 안녕', '한 줄에 하나');
+});
+
+await check('만화 컷은 내보내기·불러오기에서 사진 원본·말풍선·글꼴이 함께 오간다', () => {
+  const bub = makeBubble({ type: 'say', text: '안녕', speaker: '하린' });
+  const orig = { size: 3 };
+  const { manifest, files } = buildProject({
+    images: [], passages: {}, beats: {}, memo: '', settings: {}, story: '',
+    comic: {
+      images: [{ id: 'c1', name: '컷.jpg', mimeType: 'image/jpeg', blob: { size: 1 }, original: orig }],
+      items: { c1: { scenario: '문 앞', bubbles: [bub], status: 'done', error: '' } },
+      fonts: [{ name: '내글꼴', blob: { size: 5 } }]
+    },
+    comicText: '[컷 1]'
+  });
+  ok(files.some((f) => f.name === 'comic.txt'), '대사 txt');
+  const imgFile = files.find((f) => f.name.startsWith('comic/'));
+  ok(imgFile && imgFile.data === orig, '원본이 있으면 원본을 담는다');
+  ok(files.some((f) => f.name.startsWith('fonts/')), '글꼴 파일');
+  const entries = files.map((f) => ({ name: f.name, bytes: typeof f.data === 'string' ? new TextEncoder().encode(f.data) : new Uint8Array([1, 2, 3]) }));
+  const got = readProject(entries);
+  eq(got.comicImages.length, 1, '컷 사진');
+  eq(got.comicImages[0].id, 'c1', 'id 유지');
+  eq(got.comicFonts.map((f) => f.name), ['내글꼴'], '글꼴');
+  eq(got.manifest.comic.items.c1.bubbles[0].text, '안녕', '말풍선');
+  // 만화가 없던 예전 파일도 읽힌다
+  const old = readProject([{ name: PROJECT_FILE, bytes: new TextEncoder().encode(JSON.stringify({ app: 'photo-novel', version: 1, images: [], passages: {}, shorts: { images: [], items: {} } })) }]);
+  eq([old.comicImages, old.comicFonts], [[], []], '예전 파일');
 });
 
 /* --------------------------------------------------------- 설정 파일 */
