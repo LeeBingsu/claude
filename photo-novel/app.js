@@ -19,7 +19,7 @@ import {
   mirrorAvailable, saveMirror, loadMirror, mirrorInfo, clearMirror, requestPersistence, storageInfo, MIRROR_MAX_BYTES
 } from './lib/mirror.js';
 import {
-  SHAPES, TYPES, FONT_PRESETS, FONT_SETS, fontSetFor, applyFontSet, loadFonts, fontKey, makeBubble, normalizeBubble, normalizeComic, copyStyle, parseDialogue,
+  SHAPES, TYPES, FONT_PRESETS, FONT_SETS, DEFAULT_FONT, ownFontFor, presetKey, fontSetFor, applyFontSet, loadFonts, fontKey, makeBubble, normalizeBubble, normalizeComic, copyStyle, parseDialogue,
   sizeBubble, bubblesFromDialogue, hitTest, drawBubbles, drawHandles, renderComic, renderComicStrip,
   comicPlainText, buildComicSystem, buildComicParts, newBubbleId, placeBubble, nextUnplaced, defaultTail
 } from './lib/comic.js';
@@ -2566,8 +2566,8 @@ function syncProps() {
   $('cpText').value = b.text;
   $('cpSpeaker').value = b.speaker;
   $('cpShape').value = b.shape;
-  const known = Object.keys(FONT_PRESETS).includes(b.font) || state.comic.fonts.some((f) => f.name === b.font);
-  $('cpFont').value = known ? b.font : '__custom';
+  const known = Object.keys(FONT_PRESETS).includes(presetKey(b.font)) || state.comic.fonts.some((f) => f.name === b.font);
+  $('cpFont').value = known ? (FONT_PRESETS[presetKey(b.font)] ? presetKey(b.font) : b.font) : '__custom';
   $('cpFontCustom').hidden = known;
   $('cpFontCustom').value = known ? '' : b.font;
   $('cpAlign').value = b.align;
@@ -2627,7 +2627,7 @@ function bindProps() {
     $('cpFontCustom').hidden = true;
     editBubble((b) => { b.font = v; }, { remember: true });
   });
-  on('cpFontCustom', 'input', () => editBubble((b) => { b.font = $('cpFontCustom').value.trim() || 'gothic'; }, { remember: true }));
+  on('cpFontCustom', 'input', () => editBubble((b) => { b.font = $('cpFontCustom').value.trim() || DEFAULT_FONT; }, { remember: true }));
   on('cpAlign', 'change', () => editBubble((b) => { b.align = $('cpAlign').value; }));
   on('cpFill', 'input', () => editBubble((b) => { b.fill = $('cpFill').value; }));
   on('cpStroke', 'input', () => editBubble((b) => { b.stroke = $('cpStroke').value; }, { remember: true }));
@@ -2724,10 +2724,12 @@ function bindProps() {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    const name = file.name.replace(/\.[^.]+$/, '').replace(/["'\;{}<>]/g, '').trim().slice(0, 40) || 'font';
+    // KoPub·미원체처럼 저장소에 담지 못한 글꼴이면, 목록의 그 글꼴 이름으로 등록해 바로 쓰이게 한다.
+    const own = ownFontFor(file.name);
+    const name = own ? own.alias : file.name.replace(/\.[^.]+$/, '').replace(/["'\;{}<>]/g, '').trim().slice(0, 40) || 'font';
     try {
       await registerComicFont(name, file);
-      editBubble((b) => { b.font = name; }, { remember: true });
+      editBubble((b) => { b.font = own ? own.key : name; }, { remember: true });
       syncProps();
       redrawAllComic();
       cStatus(`글꼴 "${name}" 을 올렸습니다. 저장·백업에도 함께 들어갑니다.`);

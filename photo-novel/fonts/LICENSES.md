@@ -1,56 +1,39 @@
 # 함께 담은 글꼴
 
-말풍선에 쓰는 글꼴입니다. 모두 **SIL Open Font License 1.1(OFL)** 로 공개된 무료 글꼴이고, 출처는 Google Fonts 저장소(https://github.com/google/fonts, `ofl/` 폴더)입니다.
+말풍선에 쓰는 글꼴 11종 중 **8종**을 이 폴더에 담았습니다. 모두 **SIL Open Font License 1.1(OFL)** 이고, 출처는 눈누(noonnu.cc)에 적힌 배포처입니다.
+파일은 **바이트 그대로**(글자를 빼거나 이름을 바꾸지 않음) 받았고, `.woff` 로 받은 것만 `.woff2` 로 다시 압축했습니다(글리프 변경 없음).
+"PN " 접두어는 CSS 안의 가족 이름에만 붙였습니다.
 
-웹에서 가볍게 쓰려고 **woff2 로 바꾸고**, 글자 수가 많은 글꼴은 **한글 음절·자모, 라틴, 문장부호, 일본어 가나, 기호만 남기고 한자를 뺐습니다**(글꼴 이름은 CSS 안에서만 붙였습니다). 글리프를 바꾸거나 더한 것은 없습니다.
-한자·일본어 한자는 이 글꼴에 없으므로 기기에 있는 다른 글꼴로 대신 보입니다. 일부 글꼴(Black Han Sans, Do Hyeon, Jua, Song Myung, Gaegu, Yeon Sung, East Sea Dokdo)은 원래 한글 2,350자(KS X 1001)만 지원해서, 드문 글자는 다른 글꼴로 대신 보입니다.
+| 글꼴 | 만든 곳 | 쓰임(눈누 안내) | 파일 | 출처 |
+| --- | --- | --- | --- | --- |
+| 리디바탕 | 리디주식회사 | 기본 대사 (강조는 Bold) | RIDIBatang.woff2 | https://noonnu.cc/font_page/324 |
+| 카페24 당당해 | Cafe24 | 모노로그 | Cafe24Dangdanghae.woff2 | https://noonnu.cc/font_page/371 |
+| 카페24 심플해 | Cafe24 | 꿈꾸는 느낌의 대사 | Cafe24Simplehae.woff2 | https://noonnu.cc/font_page/344 |
+| 카페24 써라운드 | Cafe24 | 장난치거나 귀여운 대사 | Cafe24Ssurround.woff2 | https://noonnu.cc/font_page/669 |
+| 배달의민족 도현 | 우아한형제들 | 소리칠 때 (Bold/Italic) | DoHyeon.woff2 | https://noonnu.cc/font_page/55 |
+| 나눔스퀘어 네오 | 네이버 | Heavy 강조, 안내판 | NanumSquareNeo-Rg/Bd/Hv.woff2 | https://noonnu.cc/font_page/1053 |
+| 나눔손글씨 다시 시작해 | 네이버 | 속닥이는 대사 | Restart.woff2 | https://noonnu.cc/font_page/585 |
+| 나눔손글씨 바른히피 | 네이버 | 속닥이는 대사 | BareunHippie.woff2 | https://noonnu.cc/font_page/514 |
 
-| 글꼴 | 쓰임 | 파일 |
+## 담지 못한 글꼴 3종
+
+| 글꼴 | 이유 | 대신 |
 | --- | --- | --- |
-| Noto Sans KR | 고딕 · 기본 대화 | NotoSansKR.woff2 (가변 굵기 100–900) |
-| Gowun Dodum | 돋움 · 부드러운 고딕 | GowunDodum.woff2 |
-| Gowun Batang | 바탕 · 순정·나레이션 | GowunBatang.woff2, GowunBatang-Bold.woff2 |
-| Song Myung | 회상 · 흩날린 명조 | SongMyung.woff2 |
-| Black Han Sans | 굵은 외침 | BlackHanSans.woff2 |
-| Do Hyeon | 굵은 제목·기계음 | DoHyeon.woff2 |
-| Jua | 둥근 · 설명 상자 | Jua.woff2 |
-| Nanum Pen Script | 손글씨 | NanumPenScript.woff2 |
-| Gaegu | 개구 손글씨 | Gaegu.woff2, Gaegu-Bold.woff2 |
-| Hi Melody | 하이멜로디 | HiMelody.woff2 |
-| Poor Story | 푸어스토리 | PoorStory.woff2 |
-| Yeon Sung | 연성 | YeonSung.woff2 |
-| Single Day | 싱글데이 | SingleDay.woff2 |
-| Gamja Flower | 감자꽃 | GamjaFlower.woff2 |
-| East Sea Dokdo | 동해 독도 붓글씨 | EastSeaDokdo.woff2 |
+| KoPub바탕 (한국출판인회의) | 파일의 복제·배포 금지 (사용 등록 후 공식 사이트에서 받는 조건) | 공식 사이트에서 받아 "글꼴 파일 올리기"로 올리면 이 이름으로 쓰입니다. 올리기 전에는 리디바탕으로 보입니다. https://www.kopus.org/biz-electronic-font2/ |
+| KoPub돋움 (한국출판인회의) | 위와 같음 | 올리기 전에는 나눔스퀘어 네오로 보입니다. |
+| 미원체 (대상) | 웹폰트 임베딩·재배포 불가 | 올리기 전에는 나눔스퀘어 네오 Heavy로 보입니다. https://www.miwon.co.kr/brand-story/miwon-font/ |
 
-## 참고: 만화 식자 글꼴 가이드와의 관계
+올린 글꼴 파일은 이 브라우저와 사용자가 내려받는 프로젝트 zip 에만 들어가며, 사이트나 저장소에는 올라가지 않습니다.
 
-https://m.blog.naver.com/kkkhumor/40208211727 (식자 길라잡이 ver2.0)는 말풍선 종류마다 어울리는 글꼴 계열을 정리한 글입니다.
-거기 추천된 한컴돋움·윤고딕·HY 계열 등은 **상용 글꼴이라 이 저장소에 넣을 수 없습니다.** 대신 글이 말하는 **계열**(대화=고딕/돋움, 외침=굵은 고딕+기울임, 생각=얇은 고딕,
-나레이션·회상=바탕/명조, 설명 상자=둥근 고딕)에 맞는 무료 글꼴을 골라 "글꼴 세트"로 묶었습니다. 상용 글꼴이 있다면 말풍선 편집 칸의 "글꼴 파일 올리기"로 직접 올려 쓸 수 있습니다.
+## 저작권 표시
 
-## 저작권 표시와 라이선스
+- **리디바탕** — 리디주식회사 (https://ridicorp.com/ridibatang/), SIL OFL 1.1
+- **카페24 당당해 · 심플해 · 써라운드** — Copyright Cafe24 Corp. All Rights Reserved. (https://fonts.cafe24.com/), SIL OFL 1.1
+- **배달의민족 도현** — Copyright © 2015 Sandoll Communications Inc. / 우아한형제들 (http://font.woowahan.com/dohyeon/), SIL OFL 1.1
+- **나눔스퀘어 네오** — Copyright © 2022 NAVER Corp. Font Designed by Sandoll Inc. (https://hangeul.naver.com/fonts/search?f=nanum), SIL OFL 1.1
+- **나눔손글씨 다시 시작해 · 바른히피** — Copyright © 2019 NAVER Corporation. Font created by CLOVA AI OCR Team. (https://clova.ai/handwriting/list.html), SIL OFL 1.1
 
-- **Noto Sans KR** — Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'
-- **Gowun Dodum** — Copyright 2021 The Gowun Dodum Project Authors (https://github.com/yangheeryu/Gowun-Dodum)
-- **Gowun Batang** — Copyright 2021 The Gowun Batang Project Authors (https://github.com/yangheeryu/Gowun-Batang)
-- **Song Myung** — Copyright 2018 The SongMyung Project Authors
-- **Black Han Sans** — Copyright 2015 The Black Han Sans Project Authors (https://github.com/zesstype/Black-Han-Sans)
-- **Do Hyeon** — Copyright 2018 The Do Hyeon Project Authors
-- **Jua** — Copyright 2018 The Jua Project Authors
-- **Nanum Pen Script** — Copyright (c) 2010, NHN Corporation (http://www.nhncorp.com),
-with Reserved Font Name Nanum, Naver Nanum, NanumGothic, Naver 
-NanumGothic, NanumMyeongjo, Naver NanumMyeongjo, NanumBrush, Naver
-NanumBrush, NanumPen, Naver NanumPen.
-- **Gaegu** — Copyright 2018 The Gaegu Project Authors
-- **Hi Melody** — Copyright (c) YoonDesign Inc. All Rights Reserved.
-- **Poor Story** — Copyright (c) YoonDesign Inc. All Rights Reserved.
-- **Yeon Sung** — Copyright 2018 The BM YEONSUNG Project Authors
-- **Single Day** — Copyright 2015 DXKorea Inc. All rights reserved.
-- **Gamja Flower** — Copyright (c) YoonDesign Inc. All Rights Reserved.
-- **East Sea Dokdo** — Copyright (c) YoonDesign Inc. All Rights Reserved.
-
-위 글꼴은 모두 아래 라이선스를 따릅니다. (각 글꼴의 원문은 위 출처 폴더의 `OFL.txt` 입니다.)
+위 글꼴은 모두 아래 라이선스를 따릅니다. 글꼴 파일 자체를 팔 수 없다는 조건은 그대로입니다.
 
 ```
 -----------------------------------------------------------

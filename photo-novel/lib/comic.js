@@ -28,69 +28,106 @@ const INNER = { oval: 0.72, whisper: 0.72, cloud: 0.66, burst: 0.6, round: 0.9, 
 const LINE_H = 1.28;
 
 /*
-  글자체. fonts/ 에 함께 담은 무료 글꼴(OFL)을 먼저 쓰고, 없으면 기기에 깔린 글꼴로 넘어간다.
-  https://m.blog.naver.com/kkkhumor/40208211727 (식자 길라잡이)가 말하는 계열 — 대화는 고딕/돋움,
-  외침은 굵은 고딕, 생각은 얇은 고딕, 나레이션·회상은 바탕/명조, 설명 상자는 둥근 고딕 — 에 맞춰 골랐다.
-  그 글의 한컴돋움·윤고딕·HY 계열은 상용이라 넣을 수 없어, 같은 계열의 무료 글꼴로 대신한다.
+  글자체 11종. 눈누(noonnu.cc)의 "무료 상용 폰트" 중 만화 대사에 어울리는 것을 골랐고, 쓰임은 눈누 안내를 따랐다.
+  fonts/ 에 담은 8종(OFL)은 바로 쓰이고, 재배포가 금지된 KoPub바탕·KoPub돋움·미원체는 담지 못했다.
+  이 셋은 공식 사이트에서 받아 "글꼴 파일 올리기"로 올리면(own) 그 이름으로 쓰이고, 올리기 전에는 stack 의 다음 글꼴로 보인다.
+  fonts/LICENSES.md 참고.
 */
 const KO_SANS = '"Apple SD Gothic Neo", "Malgun Gothic", "Nanum Gothic", sans-serif';
 const KO_SERIF = '"Nanum Myeongjo", "Noto Serif KR", "Apple Myungjo", "Batang", serif';
 export const FONT_PRESETS = {
-  gothic: { group: '기본', label: '고딕 · 기본 대화 (Noto Sans KR)', family: 'Noto Sans KR', stack: `"PN Noto Sans KR", "Noto Sans KR", ${KO_SANS}` },
-  dodum: { group: '기본', label: '돋움 · 부드러운 고딕 (Gowun Dodum)', family: 'Gowun Dodum', stack: `"PN Gowun Dodum", "Gowun Dodum", ${KO_SANS}` },
-  serif: { group: '기본', label: '바탕 · 순정·나레이션 (Gowun Batang)', family: 'Gowun Batang', stack: `"PN Gowun Batang", "Gowun Batang", ${KO_SERIF}` },
-  recall: { group: '기본', label: '회상 · 흩날린 명조 (Song Myung)', family: 'Song Myung', stack: `"PN Song Myung", "Song Myung", ${KO_SERIF}` },
-  round: { group: '기본', label: '둥근 · 설명 상자 (Jua)', family: 'Jua', stack: `"PN Jua", "Jua", "Nanum Round", ${KO_SANS}` },
-  black: { group: '강조', label: '굵은 외침 (Black Han Sans)', family: 'Black Han Sans', stack: `"PN Black Han Sans", "Black Han Sans", "Noto Sans KR", ${KO_SANS}` },
-  dohyeon: { group: '강조', label: '굵은 제목·기계음 (Do Hyeon)', family: 'Do Hyeon', stack: `"PN Do Hyeon", "Do Hyeon", "Noto Sans KR", ${KO_SANS}` },
-  hand: { group: '손글씨', label: '나눔 손글씨 펜 (Nanum Pen Script)', family: 'Nanum Pen Script', stack: `"PN Nanum Pen Script", "Nanum Pen Script", "Gaegu", cursive, ${KO_SANS}` },
-  gaegu: { group: '손글씨', label: '개구 (Gaegu)', family: 'Gaegu', stack: `"PN Gaegu", "Gaegu", cursive, ${KO_SANS}` },
-  himelody: { group: '손글씨', label: '하이멜로디 (Hi Melody)', family: 'Hi Melody', stack: `"PN Hi Melody", "Hi Melody", cursive, ${KO_SANS}` },
-  poorstory: { group: '손글씨', label: '푸어스토리 (Poor Story)', family: 'Poor Story', stack: `"PN Poor Story", "Poor Story", cursive, ${KO_SANS}` },
-  yeonsung: { group: '손글씨', label: '연성 (Yeon Sung)', family: 'Yeon Sung', stack: `"PN Yeon Sung", "Yeon Sung", cursive, ${KO_SANS}` },
-  singleday: { group: '손글씨', label: '싱글데이 (Single Day)', family: 'Single Day', stack: `"PN Single Day", "Single Day", cursive, ${KO_SANS}` },
-  gamja: { group: '손글씨', label: '감자꽃 (Gamja Flower)', family: 'Gamja Flower', stack: `"PN Gamja Flower", "Gamja Flower", cursive, ${KO_SANS}` },
-  dokdo: { group: '손글씨', label: '동해 독도 붓글씨 (East Sea Dokdo)', family: 'East Sea Dokdo', stack: `"PN East Sea Dokdo", "East Sea Dokdo", cursive, ${KO_SANS}` },
-  mono: { group: '기타', label: '고정폭', family: '', stack: '"D2Coding", "Nanum Gothic Coding", "Consolas", monospace' }
+  ridi: { group: '본문 대사', label: '리디바탕 · 기본 대사 (강조는 굵게)', stack: `"PN RIDIBatang", "RIDIBatang", ${KO_SERIF}` },
+  kopubbatang: {
+    group: '본문 대사', label: 'KoPub 바탕 · 본문·모노로그·진지한 내용 (파일 올려야 함)',
+    own: { alias: 'KoPub 바탕', match: /kopub.*(batang|바탕)|바탕체/i },
+    stack: `"KoPub 바탕", "KoPubWorldBatang", "KoPubWorld바탕체", "KoPubWorld Batang", "PN RIDIBatang", ${KO_SERIF}`
+  },
+  kopubdotum: {
+    group: '본문 대사', label: 'KoPub 돋움 · 본문·네 컷 만화 등 캐주얼 (파일 올려야 함)',
+    own: { alias: 'KoPub 돋움', match: /kopub.*(dotum|돋움)|돋움체/i },
+    stack: `"KoPub 돋움", "KoPubWorldDotum", "KoPubWorld돋움체", "KoPubWorld Dotum", "PN NanumSquare Neo", ${KO_SANS}`
+  },
+  dangdang: { group: '독백·감성', label: '카페24 당당해 · 모노로그', stack: `"PN Cafe24 Dangdanghae", "Cafe24 Dangdanghae", ${KO_SANS}` },
+  simple: { group: '독백·감성', label: '카페24 심플해 · 꿈꾸는 느낌의 대사', stack: `"PN Cafe24 Simplehae", "Cafe24 Simplehae", ${KO_SANS}` },
+  surround: { group: '독백·감성', label: '카페24 써라운드 · 장난치거나 귀여운 대사', stack: `"PN Cafe24 Ssurround", "Cafe24 Ssurround", ${KO_SANS}` },
+  dohyeon: { group: '강조·외침', label: '배민 도현 · 소리칠 때 (굵게·기울임)', stack: `"PN BM Dohyeon", "BM DoHyeon", "BMDOHYEON", ${KO_SANS}` },
+  miwon: {
+    group: '강조·외침', label: '미원체 · 매우 진지하거나 무서운 이야기 (파일 올려야 함)',
+    own: { alias: '미원체', match: /miwon|미원/i },
+    stack: `"미원체", "Miwon", "PN NanumSquare Neo", ${KO_SANS}`, weight: 900, boldWeight: 900
+  },
+  squareneo: { group: '강조·외침', label: '나눔스퀘어 네오 · 안내판·설명', stack: `"PN NanumSquare Neo", "NanumSquare Neo", ${KO_SANS}` },
+  squareheavy: { group: '강조·외침', label: '나눔스퀘어 네오 Heavy · 강조', stack: `"PN NanumSquare Neo", "NanumSquare Neo", ${KO_SANS}`, weight: 900, boldWeight: 900 },
+  restart: { group: '속닥이는 대사', label: '나눔손글씨 다시 시작해', stack: `"PN Nanum Restart", "Nanum DaSiSiJagHae", cursive, ${KO_SANS}` },
+  hippie: { group: '속닥이는 대사', label: '나눔손글씨 바른히피', stack: `"PN Nanum BareunHippie", "Nanum BaReunHiPi", cursive, ${KO_SANS}` }
 };
 
+/* 예전에 저장된 말풍선이 쓰던 글꼴 이름 → 가장 가까운 새 글꼴. 불러올 때 한 번 바꿔 준다. */
+const LEGACY_FONTS = {
+  gothic: 'ridi', dodum: 'kopubdotum', serif: 'kopubbatang', recall: 'kopubbatang', round: 'surround',
+  black: 'squareheavy', dohyeon: 'dohyeon', mono: 'ridi',
+  hand: 'restart', gaegu: 'hippie', himelody: 'hippie', poorstory: 'restart', yeonsung: 'restart',
+  singleday: 'hippie', gamja: 'hippie', dokdo: 'restart'
+};
+export const presetKey = (font) => {
+  const k = String(font ?? '');
+  return FONT_PRESETS[k] ? k : LEGACY_FONTS[k] || k;
+};
+
+/* 올린 파일 이름이 담지 못한 글꼴이면 그 글꼴로 등록할 이름을 알려 준다. */
+export function ownFontFor(fileName) {
+  for (const [key, p] of Object.entries(FONT_PRESETS)) {
+    if (p.own && p.own.match.test(String(fileName))) return { key, alias: p.own.alias };
+  }
+  return null;
+}
+
+export const DEFAULT_FONT = 'ridi';
+
 /*
-  글꼴 세트 — 말의 종류마다 어울리는 글꼴. 위 가이드가 소년만화(대화=돋움, 나레이션=바탕)와
-  순정·치유(대화=바탕, 나레이션=돋움)를 뒤집어 쓴다고 정리한 것을 그대로 옮겼다.
+  글꼴 세트 — 말의 종류마다 어울리는 글꼴. 눈누에 적힌 쓰임을 그대로 옮겼다.
+  기본: 대사=리디바탕, 생각=당당해(모노로그), 외침=도현, 속삭임=다시 시작해, 설명=KoPub 바탕
 */
 export const FONT_SETS = {
-  shonen: { label: '소년만화형 (대화 고딕 · 나레이션 바탕)', say: 'gothic', think: 'dodum', shout: 'black', whisper: 'dodum', narration: 'serif' },
-  shojo: { label: '순정·치유형 (대화 바탕 · 나레이션 돋움)', say: 'serif', think: 'dodum', shout: 'black', whisper: 'dodum', narration: 'dodum' },
-  hand: { label: '손글씨형 (귀여운 웹툰)', say: 'gaegu', think: 'gaegu', shout: 'dohyeon', whisper: 'gaegu', narration: 'round' }
+  basic: { label: '기본 (대사 리디바탕 · 독백 당당해 · 외침 도현)', say: 'ridi', think: 'dangdang', shout: 'dohyeon', whisper: 'restart', narration: 'kopubbatang' },
+  casual: { label: '캐주얼 네 컷 (KoPub 돋움 · 써라운드)', say: 'kopubdotum', think: 'simple', shout: 'dohyeon', whisper: 'hippie', narration: 'squareneo' },
+  dreamy: { label: '꿈꾸는·귀여운 (심플해 · 써라운드)', say: 'surround', think: 'simple', shout: 'dohyeon', whisper: 'hippie', narration: 'simple' },
+  serious: { label: '진지·공포 (KoPub 바탕 · 미원체)', say: 'kopubbatang', think: 'dangdang', shout: 'miwon', whisper: 'restart', narration: 'miwon' }
 };
 
 export function fontSetFor(setKey, type) {
-  return (FONT_SETS[setKey] || FONT_SETS.shonen)[type] || 'gothic';
+  return (FONT_SETS[setKey] || FONT_SETS.basic)[type] || DEFAULT_FONT;
 }
 
 export function resolveFont(font) {
-  const key = String(font || 'gothic');
+  const key = presetKey(font || DEFAULT_FONT);
   if (FONT_PRESETS[key]) return FONT_PRESETS[key].stack;
-  const clean = key.replace(/["'\\;{}<>]/g, '').trim().slice(0, 60) || 'gothic';
-  return `"${clean}", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif`;
+  const clean = key.replace(/["'\;{}<>]/g, '').trim().slice(0, 60) || DEFAULT_FONT;
+  return `"${clean}", "Apple SD Gothic Neo", "PN RIDIBatang", "Malgun Gothic", sans-serif`;
+}
+
+/* 굵게를 켰을 때와 아닐 때의 글자 굵기. 글꼴마다 실제로 있는 굵기를 쓴다. */
+export function fontWeight(b) {
+  const p = FONT_PRESETS[presetKey(b.font)];
+  return b.bold ? p?.boldWeight || 700 : p?.weight || 400;
 }
 
 export function fontCss(b, fsPx) {
-  return `${b.italic ? 'italic ' : ''}${b.bold ? 700 : 400} ${Math.max(1, fsPx)}px ${resolveFont(b.font)}`;
+  return `${b.italic ? 'italic ' : ''}${fontWeight(b)} ${Math.max(1, fsPx)}px ${resolveFont(b.font)}`;
 }
 
 /* ------------------------------------------------------------ 말풍선 데이터 */
 
 const DEFAULT_STYLE = {
   fill: '#ffffff', fillAlpha: 1, stroke: '#111111', strokeW: 0.0035, color: '#111111',
-  font: 'gothic', fs: 0.04, bold: false, italic: false, align: 'center', autoFit: true
+  font: DEFAULT_FONT, fs: 0.04, bold: false, italic: false, align: 'center', autoFit: true
 };
 
 /* 말의 종류마다 처음 모양이 다르다. 나중에 화면에서 얼마든지 바꿀 수 있다. */
 const TYPE_STYLE = {
   say: { shape: 'oval' },
   think: { shape: 'cloud' },
-  shout: { shape: 'burst', italic: true, fsMul: 1.15 },      // 굵은 고딕 + 기울임: 화난 장면을 바로 알아보게
+  shout: { shape: 'burst', bold: true, italic: true, fsMul: 1.15 },   // 눈누 안내: 소리칠 때는 Bold/Italic 효과를 준다
   whisper: { shape: 'whisper', fsMul: 0.85 },
   narration: { shape: 'box', fill: '#fff6d6', align: 'left', tail: false }
 };
@@ -134,7 +171,7 @@ export function normalizeBubble(raw = {}) {
     stroke: colorOr(raw.stroke, DEFAULT_STYLE.stroke),
     strokeW: clampNum(raw.strokeW, 0, 0.03, DEFAULT_STYLE.strokeW),
     color: colorOr(raw.color, DEFAULT_STYLE.color),
-    font: typeof raw.font === 'string' && raw.font.trim() ? raw.font.trim().slice(0, 60) : DEFAULT_STYLE.font,
+    font: typeof raw.font === 'string' && raw.font.trim() ? presetKey(raw.font.trim().slice(0, 60)) : DEFAULT_STYLE.font,
     fs: clampNum(raw.fs, 0.008, 0.2, DEFAULT_STYLE.fs),
     bold: Boolean(raw.bold),
     italic: Boolean(raw.italic),
@@ -179,6 +216,7 @@ export function applyFontSet(list, setKey) {
   for (const b of list) {
     b.font = fontSetFor(setKey, b.type);
     b.italic = b.type === 'shout';
+    b.bold = b.type === 'shout';
   }
   return list;
 }
@@ -192,19 +230,17 @@ export async function loadFonts(list, doc = globalThis.document) {
   const seen = new Set();
   const jobs = [];
   for (const b of list) {
-    for (const weight of new Set([b.bold ? 700 : 400])) {
-      const css = `${b.italic ? 'italic ' : ''}${weight} 32px ${resolveFont(b.font)}`;
-      if (seen.has(css)) continue;
-      seen.add(css);
-      jobs.push(doc.fonts.load(css, b.text || '가').catch(() => {}));
-    }
+    const css = `${b.italic ? 'italic ' : ''}${fontWeight(b)} 32px ${resolveFont(b.font)}`;
+    if (seen.has(css)) continue;
+    seen.add(css);
+    jobs.push(doc.fonts.load(css, b.text || '가').catch(() => {}));
   }
   await Promise.all(jobs);
 }
 
 /* 어떤 글꼴들이 쓰이는지 나타내는 표. 바뀌면 다시 불러온다. */
 export function fontKey(list) {
-  return [...new Set(list.map((b) => `${b.font}|${b.bold ? 1 : 0}|${b.italic ? 1 : 0}`))].sort().join(',');
+  return [...new Set(list.map((b) => `${presetKey(b.font)}|${b.bold ? 1 : 0}|${b.italic ? 1 : 0}`))].sort().join(',');
 }
 
 /* 이 컷의 말풍선 모양을 다른 말풍선에 그대로 옮긴다 (글·위치·크기는 그대로 둔다). */
